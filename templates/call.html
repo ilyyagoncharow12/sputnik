@@ -1,12 +1,13 @@
 <!-- templates/call.html -->
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" translate="no">
 <head>
     <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Звонок - Спутник</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/fonts.css">
     <style>
         * {
             margin: 0;
@@ -408,7 +409,7 @@
 
     <div id="audioElement" style="display: none;"></div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="/static/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/call.js') }}"></script>
     <script>
         // Инициализация звонка

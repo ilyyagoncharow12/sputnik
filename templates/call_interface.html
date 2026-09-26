@@ -1,10 +1,13 @@
 <!-- templates/call_interface.html -->
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" translate="no">
 <head>
     <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
+    <meta name="csrf-token" content="{{ csrf_token or '' }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Звонок - Спутник</title>
+    <link rel="stylesheet" href="/static/css/fonts.css">
     <style>
         * {
             margin: 0;
@@ -291,10 +294,26 @@
         </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="/static/socket.io.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script>
+        (function () {
+            const _fetch = window.fetch;
+            window.fetch = function (url, opts) {
+                opts = opts || {};
+                if (!opts.method || opts.method.toUpperCase() === 'GET') {
+                    return _fetch.apply(this, arguments);
+                }
+                opts.headers = opts.headers instanceof Headers ? opts.headers : new Headers(opts.headers || {});
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta && !opts.headers.has('X-CSRF-Token')) {
+                    opts.headers.set('X-CSRF-Token', meta.content);
+                }
+                return _fetch.call(this, url, opts);
+            };
+        })();
+
         const socket = io();
 
         // WebRTC конфигурация

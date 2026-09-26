@@ -1,0 +1,240 @@
+/* =====================================================================
+   MOBILE.TSC — мобильная версия (жесты, анимации, bottom-sheet)
+   Подключается последним в chat.html — перекрывает десктопные стили.
+   ===================================================================== */
+
+:root {
+    --reply-green: #34c759;
+}
+
+/* ===== База: отключаем выделение текста и тулбары при длинном нажатии ===== */
+body.mobile .message,
+body.mobile .mobile-gesture,
+.mobile .message {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* ===== Эймоб. жесты: свайп по сообщению ===== */
+.message {
+    position: relative;
+}
+
+.message .msg-swipe-hint {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%) translateX(-14px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: 52px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--reply-green);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 3;
+    transition: opacity .15s ease;
+}
+
+.message .msg-swipe-hint i {
+    font-size: 15px;
+}
+
+/* Во время свайпа пузырь не должен иметь transition (следует за пальцем) */
+.message-gesture .message-bubble {
+    transition: none !important;
+    will-change: transform;
+}
+
+/* Отклик на отпускание в зоне ответа */
+.message.swipe-replied .message-bubble {
+    animation: replyPulse .5s ease-out;
+}
+
+/* ===== Вход новых сообщений ===== */
+.message.msg-new {
+    animation: msgPopIn .28s ease-out;
+}
+
+/* список сообщений плавно проявляется при открытии чата */
+.messages-area.msg-list-in {
+    animation: slideFadeIn .22s ease-out;
+}
+
+/* ===== Анимации ===== */
+@keyframes msgPopIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes replyPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(52,199,89,.45); }
+    60%  { box-shadow: 0 0 0 12px rgba(52,199,89,0); }
+    100% { box-shadow: 0 0 0 0 rgba(52,199,89,0); }
+}
+
+@keyframes sheetUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+@keyframes cmfadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes slideFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================================================
+   МОБИЛЬНЫЕ (≤ 768px): bottom-sheet меню сообщения, жесты, композер
+   ===================================================================== */
+@media (max-width: 768px) {
+
+    /* Сообщения: запрещаем выделение, разрешаем только вертикальный скролл */
+    .message {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        touch-action: pan-y;
+    }
+
+    /* Контекстное меню сообщения — снизу на весь экран, как Telegram */
+    #contextMenuBackdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        z-index: 9998;
+        animation: cmfadeIn .18s ease-out;
+    }
+
+    #combinedContextMenu {
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        top: auto !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        max-height: 72vh !important;
+        height: auto !important;
+        overflow-y: auto !important;
+        border-radius: 18px 18px 0 0 !important;
+        z-index: 9999 !important;
+        animation: sheetUp .24s cubic-bezier(.2,.9,.3,1) !important;
+        padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    }
+
+    /* Меню выбора реакций тоже удобнее по центру на мобильных */
+    #allReactionsMenu {
+        position: fixed !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(320px, 90vw) !important;
+    }
+
+    /* Композер: крупнее поле, чтобы не было зума iOS */
+    .message-input {
+        font-size: 16px !important;
+        border-radius: 20px;
+        padding: 7px 6px;
+    }
+
+    .message-input-area {
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        padding: 8px 10px max(10px, env(safe-area-inset-bottom)) !important;
+    }
+
+    .input-wrapper {
+        gap: 6px;
+    }
+
+    .composer-box {
+        padding: 4px 6px !important;
+        border-radius: 22px !important;
+        border-width: 1.5px !important;
+    }
+
+    .attach-btn {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 19px !important;
+    }
+
+    .send-btn {
+        width: 42px !important;
+        height: 42px !important;
+        font-size: 18px !important;
+        box-shadow: 0 3px 10px rgba(0, 122, 255, 0.3);
+    }
+
+    /* На совсем узких экранах прячем второстепенные кнопки композера,
+       чтобы кнопка отправки гарантированно была видна */
+    @media (max-width: 380px) {
+        .composer-actions .attach-btn:not(#micBtn) {
+            display: none !important;
+        }
+    }
+
+    /* Кнопки компаузера получают touch-отклик */
+    .send-btn:active,
+    .attach-btn:active,
+    .composer-action:active {
+        transform: scale(.86);
+        opacity: .8;
+    }
+
+    .send-btn {
+        transition: transform .15s ease;
+    }
+
+    /* Запрещаем overscroll и случайное обновление страницы */
+    html,
+    body {
+        overscroll-behavior: none;
+    }
+
+    .messages-area {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Нажатие на пузырь — лёгкое сжатие для тактильности */
+    .message:active .message-bubble {
+        transform: scale(.975);
+    }
+
+    /* Нажатие на пункт bottom-sheet меню — отклик */
+    #combinedContextMenu > div:not(#contextMenuBackdrop) > * {
+        font-size: 15px;
+    }
+}
+
+/* ===== Лёгкая адаптация на очень маленьких экранах ===== */
+@media (max-width: 360px) {
+    .chat-user-name {
+        font-size: 14px;
+    }
+}

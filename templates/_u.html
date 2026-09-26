@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="ru" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<title>Спутник — Панель модерации</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Roboto, Arial, sans-serif; }
+body { background: #0f0f10; color: #e8e8ea; min-height: 100vh; }
+button { font-family: inherit; cursor: pointer; }
+
+#loginScreen {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.login-card {
+    background: #17171a; border-radius: 20px; padding: 34px 30px; width: 100%; max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.06);
+}
+.login-card .logo {
+    font-size: 26px; font-weight: 800; display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+    background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.login-card .logo i { font-size: 24px; }
+.login-card .sub { color: #8e8e93; font-size: 13px; margin-bottom: 22px; }
+.login-card input {
+    width: 100%; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+    padding: 13px 14px; color: white; font-size: 15px; margin-bottom: 12px; outline: none; letter-spacing: 0.5px;
+}
+.login-card input:focus { border-color: #667eea; }
+.login-card .btn {
+    width: 100%; padding: 13px; border: none; border-radius: 12px; background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white; font-size: 15px; font-weight: 700; margin-top: 6px;
+}
+.login-card .btn:disabled { opacity: 0.5; }
+.login-card .hint { font-size: 11px; color: #8e8e93; margin-top: 14px; text-align: center; }
+#loginError { color: #ff4757; font-size: 13px; margin-top: 10px; display: none; }
+
+#dashboard { display: none; }
+.topbar {
+    display: flex; align-items: center; gap: 14px; padding: 16px 24px; background: #17171a;
+    border-bottom: 1px solid rgba(255,255,255,0.06); position: sticky; top: 0; z-index: 10;
+}
+.topbar .title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.topbar .title i { color: #667eea; }
+.topbar .spacer { flex: 1; }
+.tabs { display: flex; gap: 4px; background: #1c1c1e; border-radius: 12px; padding: 4px; }
+.tabs .t {
+    border: none; background: transparent; color: #8e8e93; padding: 9px 16px; border-radius: 9px;
+    font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.tabs .t:hover { color: white; }
+.tabs .t.active { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+#logoutBtn {
+    background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 10px;
+    padding: 9px 16px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+}
+#logoutBtn:hover { background: #ff3b30; border-color: #ff3b30; }
+
+.wrap { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: #17171a; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px; }
+.stat-card .n { font-size: 26px; font-weight: 800; }
+.stat-card .l { font-size: 12px; color: #8e8e93; margin-top: 4px; }
+
+.searchbar { display: flex; gap: 10px; margin-bottom: 16px; }
+.searchbar input {
+    flex: 1; background: #17171a; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 14px;
+    color: white; font-size: 14px; outline: none;
+}
+.searchbar input:focus { border-color: #667eea; }
+.searchbar .btn { background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 12px; padding: 0 18px; }
+
+table.data { width: 100%; border-collapse: collapse; background: #17171a; border-radius: 14px; overflow: hidden; }
+table.data th, table.data td { padding: 12px 14px; text-align: left; font-size: 13px; }
+table.data th { background: #1e1e21; color: #8e8e93; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+table.data td { border-top: 1px solid rgba(255,255,255,0.04); }
+table.data tr.clickable { cursor: pointer; transition: background 0.15s; }
+table.data tbody tr.clickable:hover { background: #1e1e21; }
+.avatar-sm {
+    width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+    background: linear-gradient(135deg,#667eea,#764ba2); display: inline-flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 13px; color: white;
+}
+.avatar-sm.frozen { background: linear-gradient(135deg, #4fc3f7, #0288d1); }
+.avatar-title-sm {
+    width: 32px; height: 32px; border-radius: 10px; object-fit: cover;
+    background: linear-gradient(135deg,#764ba2,#667eea); display: inline-flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 13px; color: white;
+}
+.badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.badge.ban { background: rgba(255,59,48,0.15); color: #ff4757; }
+.badge.ok { background: rgba(52,199,89,0.15); color: #34c759; }
+.badge.gray { background: rgba(142,142,147,0.15); color: #8e8e93; }
+.badge.frz { background: rgba(79,195,247,0.15); color: #4fc3f7; }
+.snow { color: #4fc3f7; margin-left: 4px; }
+
+.tbtn {
+    border: 1px solid rgba(255,255,255,0.12); background: #1c1c1e; color: white; border-radius: 9px;
+    padding: 6px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;
+}
+.tbtn:hover { background: #242427; }
+.tbtn.danger:hover { background: #ff3b30; border-color: #ff3b30; }
+.tbtn.small { padding: 4px 8px; font-size: 11px; }
+
+#listPanel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 96vw; background: #17171a;
+    z-index: 60; transform: translateX(100%); transition: transform 0.25s ease; overflow-y: auto;
+    border-left: 1px solid rgba(255,255,255,0.08);
+}
+#listPanel.open { transform: translateX(0); }
+
+#profilePanel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 96vw; background: #17171a;
+    z-index: 50; transform: translateX(100%); transition: transform 0.25s ease; overflow-y: auto;
+    border-left: 1px solid rgba(255,255,255,0.08);
+}
+#profilePanel.open { transform: translateX(0); }
+.panel-header {
+    display: flex; align-items: center; gap: 12px; padding: 16px 18px; position: sticky; top: 0;
+    background: #17171a; border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 5;
+}
+.panel-header .back { background: none; border: none; color: #8e8e93; font-size: 20px; padding: 6px; }
+.panel-header .back:hover { color: white; }
+.panel-header .h { flex: 1; font-size: 16px; font-weight: 700; }
+.panel-body { padding: 18px; }
+.phero { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.phero .avatar {
+    width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+    background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center;
+    justify-content: center; font-size: 26px; font-weight: 800; color: white;
+}
+.phero .avatar.frozen { background: linear-gradient(135deg, #4fc3f7, #0288d1); }
+.phero .name { font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.phero .un { color: #8e8e93; font-size: 13px; }
+.kv { background: #1c1c1e; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+.kv .k { color: #8e8e93; font-size: 12px; min-width: 130px; }
+.kv .v { font-size: 14px; font-weight: 600; word-break: break-all; }
+.pbtn { width: 100%; padding: 13px; border: none; border-radius: 12px; font-size: 14px; font-weight: 700; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.pbtn.ban { background: rgba(255,59,48,0.9); color: white; }
+.pbtn.ban:hover { background: #ff3b30; }
+.pbtn.unban { background: #34c759; color: white; }
+.pbtn.moder { background: #1c1c1e; border: 1px solid rgba(255,255,255,0.12); color: #ffb800; }
+.pbtn.moder:hover { border-color: #ffb800; }
+.pbtn.save { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+#panelMsg { font-size: 13px; margin-top: 10px; }
+#loader { display: flex; justify-content: center; padding: 40px; color: #8e8e93; }
+.empty { text-align: center; color: #8e8e93; padding: 40px; font-size: 14px; }
+.section-h { font-size: 15px; font-weight: 700; margin: 18px 0 10px; color: #e8e8ea; display: flex; align-items: center; gap: 8px; }
+.edit-field { margin-bottom: 10px; }
+.edit-field label { display: block; font-size: 11px; color: #8e8e93; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+.edit-field input, .edit-field textarea {
+    width: 100%; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    padding: 11px 12px; color: white; font-size: 14px; outline: none; resize: vertical;
+}
+.edit-field input:focus, .edit-field textarea:focus { border-color: #667eea; }
+
+.modal-ovr {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100; display: flex;
+    align-items: center; justify-content: center; padding: 20px;
+}
+.modal-box {
+    background: #17171a; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px;
+    padding: 26px; width: 100%; max-width: 420px;
+}
+.modal-box h3 { font-size: 17px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+.modal-box h3 i { color: #ff4757; }
+.modal-box textarea, .modal-box input {
+    width: 100%; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    padding: 12px; color: white; font-size: 14px; outline: none; resize: vertical;
+}
+.modal-box textarea { min-height: 90px; }
+.modal-box textarea:focus, .modal-box input:focus { border-color: #667eea; }
+.mbtns { display: flex; gap: 10px; margin-top: 14px; }
+.mbtns .btn {
+    flex: 1; padding: 12px; border: none; border-radius: 11px; font-size: 14px; font-weight: 700;
+}
+.mbtns .btn.primary { background: #ff3b30; color: white; }
+.mbtns .btn.ghost { background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); color: white; }
+
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding: 10px 0; }
+.chart .bar { flex: 1; background: linear-gradient(180deg, #667eea, #764ba2); border-radius: 6px 6px 0 0; position: relative; min-width: 14px; }
+.chart .bar span { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #8e8e93; white-space: nowrap; }
+
+.metric-group { background: #17171a; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.metric { background: #1c1c1e; border-radius: 11px; padding: 12px 14px; }
+.metric .m-n { font-size: 20px; font-weight: 800; }
+.metric .m-l { font-size: 11px; color: #8e8e93; margin-top: 3px; }
+
+/* ===== Просмотр аккаунта (read-only) ===== */
+.vf-card { background: #17171a; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+.vf-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin-bottom: 12px; }
+.vf-row.single { grid-template-columns: 1fr; }
+.vf-row input {
+    background: #1c1c1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    padding: 11px 12px; color: white; font-size: 14px; outline: none;
+}
+.vf-row input:focus { border-color: #667eea; }
+.vf-btn {
+    border: 1px solid rgba(255,255,255,0.12); background: #1c1c1e; color: white; border-radius: 10px;
+    padding: 11px 18px; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;
+}
+.vf-btn.primary { background: linear-gradient(135deg, #667eea, #764ba2); border: none; font-weight: 700; }
+.vf-btn:hover { background: #242427; }
+.vf-btn.primary:hover { filter: brightness(1.1); }
+.vf-hint { font-size: 12px; color: #8e8e93; margin-bottom: 10px; }
+.vf-user { display: flex; align-items: center; gap: 12px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+.vf-user:hover { background: #242427; }
+.vf-user .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; color: white; }
+.chat-item { display: flex; align-items: center; gap: 12px; background: #1c1c1e; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+.chat-item:hover { background: #242427; }
+.chat-item .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    background: linear-gradient(135deg,#764ba2,#667eea); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px; color: white; }
+.chat-item .meta { flex: 1; min-width: 0; }
+.chat-item .meta .t { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.chat-item .meta .s { color: #8e8e93; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-item .cnt { text-align: right; flex-shrink: 0; }
+.chat-item .cnt .n { font-size: 13px; font-weight: 800; color: #667eea; }
+.chat-item .cnt .l { font-size: 11px; color: #8e8e93; }
+.tag { padding: 3px 8px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.tag.personal { background: rgba(102,126,234,0.18); color: #8ea3ff; }
+.tag.group { background: rgba(255,184,0,0.15); color: #ffb800; }
+.tag.channel { background: rgba(79,195,247,0.15); color: #4fc3f7; }
+.msg-list .msg { display: flex; gap: 10px; padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.msg-list .msg .avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    background: linear-gradient(135deg,#667eea,#764ba2); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 12px; color: white; }
+.msg-list .msg .who { font-weight: 700; font-size: 13px; }
+.msg-list .msg .time { color: #8e8e93; font-size: 11px; margin-left: 8px; }
+.msg-list .msg .text { font-size: 13.5px; white-space: pre-wrap; word-break: break-word; color: #e8e8ea; }
+.msg-list .msg .file { color: #8ea3ff; font-size: 13px; }
+.msg-list .msg .media { margin-top: 6px; }
+.msg-list .msg .media img.mimg, .msg-list .msg .media video.mvid {
+    max-width: 100%; max-height: 320px; border-radius: 10px; display: block;
+    border: 1px solid rgba(255,255,255,0.08); cursor: zoom-in; background: #000; }
+.msg-list .msg .media audio.maudio { width: 100%; max-width: 320px; display: block; margin-top: 4px; }
+.msg-list .msg .media .mfile { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+    color: #8ea3ff; text-decoration: none; background: rgba(102,126,234,0.12);
+    border: 1px solid rgba(102,126,234,0.3); border-radius: 10px; padding: 6px 10px; }
+.msg-list .msg .media .mfile:hover { background: rgba(102,126,234,0.22); }
+.msg-list .msg .media .mbroken { font-size: 12px; color: #ff6b6b; }
+#mediaOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9999;
+    display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+#mediaOverlay.on { display: flex; }
+#mediaOverlay img, #mediaOverlay video { max-width: 94vw; max-height: 86vh; border-radius: 8px; }
+#mediaOverlay .mclose { position: absolute; top: 16px; right: 20px; color: #fff; font-size: 28px;
+    cursor: pointer; background: none; border: none; line-height: 1; }
+#mediaOverlay .mtip { color: #aaa; font-size: 12px; }
+.chat-panel-title { display: flex; align-items: center; gap: 12px; }
+.chat-panel-title img, .chat-panel-title .avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+    background: linear-gradient(135deg,#764ba2,#667eea); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: white; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+    <div class="login-card">
+        <div class="logo"><i class="fas fa-user-shield"></i> Спутник</div>
+        <div class="sub">Панель модерации · доступ только для администратора</div>
+        <input id="ipPhone" type="text" placeholder="Телефон (например +777 203 374)" autocomplete="off">
+        <input id="ipPassword" type="password" placeholder="Пароль" autocomplete="off">
+        <input id="ipCode" type="text" maxlength="5" inputmode="numeric" placeholder="Код доступа (5 цифр)" autocomplete="off">
+        <button class="btn" id="loginBtn" onclick="doLogin()"><i class="fas fa-lock"></i> Войти в панель</button>
+        <div id="loginError"></div>
+        <div class="hint">Двухфакторный код запрашивается отдельно после телефона и пароля</div>
+    </div>
+</div>
+
+<div id="dashboard">
+    <div class="topbar">
+        <div class="title"><i class="fas fa-user-shield"></i> Панель модерации</div>
+        <div class="spacer"></div>
+        <button id="logoutBtn" onclick="doLogout()"><i class="fas fa-sign-out-alt"></i> Выйти</button>
+    </div>
+    <div class="topbar" style="padding:12px 24px; position: static;">
+        <div class="tabs">
+            <button class="t active" data-tab="users" onclick="switchTab('users')"><i class="fas fa-users"></i> Пользователи</button>
+            <button class="t" data-tab="groups" onclick="switchTab('groups')"><i class="fas fa-users-rectangle"></i> Группы</button>
+            <button class="t" data-tab="channels" onclick="switchTab('channels')"><i class="fas fa-bullhorn"></i> Каналы</button>
+            <button class="t" data-tab="stats" onclick="switchTab('stats')"><i class="fas fa-chart-bar"></i> Статистика</button>
+            <button class="t" data-tab="journal" onclick="switchTab('journal')"><i class="fas fa-clipboard-list"></i> Журнал</button>
+            <button class="t" data-tab="logins" onclick="switchTab('logins')"><i class="fas fa-sign-in-alt"></i> Входы</button>
+            <button class="t" data-tab="viewer" onclick="switchTab('viewer')"><i class="fas fa-eye"></i> Просмотр аккаунта</button>
+        </div>
+        <button id="refreshBtn" class="tbtn" style="margin-left:auto;" onclick="refreshCurrentTab()"><i class="fas fa-sync-alt"></i> Обновить</button>
+    </div>
+
+    <div class="wrap">
+        <div id="tabUsers">
+            <div class="stats-row" id="statsRow"></div>
+            <div class="searchbar">
+                <input id="searchInput" placeholder="Поиск по id, username, имени, номеру телефона или причине бана..." oninput="filterUsers()">
+            </div>
+            <div id="usersTable"></div>
+        </div>
+        <div id="tabGroups" style="display:none;"><div id="groupsTable"></div></div>
+        <div id="tabChannels" style="display:none;"><div id="channelsTable"></div></div>
+        <div id="tabStats" style="display:none;"><div id="statsContainer"></div></div>
+        <div id="tabJournal" style="display:none;"><div id="journalTable"></div></div>
+        <div id="tabLogins" style="display:none;">
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-sign-in-alt"></i> Журнал входов в панель</div>
+                <div class="vf-hint">Каждая попытка входа (успешная или нет): время, IP-адрес, устройство/браузер и введённый код доступа. Отказ — красным, успех — зелёным.</div>
+            </div>
+            <div id="loginLogTable"></div>
+        </div>
+        <div id="tabViewer" style="display:none;">
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-eye"></i> Просмотр аккаунта (только чтение)</div>
+                <div class="vf-hint">Введите телефон, username и/или уникальный ID пользователя — откроется его «зеркальный» профиль со всеми чатами. Отправлять сообщения от его имени нельзя.</div>
+                <div class="vf-row">
+                    <input id="viPhone" placeholder="Телефон (например +777 203 374)" autocomplete="off">
+                    <input id="viUsername" placeholder="Username (без @)" autocomplete="off">
+                    <input id="viUid" placeholder="Уникальный ID" autocomplete="off">
+                </div>
+                <button class="vf-btn primary" onclick="viewerSearch()"><i class="fas fa-search"></i> Найти / Открыть</button>
+            </div>
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-file-import"></i> Импорт из JSON-файла</div>
+                <div class="vf-hint">Загрузите ранее выгруженный файл <b>sputnik_&lt;username&gt;.json</b> — зеркальный профиль и переписка откроются локально, без обращения к серверу.</div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="file" id="viImportInput" accept=".json,application/json" style="display:none;">
+                    <button class="vf-btn" onclick="document.getElementById('viImportInput').click()"><i class="fas fa-upload"></i> Выбрать JSON-файл</button>
+                    <span id="viImportStatus" style="font-size:12px;color:#8e8e93;"></span>
+                </div>
+            </div>
+            <div id="viewerResults"></div>
+        </div>
+    </div>
+</div>
+
+<div id="profilePanel">
+    <div class="panel-header">
+        <button class="back" onclick="closeProfile()"><i class="fas fa-arrow-left"></i></button>
+        <div class="h">Профиль пользователя</div>
+        <span id="panelStatus"></span>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
+</div>
+
+<div id="listPanel">
+    <div class="panel-header">
+        <button class="back" onclick="closeList()"><i class="fas fa-arrow-left"></i></button>
+        <div class="h" id="listTitle">Список</div>
+    </div>
+    <div class="panel-body" id="listBody"></div>
+</div>
+
+<div id="banModal" class="modal-ovr" style="display:none;">
+    <div class="modal-box">
+        <h3><i class="fas fa-snowflake"></i> Заблокировать аккаунт</h3>
+        <p style="color:#8e8e93; font-size:13px; margin-bottom:12px;">Причина нарушения будет показана пользователю при попытке входа (появится снежинка ❄ и надпись «Аккаунт заморожен»).</p>
+        <textarea id="banReasonInput" placeholder="Причина блокировки, например: рассылка спама, оскорбления, мошенничество..."></textarea>
+        <div class="mbtns">
+            <button class="btn primary" onclick="confirmBan()"><i class="fas fa-snowflake"></i> Заблокировать</button>
+            <button class="btn ghost" onclick="closeBanModal()">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+const U = {{ urimap|tojson }};
+let allUsers = [];
+let banTargetId = null;
+
+function post(url, body) {
+    return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+        body: body ? JSON.stringify(body) : undefined
+    }).then(r => r.json());
+}
+
+function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmtDate(s) {
+    if (!s) return '—';
+    const d = new Date(s);
+    return isNaN(d) ? '—' : d.toLocaleDateString('ru-RU');
+}
+function fmtDateTime(s) {
+    if (!s) return '—';
+    const d = new Date(s);
+    return isNaN(d) ? '—' : d.toLocaleString('ru-RU');
+}
+
+function doLogin() {
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('loginError');
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Проверка...';
+    post(U.login, {
+        phone: document.getElementById('ipPhone').value.trim(),
+        password: document.getElementById('ipPassword').value,
+        code: document.getElementById('ipCode').value.trim()
+    }).then(d => {
+        if (d.success) {
+            enterDash();
+        } else {
+            err.textContent = d.error || 'Ошибка входа';
+            err.style.display = 'block';
+        }
+    }).catch(() => {
+        err.textContent = 'Ошибка соединения';
+        err.style.display = 'block';
+    }).finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-lock"></i> Войти в панель';
+    });
+}
+
+function enterDash() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    switchTab('users');
+}
+
+function doLogout() {
+    post(U.logout).then(() => {
+        location.reload();
+    });
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tabs .t').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+    });
+    ['users', 'groups', 'channels', 'stats', 'journal', 'logins', 'viewer'].forEach(t => {
+        document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = (t === tab) ? 'block' : 'none';
+    });
+    if (tab === 'users') loadUsers();
+    if (tab === 'groups') loadGroups();
+    if (tab === 'channels') loadChannels();
+    if (tab === 'stats') loadStats();
+    if (tab === 'journal') loadJournal();
+    if (tab === 'logins') loadLoginLog();
+}
+
+function refreshCurrentTab() {
+    const active = document.querySelector('.tabs .t.active').dataset.tab;
+    switchTab(active);
+}
+
+// ================= ПОЛЬЗОВАТЕЛИ =================
+function loadUsers() {
+    const el = document.getElementById('usersTable');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка пользователей...</div>';
+    fetch(U.users, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(users => {
+            if (users.error) throw new Error(users.error);
+            allUsers = users;
+            renderUsers(users);
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка загрузки: ' + esc(e.message) + '</div>';
+        });
+}
+
+function renderUsers(users) {
+    const banned = users.filter(u => u.is_banned).length;
+    const deleted = users.filter(u => u.is_deleted).length;
+    document.getElementById('statsRow').innerHTML = `
+        <div class="stat-card"><div class="n">${users.length}</div><div class="l">Всего аккаунтов</div></div>
+        <div class="stat-card"><div class="n">${deleted}</div><div class="l">Удалённых</div></div>
+        <div class="stat-card"><div class="n" style="color:#ff4757;">${banned}</div><div class="l">❄ Заморожено</div></div>
+        <div class="stat-card"><div class="n">${users.reduce((s,u) => s + (u.messages_count || 0), 0)}</div><div class="l">Сообщений</div></div>
+    `;
+
+    if (!users.length) {
+        document.getElementById('usersTable').innerHTML = '<div class="empty">Пользователи не найдены</div>';
+        return;
+    }
+    let rows = '';
+    users.forEach(u => {
+        const inits = esc((u.display_name || u.username || '?')[0].toUpperCase());
+        const avatar = u.avatar
+            ? `<img class="avatar-sm ${u.is_banned ? 'frozen' : ''}" src="/${esc(u.avatar)}">`
+            : `<span class="avatar-sm ${u.is_banned ? 'frozen' : ''}">${u.is_banned ? '❄' : inits}</span>`;
+        const statusBadge = u.is_deleted
+            ? '<span class="badge gray">удалён</span>'
+            : u.is_banned
+                ? '<span class="badge frz">❄ заморожен</span>'
+                : '<span class="badge ok">активен</span>';
+        const reason = u.is_banned && u.ban_reason ? `<br><span style="color:#ff8aa0;font-size:11px;">причина: ${esc(u.ban_reason)}</span>` : '';
+        rows += `<tr class="clickable" onclick="openProfile(${u.id})">
+            <td>${avatar}</td>
+            <td><b>${esc(u.display_name || '—')}${u.is_banned ? '<span class="snow">❄</span>' : ''}</b><br><span style="color:#8e8e93;font-size:12px;">@${esc(u.username || '—')}</span></td>
+            <td style="color:#8e8e93;">${esc(u.phone)}</td>
+            <td><b>ID:</b> ${u.id} <span style="color:#8e8e93;">(uid ${u.unique_id})</span></td>
+            <td>${fmtDate(u.created_at)}</td>
+            <td>${statusBadge}${reason}</td>
+        </tr>`;
+    });
+    document.getElementById('usersTable').innerHTML = `
+        <table class="data">
+            <thead><tr><th></th><th>Имя</th><th>Телефон</th><th>ID</th><th>Регистрация</th><th>Статус</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+function filterUsers() {
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (!q) { renderUsers(allUsers); return; }
+    const filtered = allUsers.filter(u =>
+        String(u.id).includes(q) ||
+        String(u.unique_id).includes(q) ||
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.display_name || '').toLowerCase().includes(q) ||
+        (u.phone || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.ban_reason || '').toLowerCase().includes(q)
+    );
+    renderUsers(filtered);
+}
+
+function openProfile(userId) {
+    document.getElementById('profilePanel').classList.add('open');
+    document.getElementById('panelBody').innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+    document.getElementById('panelStatus').innerHTML = '';
+    fetch(`${U.profile}/${userId}`, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(p => {
+            if (p.error) throw new Error(p.error);
+            renderProfile(p);
+        })
+        .catch(e => {
+            document.getElementById('panelBody').innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function renderProfile(p) {
+    const inits = esc((p.display_name || p.username || '?')[0].toUpperCase());
+    const avatar = p.avatar
+        ? `<img class="avatar ${p.is_banned ? 'frozen' : ''}" src="/${esc(p.avatar)}">`
+        : `<span class="avatar ${p.is_banned ? 'frozen' : ''}">${p.is_banned ? '❄' : inits}</span>`;
+    document.getElementById('panelStatus').innerHTML = p.is_banned
+        ? '<span class="badge frz">❄ заморожен</span>'
+        : '<span class="badge ok">активен</span>';
+
+    const rows = [
+        ['ID (внутренний)', p.id],
+        ['Уникальный ID', p.unique_id],
+        ['Телефон', p.phone],
+        ['Username', '@' + (p.username || '—')],
+        ['Имя', p.display_name || '—'],
+        ['Email', p.email || '—'],
+        ['Био', p.bio || '—'],
+        ['Дата рождения', p.birthday || '—'],
+        ['Зарегистрирован', fmtDateTime(p.created_at)],
+        ['Был в сети', fmtDateTime(p.last_seen)],
+        ['Регистрация завершена', p.registration_complete ? 'Да' : 'Нет'],
+        ['Аккаунт удалён', p.is_deleted ? 'Да' : 'Нет'],
+        ['Сообщений', p.messages_count],
+        ['Чатов', p.chats_count],
+        ['Историй', p.stories_count],
+        ['Контактов', p.contacts_count],
+    ];
+    const banRow = p.is_banned && p.ban_reason
+        ? `<div class="kv" style="border:1px solid rgba(79,195,247,0.3);"><div class="k" style="color:#4fc3f7;">❄ Причина бана</div><div class="v" style="color:#ff8aa0;">${esc(p.ban_reason)}</div></div>`
+        : '';
+
+    document.getElementById('panelBody').innerHTML = `
+        <div class="phero">${avatar}<div><div class="name">${esc(p.display_name || 'Пользователь')}${p.is_banned ? '<span class="snow">❄</span>' : ''}</div><div class="un">@${esc(p.username || '—')}</div></div></div>
+        ${banRow}
+        ${rows.map(r => `<div class="kv"><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}
+        <div class="section-h"><i class="fas fa-edit"></i> Модерация профиля</div>
+        <div class="edit-field"><label>Имя</label><input id="editName" value="${esc(p.display_name || '')}"></div>
+        <div class="edit-field"><label>Username</label><input id="editUsername" value="${esc(p.username || '')}"></div>
+        <div class="edit-field"><label>Био</label><textarea id="editBio" rows="2">${esc(p.bio || '')}</textarea></div>
+        <div class="edit-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;"><input type="checkbox" id="editResetAvatar" style="width:auto;"> Сбросить аватарку на стандартную</label></div>
+        <button class="pbtn save" onclick="saveProfile(${p.id})"><i class="fas fa-save"></i> Сохранить изменения</button>
+        ${p.is_banned
+            ? `<button class="pbtn unban" onclick="setBan(${p.id}, false)"><i class="fas fa-check-circle"></i> Разморозить аккаунт</button>`
+            : `<button class="pbtn ban" onclick="openBanModal(${p.id})"><i class="fas fa-snowflake"></i> Заморозить (заблокировать)</button>`}
+        <button class="pbtn moder" onclick="deleteContent(${p.id})"><i class="fas fa-eraser"></i> Удалить контент (сообщения и истории)</button>
+        <div id="panelMsg"></div>
+    `;
+}
+
+function saveProfile(userId) {
+    const msg = document.getElementById('panelMsg');
+    msg.style.color = '#667eea';
+    msg.textContent = '⏳ Сохранение...';
+    post(U.edit_profile, {
+        user_id: userId,
+        username: document.getElementById('editUsername').value.trim(),
+        display_name: document.getElementById('editName').value.trim(),
+        bio: document.getElementById('editBio').value.trim(),
+        reset_avatar: document.getElementById('editResetAvatar').checked
+    }).then(d => {
+        if (d.success) {
+            msg.textContent = '✅ Профиль обновлён';
+            msg.style.color = '#34c759';
+            loadUsers();
+            openProfile(userId);
+        } else {
+            msg.textContent = 'Ошибка: ' + (d.error || '');
+        }
+    });
+}
+
+function openBanModal(userId) {
+    banTargetId = userId;
+    document.getElementById('banReasonInput').value = '';
+    document.getElementById('banModal').style.display = 'flex';
+    setTimeout(() => document.getElementById('banReasonInput').focus(), 50);
+}
+function closeBanModal() {
+    document.getElementById('banModal').style.display = 'none';
+    banTargetId = null;
+}
+function confirmBan() {
+    const userId = banTargetId;
+    const reason = document.getElementById('banReasonInput').value.trim();
+    if (!reason) {
+        document.getElementById('banReasonInput').style.borderColor = '#ff4757';
+        return;
+    }
+    closeBanModal();
+    setBan(userId, true, reason);
+}
+
+function setBan(userId, banned, reason) {
+    const msg = document.getElementById('panelMsg');
+    msg.style.color = banned ? '#ff4757' : '#34c759';
+    msg.textContent = banned ? '⏳ Заморозка...' : '⏳ Разморозка...';
+    post(U.ban, { user_id: userId, banned, reason })
+        .then(d => {
+            if (d.success) {
+                msg.textContent = banned ? `✅ Аккаунт заморожен (причина: ${d.reason || '—'})` : '✅ Аккаунт разморожен';
+                msg.style.color = banned ? '#4fc3f7' : '#34c759';
+                loadUsers();
+                openProfile(userId);
+            } else {
+                msg.textContent = 'Ошибка: ' + (d.error || '');
+            }
+        });
+}
+
+function deleteContent(userId) {
+    const msg = document.getElementById('panelMsg');
+    if (!confirm('Удалить все сообщения и истории этого пользователя (модерация контента)?')) return;
+    msg.style.color = '#ffb800';
+    msg.textContent = '⏳ Удаление контента...';
+    post(U.delete_content, { user_id: userId })
+        .then(d => {
+            if (d.success) {
+                msg.textContent = `✅ Удалено сообщений: ${d.deleted_messages}, историй: ${d.deleted_stories}`;
+                openProfile(userId);
+            } else {
+                msg.textContent = 'Ошибка: ' + (d.error || '');
+            }
+        });
+}
+
+// ================= ГРУППЫ =================
+function loadGroups() {
+    const el = document.getElementById('groupsTable');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка групп...</div>';
+    fetch(U.groups, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(groups => {
+            if (groups.error) throw new Error(groups.error);
+            if (!groups.length) {
+                el.innerHTML = '<div class="empty">Групп пока нет</div>';
+                return;
+            }
+            let rows = '';
+            groups.forEach(g => {
+                const inits = esc((g.name || '?')[0].toUpperCase());
+                const avatar = g.avatar ? `<img class="avatar-title-sm" src="/${esc(g.avatar)}">` : `<span class="avatar-title-sm">${inits}</span>`;
+                rows += `<tr>
+                    <td>${avatar}</td>
+                    <td><b>${esc(g.name)}</b><br><span style="color:#8e8e93;font-size:12px;">${g.is_public ? 'публичная' : 'приватная'}</span></td>
+                    <td style="color:#8e8e93;">${esc(g.description || '—')}</td>
+                    <td><b>${g.member_count}</b> участников<br><span style="color:#8e8e93;font-size:12px;">${g.message_count} сообщений</span></td>
+                    <td>@${esc(g.owner_username || '—')}<br><span style="color:#8e8e93;font-size:12px;">ID ${g.owner_id}</span></td>
+                    <td>${fmtDate(g.created_at)}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button class="tbtn" onclick="openGroupMembers(${g.id}, '${esc(g.name).replace(/'/g, "\\'")}')"><i class="fas fa-list"></i> Участники</button>
+                        <button class="tbtn danger" onclick="deleteGroup(${g.id}, '${esc(g.name).replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            el.innerHTML = `
+                <table class="data">
+                    <thead><tr><th></th><th>Название</th><th>Описание</th><th>Участники</th><th>Владелец</th><th>Создана</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function openGroupMembers(groupId, name) {
+    document.getElementById('listTitle').textContent = 'Участники: ' + name;
+    const list = document.getElementById('listBody');
+    list.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+    document.getElementById('listPanel').classList.add('open');
+    fetch(`${U.group_members}/${groupId}`, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(members => {
+            if (!members.length) { list.innerHTML = '<div class="empty">Нет участников</div>'; return; }
+            list.innerHTML = members.map(m => {
+                const inits = esc((m.display_name || m.username || '?')[0].toUpperCase());
+                const avatar = m.avatar ? `<img class="avatar-sm ${m.is_banned ? 'frozen' : ''}" src="/${esc(m.avatar)}">` : `<span class="avatar-sm ${m.is_banned ? 'frozen' : ''}">${m.is_banned ? '❄' : inits}</span>`;
+                const roleBadge = m.role === 'owner'
+                    ? '<span class="badge frz">создатель</span>'
+                    : m.role === 'admin'
+                        ? '<span class="badge ok">админ</span>' : '';
+                return `<div class="kv" style="justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:10px;">${avatar}<div><b>${esc(m.display_name || '—')}${m.is_banned ? '<span class="snow">❄</span>' : ''}</b><br><span style="color:#8e8e93;font-size:12px;">@${esc(m.username || '—')} · ${esc(m.phone)}</span></div></div>
+                    <div style="display:flex;align-items:center;gap:8px;">${roleBadge}${m.role !== 'owner' ? `<button class="tbtn danger small" onclick="removeMember(${groupId}, ${m.user_id})"><i class="fas fa-user-minus"></i></button>` : ''}</div>
+                </div>`;
+            }).join('');
+        });
+}
+
+function removeMember(groupId, userId) {
+    if (!confirm('Исключить участника из группы?')) return;
+    post(`${U.group_remove_member}/${groupId}`, { user_id: userId })
+        .then(d => {
+            updateListCard(d.success);
+            openGroupMembers(groupId, document.getElementById('listTitle').textContent.replace('Участники: ', ''));
+        });
+}
+function updateListCard(ok) {
+    const b = document.getElementById('listBody');
+    const d = document.createElement('div');
+    d.style.cssText = 'font-size:13px;color:' + (ok ? '#34c759' : '#ff4757') + ';margin-bottom:8px;';
+    d.textContent = ok ? '✅ Исключён' : 'Ошибка';
+    b.prepend(d);
+}
+
+function deleteGroup(groupId, name) {
+    if (!confirm('Удалить группу «' + name + '» полностью? Действие необратимо.')) return;
+    post(`${U.group_delete}/${groupId}`)
+        .then(d => {
+            if (d.success) loadGroups();
+            else alert('Ошибка: ' + (d.error || ''));
+        });
+}
+
+// ================= КАНАЛЫ =================
+function loadChannels() {
+    const el = document.getElementById('channelsTable');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка каналов...</div>';
+    fetch(U.channels, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(channels => {
+            if (channels.error) throw new Error(channels.error);
+            if (!channels.length) {
+                el.innerHTML = '<div class="empty">Каналов пока нет</div>';
+                return;
+            }
+            let rows = '';
+            channels.forEach(c => {
+                const inits = esc((c.name || '?')[0].toUpperCase());
+                const avatar = c.avatar ? `<img class="avatar-title-sm" src="/${esc(c.avatar)}">` : `<span class="avatar-title-sm">${inits}</span>`;
+                rows += `<tr>
+                    <td>${avatar}</td>
+                    <td><b>${esc(c.name)}</b><br><span style="color:#8e8e93;font-size:12px;">${c.is_public ? 'публичный' : 'приватный'}</span></td>
+                    <td style="color:#8e8e93;">${esc(c.description || '—')}</td>
+                    <td><b>${c.subscriber_count}</b> подписчиков<br><span style="color:#8e8e93;font-size:12px;">${c.message_count} постов</span></td>
+                    <td>@${esc(c.owner_username || '—')}</td>
+                    <td>${fmtDate(c.created_at)}</td>
+                    <td style="text-align:right; white-space:nowrap;">
+                        <button class="tbtn" onclick="openChannelSubs(${c.id}, '${esc(c.name).replace(/'/g, "\\'")}')"><i class="fas fa-list"></i> Подписчики</button>
+                        <button class="tbtn danger" onclick="deleteChannel(${c.id}, '${esc(c.name).replace(/'/g, "\\'")}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            el.innerHTML = `
+                <table class="data">
+                    <thead><tr><th></th><th>Название</th><th>Описание</th><th>Подписчики</th><th>Владелец</th><th>Создан</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function openChannelSubs(channelId, name) {
+    document.getElementById('listTitle').textContent = 'Подписчики: ' + name;
+    const list = document.getElementById('listBody');
+    list.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка...</div>';
+    document.getElementById('listPanel').classList.add('open');
+    fetch(`${U.channel_subscribers}/${channelId}`, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(subs => {
+            if (!subs.length) { list.innerHTML = '<div class="empty">Нет подписчиков</div>'; return; }
+            list.innerHTML = subs.map(m => {
+                const inits = esc((m.display_name || m.username || '?')[0].toUpperCase());
+                const avatar = m.avatar ? `<img class="avatar-sm ${m.is_banned ? 'frozen' : ''}" src="/${esc(m.avatar)}">` : `<span class="avatar-sm ${m.is_banned ? 'frozen' : ''}">${m.is_banned ? '❄' : inits}</span>`;
+                return `<div class="kv"><div style="display:flex;align-items:center;gap:10px;">${avatar}<div><b>${esc(m.display_name || '—')}${m.is_banned ? '<span class="snow">❄</span>' : ''}</b><br><span style="color:#8e8e93;font-size:12px;">@${esc(m.username || '—')} · ${esc(m.phone)}</span></div></div></div>`;
+            }).join('');
+        });
+}
+
+function deleteChannel(channelId, name) {
+    if (!confirm('Удалить канал «' + name + '» полностью? Действие необратимо.')) return;
+    post(`${U.channel_delete}/${channelId}`)
+        .then(d => {
+            if (d.success) loadChannels();
+            else alert('Ошибка: ' + (d.error || ''));
+        });
+}
+
+// ================= СТАТИСТИКА =================
+function loadStats() {
+    const el = document.getElementById('statsContainer');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка статистики...</div>';
+    fetch(U.statistics, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(s => {
+            if (s.error) throw new Error(s.error);
+            const maxDay = Math.max(...s.registrations.map(r => r.cnt), 1);
+            const bars = s.registrations.map(r => `
+                <div class="bar" style="height:${Math.max(4, Math.round(r.cnt / maxDay * 100))}%;" title="${fmtDate(r.day)}: ${r.cnt}">
+                    <span>${r.day.slice(5)}</span>
+                </div>`).join('');
+            const topUsers = (s.top_users || []).map((u, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${esc(u.display_name || '—')}${u.is_banned ? '<span class="snow">❄</span>' : ''}</td>
+                    <td style="color:#8e8e93;">@${esc(u.username || '—')}</td>
+                    <td><b>${u.cnt}</b></td>
+                </tr>`).join('');
+            el.innerHTML = `
+                <div class="metric-group">
+                    <div class="section-h"><i class="fas fa-users"></i> Пользователи</div>
+                    <div class="metric-grid">
+                        <div class="metric"><div class="m-n">${s.users}</div><div class="m-l">Всего аккаунтов</div></div>
+                        <div class="metric"><div class="m-n" style="color:#ff4757;">${s.banned_users}</div><div class="m-l">❄ Заморожено</div></div>
+                        <div class="metric"><div class="m-n" style="color:#8e8e93;">${s.deleted_users}</div><div class="m-l">Удалённых</div></div>
+                        <div class="metric"><div class="m-n">${s.contacts}</div><div class="m-l">Контактов</div></div>
+                    </div>
+                </div>
+                <div class="metric-group">
+                    <div class="section-h"><i class="fas fa-envelope"></i> Контент</div>
+                    <div class="metric-grid">
+                        <div class="metric"><div class="m-n">${s.messages}</div><div class="m-l">Сообщений</div></div>
+                        <div class="metric"><div class="m-n">${s.chats}</div><div class="m-l">Чатов</div></div>
+                        <div class="metric"><div class="m-n">${s.groups}</div><div class="m-l">Групп</div></div>
+                        <div class="metric"><div class="m-n">${s.channels}</div><div class="m-l">Каналов</div></div>
+                        <div class="metric"><div class="m-n">${s.stories}</div><div class="m-l">Историй</div></div>
+                    </div>
+                </div>
+                <div class="metric-group">
+                    <div class="section-h"><i class="fas fa-calendar-day"></i> Регистрации за 14 дней</div>
+                    <div class="chart">${bars || '<div class="empty">Нет данных</div>'}</div>
+                </div>
+                <div class="metric-group">
+                    <div class="section-h"><i class="fas fa-trophy"></i> Топ активных пользователей</div>
+                    <table class="data">
+                        <thead><tr><th>#</th><th>Имя</th><th>Username</th><th>Сообщений</th></tr></thead>
+                        <tbody>${topUsers || '<tr><td colspan="4" style="color:#8e8e93;">Сообщений пока нет</td></tr>'}</tbody>
+                    </table>
+                </div>`;
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+// ================= ЖУРНАЛ (АУДИТ) =================
+function loadJournal() {
+    const el = document.getElementById('journalTable');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка журнала...</div>';
+    fetch(U.audit_log, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(log => {
+            if (log.error) throw new Error(log.error);
+            if (!log.length) {
+                el.innerHTML = '<div class="empty">Журнал пуст</div>';
+                return;
+            }
+            const actionNames = {
+                'ban': '❄ Заморозка аккаунта',
+                'unban': '✅ Разморозка аккаунта',
+                'delete_content': '🗑 Удаление контента',
+                'edit_profile': '✏️ Редактирование профиля',
+                'delete_group': '🚫 Удаление группы',
+                'delete_channel': '🚫 Удаление канала',
+                'remove_group_member': '👤 Исключение из группы',
+                'login': '🔐 Вход в панель'
+            };
+            let rows = '';
+            log.forEach(e => {
+                rows += `<tr>
+                    <td>${e.id}</td>
+                    <td>${fmtDateTime(e.created_at)}</td>
+                    <td>${actionNames[e.action] || esc(e.action)}</td>
+                    <td style="color:#8e8e93;">${esc(e.details || '—')}</td>
+                </tr>`;
+            });
+            el.innerHTML = `
+                <table class="data">
+                    <thead><tr><th>#</th><th>Когда</th><th>Действие</th><th>Детали</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function loadLoginLog() {
+    const el = document.getElementById('loginLogTable');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка журнала входов...</div>';
+    fetch(U.login_log, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(log => {
+            if (log.error) throw new Error(log.error);
+            if (!log.length) {
+                el.innerHTML = '<div class="empty">Журнал входов пуст</div>';
+                return;
+            }
+            let rows = '';
+            log.forEach(e => {
+                const code = `<code style="background:rgba(102,126,234,0.14);color:#a5b4fc;border-radius:6px;padding:2px 8px;font-size:13px;letter-spacing:1px;">${esc(e.probe || '—')}</code>`;
+                const ok = e.success ? '<span style="color:#34c759;font-weight:600;">✅ Успешно</span>' : '<span style="color:#ff6b61;font-weight:600;">❌ Отказ</span>';
+                rows += `<tr>
+                    <td>${e.id}</td>
+                    <td>${fmtDateTime(e.created_at)}</td>
+                    <td style="font-family:Consolas,monospace;">${esc(e.ip || '—')}</td>
+                    <td style="color:#a5b4fc;">${esc(e.device || '—')}</td>
+                    <td style="color:#8e8e93;">${esc(e.phone || '—')}</td>
+                    <td>${code}</td>
+                    <td>${ok}</td>
+                </tr>`;
+            });
+            el.innerHTML = `
+                <table class="data">
+                    <thead><tr><th>#</th><th>Когда</th><th>IP</th><th>Устройство / браузер</th><th>Телефон</th><th>Код доступа</th><th>Результат</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+// ================= ПРОСМОТР АККАУНТА (READ-ONLY) =================
+let viewerUser = null;
+let viewerImportMode = false;
+let viewerImportMessages = {};
+
+function importViewerJson(file) {
+    const status = document.getElementById('viImportStatus');
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            const data = JSON.parse(reader.result);
+            if (!data || !data.profile || !Array.isArray(data.chats)) {
+                throw new Error('Неверный формат файла: ожидается { profile, chats }');
+            }
+            viewerImportMode = true;
+            viewerImportMessages = {};
+            viewerUser = {
+                profile: data.profile,
+                chats: (data.chats || []).map(item => {
+                    const c = (item && item.chat) ? item.chat : item;
+                    viewerImportMessages[c.chat_type + ':' + c.chat_id] =
+                        (item && Array.isArray(item.messages)) ? item.messages : [];
+                    return c;
+                })
+            };
+            status.textContent = '✅ Файл загружен: ' + (file.name || '');
+            renderAccountView(viewerUser);
+        } catch (e) {
+            status.textContent = '';
+            document.getElementById('viewerResults').innerHTML =
+                '<div class="empty">Ошибка импорта: ' + esc(e.message) + '</div>';
+        }
+    };
+    reader.readAsText(file);
+}
+
+function viewerSearch() {
+    const el = document.getElementById('viewerResults');
+    const phone = document.getElementById('viPhone').value.trim();
+    const username = document.getElementById('viUsername').value.trim();
+    const uid = document.getElementById('viUid').value.trim();
+    if (!phone && !username && !uid) {
+        el.innerHTML = '<div class="empty">Укажите хотя бы телефон, username или уникальный ID</div>';
+        return;
+    }
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Поиск...</div>';
+    fetch(U.account_search + '?' + new URLSearchParams({ phone, username, unique_id: uid }),
+        { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            if (!d.users || !d.users.length) {
+                el.innerHTML = '<div class="empty">Пользователь не найден</div>';
+                return;
+            }
+            if (d.users.length === 1) {
+                loadAccountView(d.users[0].id);
+            } else {
+                el.innerHTML = '<div class="vf-hint">Найдено несколько пользователей — выберите нужного:</div>' +
+                    d.users.map(u => vfUserCard(u, 'loadAccountView(' + u.id + ')')).join('');
+            }
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function vfUserCard(u, onclick) {
+    const inits = esc((u.display_name || u.username || '?')[0].toUpperCase());
+    const avatar = u.avatar
+        ? `<img class="avatar" src="/${esc(u.avatar)}">`
+        : `<span class="avatar">${u.is_banned ? '❄' : inits}</span>`;
+    return `<div class="vf-user" onclick="${onclick}">
+        ${avatar}
+        <div style="flex:1;min-width:0;">
+            <b>${esc(u.display_name || '—')}${u.is_banned ? '<span class="snow">❄</span>' : ''}</b>
+            <br><span style="color:#8e8e93;font-size:12px;">@${esc(u.username || '—')} · ${esc(u.phone)}</span>
+        </div>
+        <span style="color:#8e8e93;font-size:12px;">ID ${u.id} (uid ${esc(u.unique_id)})</span>
+    </div>`;
+}
+
+function loadAccountView(userId) {
+    const el = document.getElementById('viewerResults');
+    el.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка аккаунта...</div>';
+    fetch(U.account_view + '/' + userId, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            viewerImportMode = false;
+            viewerImportMessages = {};
+            viewerUser = d;
+            renderAccountView(d);
+        })
+        .catch(e => {
+            el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function renderAccountView(data) {
+    const p = data.profile;
+    const inits = esc((p.display_name || p.username || '?')[0].toUpperCase());
+    const avatar = p.avatar
+        ? `<img class="avatar" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" src="/${esc(p.avatar)}">`
+        : `<span class="avatar" style="width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;color:#fff;background:linear-gradient(135deg,#667eea,#764ba2);">${p.is_banned ? '❄' : inits}</span>`;
+
+    const chats = (data.chats || []).map(c => {
+        const tag = c.chat_type === 'group' ? '<span class="tag group">группа</span>'
+            : c.chat_type === 'channel' ? '<span class="tag channel">канал</span>'
+            : '<span class="tag personal">личный</span>';
+        const inits2 = esc((c.name || '?')[0].toUpperCase());
+        const av = c.avatar
+            ? `<img class="avatar" src="/${esc(c.avatar)}">`
+            : `<span class="avatar">${inits2}</span>`;
+        const sub = c.chat_type === 'group'
+            ? (c.member_count || 0) + ' участников'
+            : c.chat_type === 'channel'
+                ? (c.subscriber_count || 0) + ' подписчиков'
+                : c.other_username ? '@' + esc(c.other_username) : '';
+        return `<div class="chat-item" onclick="loadChatMessages('${c.chat_type}', ${c.chat_id})">
+            ${av}
+            <div class="meta">
+                <div class="t">${esc(c.name || '—')} ${tag}${c.chat_type === 'personal' && c.other_banned ? '<span class="snow">❄</span>' : ''}</div>
+                <div class="s">${sub}${c.last_message ? ' · ' + esc(String(c.last_message).slice(0, 60)) : ''}</div>
+            </div>
+            <div class="cnt"><div class="n">${c.message_count}</div><div class="l">сообщ.</div></div>
+        </div>`;
+    }).join('') || '<div class="empty">Нет чатов</div>';
+
+    const info = [
+        ['Уникальный ID', p.unique_id],
+        ['Телефон', p.phone],
+        ['Username', '@' + (p.username || '—')],
+        ['Имя', p.display_name || '—'],
+        ['Email', p.email || '—'],
+        ['Сообщений', p.messages_count],
+        ['Зарегистрирован', fmtDateTime(p.created_at)]
+    ].map(r => `<div class="kv"><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('');
+
+    const el = document.getElementById('viewerResults');
+    el.innerHTML = `
+        <div class="vf-card">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+                ${avatar}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:18px;font-weight:800;">${esc(p.display_name || 'Пользователь')}${p.is_banned ? '<span class="snow">❄</span>' : ''}${viewerImportMode ? '<span class="tag" style="background:rgba(102,126,234,0.18);color:#8ea3ff;margin-left:8px;">из файла</span>' : ''}</div>
+                    <div style="color:#8e8e93;font-size:13px;">@${esc(p.username || '—')} · ID ${p.id}</div>
+                </div>
+            </div>
+            ${info}
+            <div style="display:flex;gap:10px;margin-top:12px;">
+                <button class="vf-btn" onclick="exportAccountJson()"><i class="fas fa-download"></i> Экспорт JSON</button>
+                <button class="vf-btn" onclick="exportAccountTxt()"><i class="fas fa-file-alt"></i> Экспорт TXT</button>
+                <button class="vf-btn" onclick="viewerSearch()" style="margin-left:auto;"><i class="fas fa-undo"></i> Другой аккаунт</button>
+            </div>
+        </div>
+        <div class="vf-card">
+            <div class="section-h"><i class="fas fa-envelope"></i> Чаты (${(data.chats || []).length})</div>
+            ${chats}
+        </div>`;
+}
+
+function loadChatMessages(chatType, chatId) {
+    const found = (viewerUser ? viewerUser.chats : []).find(c => c.chat_type === chatType && c.chat_id === chatId);
+    document.getElementById('listTitle').innerHTML = `<div class="chat-panel-title">
+        ${found && found.avatar
+            ? `<img src="/${esc(found.avatar)}">`
+            : `<span class="avatar">${esc((found ? found.name || '?' : '?')[0].toUpperCase())}</span>`}
+        <span>${esc(found ? found.name || '' : 'Чат')}</span>
+    </div>`;
+    const list = document.getElementById('listBody');
+    list.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка переписки...</div>';
+    document.getElementById('listPanel').classList.add('open');
+
+    // Импорт из файла: сообщения уже локально в JSON (без запросов к серверу)
+    if (viewerImportMode) {
+        const msgs = viewerImportMessages[chatType + ':' + chatId] || [];
+        const box = document.createElement('div');
+        box.className = 'msg-list';
+        box.innerHTML = msgs.map(m => renderMsg(m)).join('') || '<div class="empty">Сообщений нет</div>';
+        const holder = document.getElementById('listBody');
+        holder.innerHTML = '';
+        holder.appendChild(box);
+        holder.scrollTop = holder.scrollHeight;
+        return;
+    }
+
+    const loadPage = (offset) => {
+        fetch(`${U.account_messages}/${viewerUser.profile.id}?type=${chatType}&id=${chatId}&limit=300&offset=${offset}`,
+            { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(d => {
+                if (d.error) throw new Error(d.error);
+                const box = document.createElement('div');
+                box.className = 'msg-list';
+                box.innerHTML = d.messages.map(m => renderMsg(m)).join('');
+                if (!d.total) box.innerHTML = '<div class="empty">Сообщений нет</div>';
+                const holder = document.getElementById('listBody');
+                holder.innerHTML = '';
+                if (d.has_more) {
+                    const more = document.createElement('button');
+                    more.className = 'tbtn';
+                    more.style.cssText = 'display:block;margin:10px auto;width:auto;';
+                    more.innerHTML = '<i class="fas fa-arrow-up"></i> Загрузить ещё (' + (d.total - offset - d.messages.length) + ')';
+                    more.onclick = () => { more.remove(); loadPage(offset + d.messages.length); };
+                    holder.appendChild(more);
+                } else if (offset > 0) {
+                    const top = document.createElement('div');
+                    top.className = 'empty';
+                    top.textContent = 'Начало переписки';
+                    holder.appendChild(top);
+                }
+                holder.appendChild(box);
+                holder.scrollTop = holder.scrollHeight;
+            })
+            .catch(e => {
+                document.getElementById('listBody').innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+            });
+    };
+    loadPage(0);
+}
+
+function mediaUrl(p) {
+    if (!p) return '';
+    if (/^https?:\/\//i.test(p)) return p;
+    let u = String(p).replace(/^\/+/, '');
+    if (u.indexOf('static/') === 0) u = u.slice(7);
+    return '/' + u;
+}
+
+function openMedia(url, kind) {
+    let ov = document.getElementById('mediaOverlay');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'mediaOverlay';
+        ov.innerHTML = '<button class="mclose" onclick="closeMedia()">&times;</button>' +
+            '<div class="mbody"></div><div class="mtip">ESC или клик по фону — закрыть</div>';
+        ov.onclick = e => { if (e.target === ov) closeMedia(); };
+        document.body.appendChild(ov);
+    }
+    ov.querySelector('.mbody').innerHTML = kind === 'video'
+        ? '<video src="' + esc(url) + '" controls autoplay playsinline></video>'
+        : '<img src="' + esc(url) + '" alt="">';
+    ov.classList.add('on');
+}
+
+function closeMedia() {
+    const ov = document.getElementById('mediaOverlay');
+    if (!ov) return;
+    ov.classList.remove('on');
+    ov.querySelector('.mbody').innerHTML = '';
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMedia();
+});
+
+function renderMedia(m) {
+    const url = mediaUrl(m.file_path);
+    if (!url) return '';
+    const fs = m.file_size ? ' · ' + fmtBytes(m.file_size) : '';
+    const open = `<div style="margin-top:6px;"><a class="mfile" href="${esc(url)}" target="_blank" rel="noopener">` +
+        `<i class="fas fa-download"></i> Открыть оригинал (${esc(m.file_name || m.file_type || 'файл')}${fs})</a></div>`;
+    const broken = esc(m.file_name || '') + ' — файл не найден на сервере';
+    if (m.file_type === 'photo') {
+        return `<div class="media"><img class="mimg" loading="lazy" src="${esc(url)}" alt=""
+            onclick="openMedia('${esc(url)}','photo')"
+            onerror="this.outerHTML='<div class=&quot;mbroken&quot;>🖼 ${broken}</div>'">${open}</div>`;
+    }
+    if (m.file_type === 'video') {
+        return `<div class="media"><video class="mvid" controls preload="metadata" src="${esc(url)}"
+            onerror="this.outerHTML='<div class=&quot;mbroken&quot;>🎬 ${broken}</div>'"></video>${open}</div>`;
+    }
+    if (m.file_type === 'audio') {
+        return `<div class="media"><div class="mbroken" style="color:#8ea3ff;">🎵 ${esc(m.file_name || 'аудио')}${fs}</div>` +
+            `<audio class="maudio" controls preload="metadata" src="${esc(url)}"></audio>${open}</div>`;
+    }
+    return `<div class="media"><a class="mfile" href="${esc(url)}" target="_blank" rel="noopener" download>` +
+        `<i class="fas fa-file"></i> 📎 ${esc(m.file_name || m.file_type || 'файл')}${fs} ` +
+        `<span style="color:#8e8e93;">(${esc(m.file_type || 'document')})</span></a></div>`;
+}
+
+function renderMsg(m) {
+    const sender = m.display_name || m.username || ('id' + m.sender_id);
+    const inits = esc((sender || '?')[0].toUpperCase());
+    const av = m.avatar
+        ? `<img class="avatar" src="/${esc(m.avatar)}">`
+        : `<span class="avatar">${m.sender_is_banned ? '❄' : inits}</span>`;
+    let body;
+    if (m.file_type) {
+        body = renderMedia(m);
+        if (m.content) body += `<div class="text">${esc(m.content)}</div>`;
+    } else {
+        body = `<div class="text">${esc(m.content || '')}</div>`;
+    }
+    return `<div class="msg">
+        ${av}
+        <div style="flex:1;min-width:0;">
+            <span class="who">${esc(sender)}</span><span class="time">${fmtDateTime(m.created_at)}</span>
+            ${body}
+        </div>
+    </div>`;
+}
+
+function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' МБ';
+    if (n >= 1024) return (n / 1024).toFixed(1) + ' КБ';
+    return n + ' Б';
+}
+
+function viewerExportBase() {
+    if (!viewerUser) return Promise.reject(new Error('Нет данных'));
+    if (viewerImportMode) {
+        // Импортированный файл: экспортируем то, что уже загружено локально
+        const all = (viewerUser.chats || []).map(c => ({
+            chat: c,
+            messages: viewerImportMessages[c.chat_type + ':' + c.chat_id] || []
+        }));
+        return Promise.resolve({
+            exported_at: new Date().toISOString(),
+            profile: viewerUser.profile,
+            chats: all
+        });
+    }
+    const all = [];
+    // Загружаем все сообщения всех чатов
+    const jobs = viewerUser.chats.map(c => {
+        return fetch(`${U.account_messages}/${viewerUser.profile.id}?type=${c.chat_type}&id=${c.chat_id}&limit=500`,
+            { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+            .then(r => r.json())
+            .then(d => {
+                all.push({ chat: c, messages: d.messages });
+            });
+    });
+    return Promise.all(jobs).then(() => ({
+        exported_at: new Date().toISOString(),
+        profile: viewerUser.profile,
+        chats: all
+    }));
+}
+
+function exportAccountJson() {
+    viewerExportBase().then(data => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, 'sputnik_' + (viewerUser.profile.username || viewerUser.profile.id) + '.json');
+    });
+}
+
+function exportAccountTxt() {
+    viewerExportBase().then(data => {
+        const p = data.profile;
+        const L = [];
+        L.push('СПУТНИК — выгрузка аккаунта (read-only)');
+        L.push('Дата выгрузки: ' + new Date().toLocaleString('ru-RU'));
+        L.push('='.repeat(50));
+        L.push('Имя: ' + (p.display_name || '—'));
+        L.push('Username: @' + (p.username || '—'));
+        L.push('Телефон: ' + (p.phone || '—'));
+        L.push('Уникальный ID: ' + (p.unique_id || '—'));
+        L.push('Внутренний ID: ' + p.id);
+        L.push('Email: ' + (p.email || '—'));
+        L.push('Зарегистрирован: ' + fmtDateTime(p.created_at));
+        L.push('');
+        data.chats.forEach(c => {
+            const n = c.chat.name || '—';
+            const t = c.chat.chat_type === 'group' ? 'группа' : c.chat.chat_type === 'channel' ? 'канал' : 'личный';
+            L.push('');
+            L.push('— ' + n + ' [' + t + ', ' + c.chat.message_count + ' сообщений]');
+            L.push('-'.repeat(50));
+            (c.messages || []).forEach(m => {
+                const sender = m.display_name || m.username || ('id' + m.sender_id);
+                const line = m.file_type
+                    ? '📎 ' + (m.file_name || m.file_type) + (m.content ? ' | ' + m.content : '')
+                    : (m.content || '');
+                L.push('[' + fmtDateTime(m.created_at) + '] ' + sender + ': ' + line);
+            });
+        });
+        const txt = L.join('\n');
+        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+        downloadBlob(blob, 'sputnik_' + (p.username || p.id) + '.txt');
+    });
+}
+
+function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+['viPhone', 'viUsername', 'viUid'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') viewerSearch();
+    });
+});
+document.getElementById('viImportInput').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) importViewerJson(f);
+    e.target.value = '';
+});
+
+// ================= ПАНЕЛИ =================
+function closeProfile() {
+    document.getElementById('profilePanel').classList.remove('open');
+}
+function closeList() {
+    document.getElementById('listPanel').classList.remove('open');
+}
+
+document.getElementById('ipCode').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+});
+document.getElementById('ipPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const code = document.getElementById('ipCode');
+        if (code.value.trim().length === 5) doLogin();
+        else code.focus();
+    }
+});
+document.getElementById('ipPhone').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('ipPassword').focus();
+});
+document.getElementById('banModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('banModal')) closeBanModal();
+});
+
+fetch(U.status, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+    .then(r => r.json())
+    .then(d => {
+        if (d.is_admin) enterDash();
+    });
+</script>
+</body>
+</html>

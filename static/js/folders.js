@@ -6,7 +6,7 @@ let selectedChatsForFolder = [];
 let isFolderLoading = false;
 
 // ===== ЗАГРУЗКА ПАПОК =====
-function loadFolders() {
+function loadFolders(preferredFolderId) {
     if (isFolderLoading) return;
     isFolderLoading = true;
 
@@ -16,19 +16,15 @@ function loadFolders() {
             foldersData = data.folders || [];
             renderFoldersUI();
 
-            const savedFolderId = localStorage.getItem('currentFolderId');
+            const savedFolderId = preferredFolderId || localStorage.getItem('currentFolderId');
 
             if (savedFolderId && foldersData.some(f => f.id == savedFolderId)) {
                 selectFolder(parseInt(savedFolderId));
-            } else if (foldersData.length > 0) {
-                const firstCustomFolder = foldersData.find(f => !f.is_default);
-                if (firstCustomFolder) {
-                    selectFolder(firstCustomFolder.id);
-                } else {
-                    const defaultFolder = foldersData.find(f => f.is_default);
-                    if (defaultFolder) {
-                        selectFolder(defaultFolder.id);
-                    }
+            } else {
+                // По умолчанию всегда открываем «Все чаты» (как в Telegram)
+                const defaultFolder = foldersData.find(f => f.is_default) || foldersData[0];
+                if (defaultFolder) {
+                    selectFolder(defaultFolder.id);
                 }
             }
         })
@@ -43,28 +39,142 @@ function renderFoldersUI() {
     const tabsContainer = document.querySelector('.chat-tabs');
     if (!tabsContainer) return;
 
-    // Очищаем контейнер полностью
+    const defaultFolder = foldersData.find(f => f.is_default);
+
     tabsContainer.innerHTML = '';
 
-    // Добавляем только папки
-    foldersData.forEach(folder => {
+    // Если дефолтной папки нет — создаём искусственную вкладку «Все чаты»
+    // (на случай миграции, когда папки ещё не было)
+    const defaultName = defaultFolder ? defaultFolder.name : 'Все чаты';
+
+    // Вкладка «Все чаты»
+    const defaultTab = document.createElement('button');
+    defaultTab.className = 'chat-tab' +
+        ((currentFolderId === (defaultFolder ? defaultFolder.id : null)) || currentFolderId === null ? ' active' : '');
+    defaultTab.onclick = () => selectDefaultFolder();
+    defaultTab.style.flex = '0 0 auto';
+    defaultTab.style.minWidth = '60px';
+    defaultTab.innerHTML = `
+        <i class="fas fa-inbox"></i>
+        <span style="max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(defaultName)}</span>
+        <span id="unreadTotalBadge" class="tab-badge" style="display:none;"></span>
+    `;
+    tabsContainer.appendChild(defaultTab);
+
+    // Пользовательские папки
+    foldersData.filter(f => !f.is_default).forEach(folder => {
         const tab = document.createElement('button');
-        tab.className = `chat-tab ${currentFolderId === folder.id ? 'active' : ''}`;
+        tab.className = 'chat-tab' + (currentFolderId === folder.id ? ' active' : '');
         tab.setAttribute('data-folder-id', folder.id);
-
-        let iconClass = 'fa-folder';
-        if (folder.is_default) {
-            iconClass = 'fa-cloud';
-        }
-
-        tab.innerHTML = `
-            <i class="fas ${iconClass}"></i>
-            <span style="font-size: 12px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${folder.name}</span>
-        `;
-
+        tab.style.flex = '0 0 auto';
+        tab.style.minWidth = '44px';
+        tab.style.padding = '10px 8px';
         tab.onclick = () => selectFolder(folder.id);
+        tab.innerHTML = `
+            <i class="fas fa-folder"></i>
+            <span style="font-size: 12px; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(folder.name)}</span>
+        `;
         tabsContainer.appendChild(tab);
     });
+
+    // Кнопка создания папки (как в Telegram)
+    const addTab = document.createElement('button');
+    addTab.className = 'chat-tab chat-tab-add';
+    addTab.style.flex = '0 0 auto';
+    addTab.title = 'Создать папку';
+    addTab.onclick = () => openCreateFolderModal();
+    addTab.innerHTML = '<i class="fas fa-plus"></i>';
+    tabsContainer.appendChild(addTab);
+
+    enableTabsDragToScroll(tabsContainer);
+}
+
+// ===== ПЕРЕТАСКИВАНИЕ ВКЛАДОК ПАПОК (drag-to-scroll) =====
+let tabsDrag = null;
+let tabsDragMoved = false;
+
+function enableTabsDragToScroll(container) {
+    if (!container || container.dataset.dragEnabled) return;
+    container.dataset.dragEnabled = '1';
+
+    const threshold = 6;
+
+    container.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        // Касание (телефон) — используем нативный свайп-скролл, не мешаем ему
+        if (e.pointerType !== 'mouse') return;
+        tabsDrag = { startX: e.clientX, startScroll: container.scrollLeft, moved: false, captured: false };
+    });
+
+    container.addEventListener('pointermove', e => {
+        if (!tabsDrag) return;
+        const dx = e.clientX - tabsDrag.startX;
+        if (Math.abs(dx) > threshold) tabsDrag.moved = true;
+        if (tabsDrag.moved) {
+            if (!tabsDrag.captured) {
+                try { container.setPointerCapture(e.pointerId); tabsDrag.captured = true; } catch (err) {}
+                container.classList.add('dragging');
+                container.style.userSelect = 'none';
+                e.preventDefault();
+            }
+            container.scrollLeft = tabsDrag.startScroll - dx;
+        }
+    });
+
+    const stopDrag = e => {
+        if (!tabsDrag) return;
+        tabsDragMoved = tabsDrag.moved || tabsDragMoved;
+        if (tabsDrag.captured) {
+            try { container.releasePointerCapture(e.pointerId); } catch (err) {}
+            container.classList.remove('dragging');
+            container.style.userSelect = '';
+        }
+        tabsDrag = null;
+    };
+    container.addEventListener('pointerup', stopDrag);
+    container.addEventListener('pointercancel', stopDrag);
+
+    // Если вкладки перетаскивали — клик по папке не должен срабатывать
+    container.addEventListener('click', e => {
+        if (tabsDragMoved) {
+            e.preventDefault();
+            e.stopPropagation();
+            tabsDragMoved = false;
+        }
+    }, true);
+}
+
+// ===== ВЫБОР ДЕФОЛТНОЙ ПАПКИ «ВСЕ ЧАТЫ» =====
+function selectDefaultFolder() {
+    const defaultFolder = foldersData.find(f => f.is_default);
+    if (defaultFolder) {
+        selectFolder(defaultFolder.id);
+    } else {
+        // Фолбэк: показываем все чаты напрямую
+        currentFolderId = null;
+        sessionStorage.setItem('inFolder', 'true');
+        renderFoldersUI();
+        fetch('/api/get_chats_list')
+            .then(r => r.json())
+            .then(chats => renderDefaultFolder(chats))
+            .catch(err => console.error('Error loading all chats:', err));
+    }
+}
+
+// ===== ОТОБРАЖЕНИЕ ПАПКИ «ВСЕ ЧАТЫ» =====
+function renderDefaultFolder(chats) {
+    const formattedChats = (chats || []).map(chat => ({
+        chat_id: chat.chat_id || chat.id || chat.group_id || chat.channel_id,
+        chat_type: chat.chat_type || 'personal',
+        chat_name: chat.name || 'Чат',
+        chat_avatar: chat.avatar || '',
+        last_message: chat.last_message || '',
+        last_message_time: chat.last_message_time || '',
+        other_user_id: chat.other_user_id || chat.id,
+        unread_count: chat.unread_count || 0,
+        is_pinned: chat.is_pinned || false
+    }));
+    renderChatsListForFolder(formattedChats);
 }
 
 // ===== ВЫБОР ПАПКИ =====
@@ -83,18 +193,7 @@ function selectFolder(folderId) {
         fetch('/api/get_chats_list')
             .then(r => r.json())
             .then(chats => {
-                const formattedChats = chats.map(chat => ({
-                    chat_id: chat.chat_id || chat.id || chat.group_id || chat.channel_id,
-                    chat_type: chat.chat_type || 'personal',
-                    chat_name: chat.name || 'Чат',
-                    chat_avatar: chat.avatar || '',
-                    last_message: chat.last_message || '',
-                    last_message_time: chat.last_message_time || '',
-                    other_user_id: chat.other_user_id || chat.id,
-                    unread_count: chat.unread_count || 0,
-                    is_pinned: chat.is_pinned || false
-                }));
-                renderChatsListForFolder(formattedChats);
+                renderDefaultFolder(chats);
             })
             .catch(err => console.error('Error loading all chats:', err));
     } else {
@@ -197,6 +296,7 @@ function renderChatsListForFolder(chats) {
         }
 
         const active = isActive(chat);
+        const dataChatId = chatType === 'personal' ? (otherUserId || chatId) : chatId;
 
         let openParams = '';
 
@@ -214,6 +314,8 @@ function renderChatsListForFolder(chats) {
 
         return `
             <div class="chat-item ${isPinned ? 'pinned' : ''} ${active ? 'active' : ''}"
+                 data-chat-id="${dataChatId}"
+                 data-chat-type="${chatType}"
                  onclick="openChatFromFolder(${openParams})"
                  style="height: 68px; min-height: 68px; display: flex; align-items: center; padding: 12px 16px; gap: 12px; box-sizing: border-box; cursor: pointer;">
                 <div class="chat-avatar ${avatarClass}"
@@ -280,6 +382,7 @@ function refreshFolderChats() {
 // ===== ОТКРЫТИЕ МЕНЕДЖЕРА ПАПОК =====
 function openFolderManager() {
     closeBurgerMenu();
+    modalReturnTo = 'openBurgerMenu';
 
     fetch('/api/folders/get')
         .then(r => r.json())
@@ -290,10 +393,16 @@ function openFolderManager() {
             let html = `
                 <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 500px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
+                        <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
+                            <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 18px; cursor: pointer; padding: 4px; letter-spacing: 1px;">
+                                <i class="fas fa-ellipsis-h"></i>
+                            </button>
+                        </div>
                         <div style="font-size: 18px; font-weight: 600;">Папки с чатами</div>
-                        <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer;">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <div style="width: 20px;"></div>
                     </div>
                     <div style="padding: 20px;">
             `;
@@ -322,6 +431,9 @@ function openFolderManager() {
             folders.forEach((folder) => {
                 const isDefault = folder.is_default;
                 const folderId = folder.id;
+                const chatCountLabel = isDefault
+                    ? 'все чаты'
+                    : `${folder.chats ? folder.chats.length : 0} чатов`;
 
                 html += `
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #1c1c1e; border-radius: 12px; margin-bottom: 8px;">
@@ -331,7 +443,7 @@ function openFolderManager() {
                             </div>
                             <div style="flex: 1;">
                                 <div style="font-weight: 500; font-size: 14px;">${escapeHtml(folder.name)}</div>
-                                <div style="font-size: 11px; color: #8e8e93;">${folder.chats ? folder.chats.length : 0} чатов</div>
+                                <div style="font-size: 11px; color: #8e8e93;">${chatCountLabel}</div>
                             </div>
                         </div>
 
@@ -356,12 +468,6 @@ function openFolderManager() {
                     </div>
                 </div>
             `;
-
-
-            // ===== ЗАГРУЗКА ПРИ СТАРТЕ =====
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(loadFolders, 500);
-});
 
             document.getElementById('tempModalBody').innerHTML = html;
             openModal('tempModal');
@@ -393,10 +499,16 @@ function openCreateFolderModal() {
                     let html = `
                         <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 500px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
+                                <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
+                                    <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
+                                        <i class="fas fa-arrow-left"></i>
+                                    </button>
+                                    <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 18px; cursor: pointer; padding: 4px; letter-spacing: 1px;">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                </div>
                                 <div style="font-size: 18px; font-weight: 600;">Новая папка</div>
-                                <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer;">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                                <div style="width: 20px;"></div>
                             </div>
                             <div style="padding: 20px;">
                                 <div style="margin-bottom: 16px;">
@@ -421,7 +533,7 @@ function openCreateFolderModal() {
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #2c2c2e; cursor: pointer;"
                                      onclick="toggleChatSelection(${chat.chat_id}, '${chat.chat_type}', '${escapeHtml(chat.name)}', '${chat.avatar || ''}')"
                                      onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_id}">
+                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_type}-${chat.chat_id}">
                                         <i class="fas fa-check" style="display: none; color: #007aff; font-size: 14px;"></i>
                                     </div>
                                     <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; overflow: hidden;">
@@ -443,7 +555,7 @@ function openCreateFolderModal() {
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #2c2c2e; cursor: pointer;"
                                      onclick="toggleChatSelection(${chat.chat_id}, '${chat.chat_type}', '${escapeHtml(chat.name)}', '${chat.avatar || ''}')"
                                      onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_id}">
+                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_type}-${chat.chat_id}">
                                         <i class="fas fa-check" style="display: none; color: #007aff; font-size: 14px;"></i>
                                     </div>
                                     <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; overflow: hidden;">
@@ -465,7 +577,7 @@ function openCreateFolderModal() {
                                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #2c2c2e; cursor: pointer;"
                                      onclick="toggleChatSelection(${chat.chat_id}, '${chat.chat_type}', '${escapeHtml(chat.name)}', '${chat.avatar || ''}')"
                                      onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_id}">
+                                    <div style="width: 24px; height: 24px; border: 2px solid #2c2c2e; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="check-${chat.chat_type}-${chat.chat_id}">
                                         <i class="fas fa-check" style="display: none; color: #007aff; font-size: 14px;"></i>
                                     </div>
                                     <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; overflow: hidden;">
@@ -506,11 +618,12 @@ function openCreateFolderModal() {
 
 // ===== ПЕРЕКЛЮЧЕНИЕ ВЫБОРА ЧАТА =====
 function toggleChatSelection(chatId, chatType, chatName, chatAvatar) {
-    const checkBox = document.getElementById(`check-${chatId}`);
+    const checkBox = document.getElementById(`check-${chatType}-${chatId}`);
     const checkIcon = checkBox.querySelector('.fa-check');
 
-    // Проверяем, выбран ли уже чат
-    const index = selectedChatsForFolder.findIndex(c => c.chat_id === chatId);
+    // Проверяем, выбран ли уже чат (по паре тип+id, т.к. группа и канал
+    // могут иметь одинаковые id)
+    const index = selectedChatsForFolder.findIndex(c => c.chat_id === chatId && c.chat_type === chatType);
 
     if (index !== -1) {
         // Удаляем из выбранных
@@ -549,17 +662,20 @@ function saveFolder() {
         return;
     }
 
-    // Формируем список ID чатов
+    // Формируем список ID чатов и их типов (типы нужны бэкенду, чтобы
+    // не путать группы и каналы с одинаковыми id)
     const chatIds = selectedChatsForFolder.map(c => c.chat_id);
+    const chatTypes = selectedChatsForFolder.map(c => c.chat_type);
 
-    console.log('📁 Creating folder:', { name, chatIds });
+    console.log('📁 Creating folder:', { name, chatIds, chatTypes });
 
     fetch('/api/folders/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             name: name,
-            chat_ids: chatIds
+            chat_ids: chatIds,
+            chat_types: chatTypes
         })
     })
     .then(r => r.json())
@@ -569,8 +685,8 @@ function saveFolder() {
             closeModal('tempModal');
             // Сбрасываем выбранные чаты
             selectedChatsForFolder = [];
-            // Перезагружаем папки
-            loadFolders();
+            // Перезагружаем папки и открываем новую папку
+            loadFolders(data.folder_id);
             showToast('✅ Папка создана!');
         } else if (data.error === 'limit_reached') {
             showToast('❌ Лимит на добавление папок исчерпан (максимум 3). Удалите какую-нибудь папку.');
@@ -600,7 +716,7 @@ function openFolderEditModal(folderId) {
                 .then(r => r.json())
                 .then(data => {
                     const allChats = data.chats || [];
-                    const existingChatIds = (folder.chats || []).map(c => c.chat_id);
+                    const existingChatKeys = (folder.chats || []).map(c => c.chat_type + '-' + c.chat_id);
                     selectedChatsForFolder = (folder.chats || []).map(c => ({
                         chat_id: c.chat_id,
                         chat_type: c.chat_type,
@@ -611,10 +727,16 @@ function openFolderEditModal(folderId) {
                     let html = `
                         <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 500px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
+                                <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
+                                    <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
+                                        <i class="fas fa-arrow-left"></i>
+                                    </button>
+                                    <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 18px; cursor: pointer; padding: 4px; letter-spacing: 1px;">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                </div>
                                 <div style="font-size: 18px; font-weight: 600;">Редактировать папку</div>
-                                <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer;">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                                <div style="width: 20px;"></div>
                             </div>
                             <div style="padding: 20px;">
                                 <div style="margin-bottom: 16px;">
@@ -633,12 +755,12 @@ function openFolderEditModal(folderId) {
                     const channels = allChats.filter(c => c.chat_type === 'channel');
 
                     const renderChat = (chat) => {
-                        const isSelected = existingChatIds.includes(chat.chat_id);
+                        const isSelected = existingChatKeys.includes(chat.chat_type + '-' + chat.chat_id);
                         return `
                             <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #2c2c2e; cursor: pointer;"
                                  onclick="toggleEditChatSelection(${chat.chat_id}, '${chat.chat_type}', '${escapeHtml(chat.name)}', '${chat.avatar || ''}')"
                                  onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                                <div style="width: 24px; height: 24px; border: 2px solid ${isSelected ? '#007aff' : '#2c2c2e'}; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="edit-check-${chat.chat_id}">
+                                <div style="width: 24px; height: 24px; border: 2px solid ${isSelected ? '#007aff' : '#2c2c2e'}; border-radius: 6px; display: flex; align-items: center; justify-content: center;" id="edit-check-${chat.chat_type}-${chat.chat_id}">
                                     <i class="fas fa-check" style="display: ${isSelected ? 'block' : 'none'}; color: #007aff; font-size: 14px;"></i>
                                 </div>
                                 <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; overflow: hidden;">
@@ -693,10 +815,10 @@ function openFolderEditModal(folderId) {
 
 // ===== ПЕРЕКЛЮЧЕНИЕ ВЫБОРА ЧАТА ПРИ РЕДАКТИРОВАНИИ =====
 function toggleEditChatSelection(chatId, chatType, chatName, chatAvatar) {
-    const checkBox = document.getElementById(`edit-check-${chatId}`);
+    const checkBox = document.getElementById(`edit-check-${chatType}-${chatId}`);
     const checkIcon = checkBox.querySelector('.fa-check');
 
-    const index = selectedChatsForFolder.findIndex(c => c.chat_id === chatId);
+    const index = selectedChatsForFolder.findIndex(c => c.chat_id === chatId && c.chat_type === chatType);
 
     if (index !== -1) {
         selectedChatsForFolder.splice(index, 1);
@@ -741,7 +863,8 @@ function updateFolder(folderId) {
         body: JSON.stringify({
             folder_id: folderId,
             name: name,
-            chat_ids: chatIds
+            chat_ids: chatIds,
+            chat_types: chatTypes
         })
     })
     .then(r => r.json())
@@ -803,45 +926,12 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(loadFolders, 500);
 });
 
-// ===== ФУНКЦИЯ: ОБНОВЛЕНИЕ ЧАТОВ В ПАПКЕ ПОСЛЕ ОТКРЫТИЯ ЧАТА =====
-function refreshFolderChats() {
-    if (currentFolderId) {
-        const folder = foldersData.find(f => f.id === currentFolderId);
-        if (folder && !folder.is_default) {
-            // Обновляем список чатов в папке
-            fetch(`/api/folders/get/${currentFolderId}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.chats && data.chats.length > 0) {
-                        renderChatsListForFolder(data.chats);
-                    }
-                })
-                .catch(err => console.error('Error refreshing folder chats:', err));
-        }
-    }
-}
-
-
-
-// ===== ПРИНУДИТЕЛЬНОЕ СОХРАНЕНИЕ ТЕКУЩЕЙ ПАПКИ =====
-function forceKeepFolder() {
-    if (currentFolderId) {
-        sessionStorage.setItem('currentFolderId', currentFolderId);
-        localStorage.setItem('currentFolderId', currentFolderId);
-    }
-}
-
-
-
-function switchTab(tab) {
-    currentTab = tab;
-    currentFolderId = null; // Сбрасываем выбранную папку при переключении на обычные табы
-    localStorage.removeItem('currentFolderId');
+// ===== ВЫХОД ИЗ ПАПКИ =====
+function exitFolder() {
+    currentFolderId = null;
+    sessionStorage.removeItem('inFolder');
+    try { localStorage.removeItem('currentFolderId'); } catch (e) {}
     renderFoldersUI();
-
-    if (tab === 'groups') loadGroupsList();
-    else if (tab === 'channels') loadChannelsList();
-    else loadChatsList();
 }
 
 

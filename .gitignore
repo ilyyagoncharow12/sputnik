@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Служебные/локальные файлы проекта Спутник
+.playwright-mcp/
+server.out.log
+server.err.log
+__pycache__/
+*.db-journal
+*.db-wal
+*.db-shm

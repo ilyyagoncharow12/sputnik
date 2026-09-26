@@ -1,0 +1,8 @@
+# Зависимости проекта Спутник (python -m pip install -r requirements.txt)
+# База данных — ВСТРОЕННЫЙ SQLite (sputnik.db в корне проекта), PostgreSQL НЕ нужен.
+Flask==2.3.3
+Flask-SocketIO==5.3.4
+# psycopg2-binary больше не требуется (перешли на SQLite), но оставлен на всякий случай
+psycopg2-binary==2.9.12
+Pillow==10.1.0
+bcrypt==5.0.0

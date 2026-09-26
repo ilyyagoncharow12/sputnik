@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" translate="no">
 <head>
 
     <link rel="icon" type="image/png" href="/static/favicon/favicon-96x96.png" sizes="96x96" />
@@ -11,12 +11,14 @@
 
 
     <meta charset="UTF-8">
+    <meta name="google" content="notranslate">
+    <meta name="csrf-token" content="{{ csrf_token or '' }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover, shrink-to-fit=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=yes">
     <title>Спутник · Вход</title>
-    <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/fonts.css">
     <style>
         * {
             margin: 0;
@@ -25,10 +27,16 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
         html, body {
             width: 100%;
             min-height: 100vh;
             overflow-x: hidden;
+            overscroll-behavior-y: none;
         }
 
         body {
@@ -36,6 +44,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             min-height: -webkit-fill-available;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -104,6 +113,9 @@
             transition: all 0.2s;
             white-space: nowrap;
             -webkit-touch-callout: none;
+            user-select: none;
+            touch-action: manipulation;
+            min-height: 44px;
         }
 
         .tab.active {
@@ -129,7 +141,7 @@
             padding: clamp(14px, 4vw, 16px) clamp(14px, 4vw, 16px);
             border: 2px solid #e2e8f0;
             border-radius: 16px;
-            font-size: clamp(14px, 4vw, 16px);
+            font-size: 16px;
             font-family: 'Unbounded', cursive;
             transition: all 0.2s;
             -webkit-appearance: none;
@@ -263,6 +275,7 @@
 
         .btn {
             width: 100%;
+            min-height: 48px;
             padding: clamp(14px, 4vw, 16px);
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
@@ -276,6 +289,8 @@
             -webkit-appearance: none;
             appearance: none;
             touch-action: manipulation;
+            -webkit-touch-callout: none;
+            user-select: none;
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
 
@@ -307,6 +322,39 @@
             border-left: 4px solid #dc2626;
             animation: shake 0.3s ease;
         }
+
+        .banned-overlay {
+            position: fixed; inset: 0;
+            background: rgba(5, 5, 15, 0.86);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .banned-card {
+            background: #14141a;
+            border: 1px solid rgba(79, 195, 247, 0.25);
+            border-radius: 22px;
+            padding: 36px 30px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 70px rgba(0,0,0,0.7);
+        }
+        .banned-icon { font-size: 56px; margin-bottom: 12px; }
+        .banned-card h2 { font-size: 21px; margin-bottom: 10px; color: #fff; font-weight: 800; }
+        .banned-reason {
+            color: #ffb8c7;
+            font-size: 14px;
+            margin-bottom: 12px;
+            background: rgba(239, 68, 68, 0.12);
+            border-radius: 12px;
+            padding: 12px 14px;
+            word-break: break-word;
+        }
+        .banned-hint { color: #9aa0a6; font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
+        .banned-card .btn { width: 100%; margin-bottom: 10px; }
 
         .info-message {
             background: #dbeafe;
@@ -341,6 +389,105 @@
             display: none;
         }
 
+        /* Анимация появления секции при переключении вкладок */
+        .form-section.entering {
+            animation: secIn 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes secIn {
+            from { opacity: 0; transform: translateY(14px) scale(0.985); }
+            to { opacity: 1; transform: none; }
+        }
+
+        /* ===== Переключатель «пароль / код» ===== */
+        .login-modes {
+            display: flex;
+            gap: 6px;
+            background: #eef1f8;
+            padding: 4px;
+            border-radius: 14px;
+            margin-bottom: 18px;
+        }
+
+        .login-mode {
+            flex: 1;
+            padding: 10px 6px;
+            border: none;
+            border-radius: 11px;
+            background: none;
+            color: #64748b;
+            font-family: 'Unbounded', cursive;
+            font-size: clamp(11px, 3.2vw, 12.5px);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+
+        .login-mode.active {
+            background: #fff;
+            color: #6d28d9;
+            box-shadow: 0 4px 14px rgba(51, 65, 85, 0.14);
+            transform: scale(1.02);
+        }
+
+        .login-mode:active { transform: scale(0.96); }
+
+        .login-pane {
+            display: block;
+            animation: secIn 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .login-pane.hidden {
+            display: none;
+        }
+
+        .code-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .code-row input {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            letter-spacing: 8px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .btn-code {
+            flex-shrink: 0;
+            padding: 0 14px;
+            min-height: 48px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            font-family: 'Unbounded', cursive;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            -webkit-appearance: none;
+            touch-action: manipulation;
+        }
+
+        .btn-code:active { transform: scale(0.96); opacity: 0.85; }
+        .btn-code:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
+
+        #codeStatus {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        #codeStatus.ok { color: #10b981; }
+        #codeStatus.err { color: #ef4444; }
+
         /* Адаптация для маленьких экранов */
         @media screen and (max-width: 360px) {
             body { padding: 8px; }
@@ -351,6 +498,155 @@
             .agreement-text { font-size: 12px; }
         }
 
+        /* ===== МАСТЕР РЕГИСТРАЦИИ ===== */
+        .reg-stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .reg-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #d6dae4;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .reg-dot.on {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 28px;
+            border-radius: 6px;
+        }
+
+        .reg-line {
+            width: 34px;
+            height: 2px;
+            background: #e2e8f0;
+            border-radius: 1px;
+            transition: background 0.3s;
+        }
+
+        .reg-line.on {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .reg-status {
+            min-height: 20px;
+            font-size: 13px;
+            color: #ef4444;
+            text-align: center;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .reg-pane {
+            display: block;
+            animation: regIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .reg-pane.hidden {
+            display: none;
+        }
+
+        @keyframes regIn {
+            from { opacity: 0; transform: translateX(16px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        .reg-pane .btn + .btn {
+            margin-top: 10px;
+        }
+
+        .username-wrap {
+            position: relative;
+        }
+
+        .username-at {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #667eea;
+            font-weight: 700;
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .username-wrap input {
+            padding-left: 34px;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #667eea;
+            box-shadow: none;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-ghost:hover {
+            background: #f1f5f9;
+        }
+
+        .btn-ghost:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
+
+        .reg-avatar-title {
+            text-align: center;
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .avatar-opt {
+            aspect-ratio: 1;
+            border-radius: 18px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 3px solid transparent;
+            transition: all 0.2s;
+            background: #f1f5f9;
+            position: relative;
+        }
+
+        .avatar-opt img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .avatar-opt.none {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .avatar-opt.none span {
+            color: #94a3b8;
+            font-size: 28px;
+            font-weight: 300;
+        }
+
+        .avatar-opt.selected {
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+            transform: scale(0.96);
+        }
+
         /* Safe area для iOS */
         @supports (padding: max(0px)) {
             body {
@@ -359,6 +655,411 @@
                 padding-top: max(12px, env(safe-area-inset-top));
                 padding-bottom: max(12px, env(safe-area-inset-bottom));
             }
+        }
+
+        /* ===== ОЗНАКОМЛЕНИЕ (как в ТГ) — тёмная тема ===== */
+        #onboarding {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            height: 100vh;
+            height: -webkit-fill-available;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: safe center;
+            padding: max(28px, env(safe-area-inset-top)) 24px max(16px, env(safe-area-inset-bottom));
+            background:
+                radial-gradient(120% 80% at 50% -15%, rgba(99, 102, 241, 0.28) 0%, rgba(99, 102, 241, 0) 55%),
+                radial-gradient(90% 60% at 85% 110%, rgba(34, 211, 238, 0.16) 0%, rgba(34, 211, 238, 0) 60%),
+                radial-gradient(90% 60% at 10% 100%, rgba(168, 85, 247, 0.18) 0%, rgba(168, 85, 247, 0) 60%),
+                linear-gradient(165deg, #151b2e 0%, #0b1020 55%, #070b16 100%);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: none;
+        }
+
+        /* Плавающие световые сферы на фоне */
+        #onboarding::before,
+        #onboarding::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(50px);
+            opacity: 0.5;
+        }
+
+        #onboarding::before {
+            width: 300px;
+            height: 300px;
+            top: -80px;
+            left: -80px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);
+            animation: obOrb1 14s ease-in-out infinite;
+        }
+
+        #onboarding::after {
+            width: 340px;
+            height: 340px;
+            bottom: -120px;
+            right: -90px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.35), transparent 70%);
+            animation: obOrb2 17s ease-in-out infinite;
+        }
+
+        @keyframes obOrb1 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(50px, 40px) scale(1.15); }
+        }
+
+        @keyframes obOrb2 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(-45px, -35px) scale(1.1); }
+        }
+
+        #onboarding.hide {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #onboarding.hide .ob-view {
+            transform: scale(0.94);
+        }
+
+        .ob-view {
+            width: 100%;
+            max-width: 360px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            transition: transform 0.5s ease;
+        }
+
+        .ob-frame {
+            width: min(320px, 78vw);
+            aspect-ratio: 1 / 1;
+            border-radius: 28px;
+            overflow: hidden;
+            position: relative;
+            background:
+                radial-gradient(80% 80% at 50% 30%, rgba(56, 189, 248, 0.12), transparent 70%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+                #0d1326;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            box-shadow:
+                0 30px 70px -18px rgba(0, 0, 0, 0.7),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            transform-origin: center;
+        }
+
+        /* Световой блик, проходящий по рамке */
+        .ob-frame::after {
+            content: '';
+            position: absolute;
+            inset: -40%;
+            pointer-events: none;
+            background: linear-gradient(115deg,
+                transparent 30%, rgba(255, 255, 255, 0.09) 45%,
+                rgba(56, 189, 248, 0.14) 50%, rgba(255, 255, 255, 0.09) 55%,
+                transparent 70%);
+            transform: translateX(-60%);
+            animation: obSweep 5.5s ease-in-out infinite;
+        }
+
+        @keyframes obSweep {
+            0%, 60% { transform: translateX(-60%); }
+            90%, 100% { transform: translateX(60%); }
+        }
+
+        .ob-frame.entering { animation: obFrameIn 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+        .ob-frame.leaving  { animation: obFrameOut 0.28s ease both; }
+
+        @keyframes obFrameIn {
+            from { opacity: 0; transform: scale(0.9) translateY(18px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes obFrameOut {
+            from { opacity: 1; transform: none; }
+            to { opacity: 0; transform: scale(0.93) translateY(-10px); }
+        }
+
+        .ob-frame video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* ===== АНИМИРОВАННЫЕ СЦЕНЫ (сгенерированные человечки) ===== */
+        .ob-scene {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ob-scene svg {
+            width: 92%;
+            height: 92%;
+            overflow: visible;
+        }
+
+        /* Пульсация светового кольца сцены */
+        .s-halo {
+            animation: sHalo 3.4s ease-in-out infinite;
+            transform-origin: center;
+        }
+
+        @keyframes sHalo {
+            0%, 100% { opacity: 0.55; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.08); }
+        }
+
+        /* Плавное покачивание персонажей */
+        .s-creature, .s-incognito, .s-plane {
+            transform-origin: center;
+            animation: sFloat 3.6s ease-in-out infinite;
+        }
+
+        @keyframes sFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Всплывающие пузыри чата */
+        .s-bubble { animation: sBubble 4s ease-in-out infinite; transform-origin: center; }
+
+        .s-bubble.b1 { animation-delay: 0s; }
+        .s-bubble.b2 { animation-delay: 1.3s; }
+
+        @keyframes sBubble {
+            0%, 12% { opacity: 0; transform: scale(0.6) translateY(14px); }
+            22%, 72% { opacity: 1; transform: scale(1) translateY(0); }
+            86%, 100% { opacity: 0; transform: scale(0.7) translateY(-12px); }
+        }
+
+        /* Печатающие точки в пузыре */
+        .s-typing { animation: sTyping 1.4s ease-in-out infinite; }
+        .s-typing.t2 { animation-delay: 0.2s; }
+        .s-typing.t3 { animation-delay: 0.4s; }
+
+        @keyframes sTyping {
+            0%, 60%, 100% { opacity: 0.25; }
+            30% { opacity: 1; }
+        }
+
+        /* Мерцающие звёздочки */
+        .s-star { animation: sTwinkle 2.6s ease-in-out infinite; transform-origin: center; }
+        .s-star.s1 { animation-delay: 0s; }
+        .s-star.s2 { animation-delay: 0.9s; }
+        .s-star.s3 { animation-delay: 1.6s; }
+
+        @keyframes sTwinkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.7); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        /* Щит приватности */
+        .s-shield { transform-origin: center; animation: sShield 3s ease-in-out infinite; }
+
+        @keyframes sShield {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.035) rotate(-1.5deg); }
+        }
+
+        .s-shine { animation: sShine 3s ease-in-out infinite; }
+
+        @keyframes sShine {
+            0%, 100% { opacity: 0.25; }
+            50% { opacity: 0.85; }
+        }
+
+        /* Самолётик/ракета — пролёт по экрану */
+        .s-plane {
+            animation: sPlane 5s ease-in-out infinite;
+        }
+
+        @keyframes sPlane {
+            0% { transform: translate(-26px, 14px) rotate(-8deg); }
+            50% { transform: translate(22px, -12px) rotate(5deg); }
+            100% { transform: translate(-26px, 14px) rotate(-8deg); }
+        }
+
+        .s-trail {
+            animation: sTrail 1.2s linear infinite;
+            stroke-dashoffset: 24;
+        }
+
+        @keyframes sTrail {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .s-cheek { transform-origin: center; animation: sCheek 1.6s ease-in-out infinite; }
+        .s-cheek.c2 { animation-delay: 0.8s; }
+
+        @keyframes sCheek {
+            0%, 100% { opacity: 0.5; transform: scale(0.85); }
+            50% { opacity: 0.95; transform: scale(1.1); }
+        }
+
+        .s-antenna { animation: sAntenna 3.6s ease-in-out infinite; transform-origin: bottom center; }
+
+        @keyframes sAntenna {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(14deg); }
+        }
+
+        .ob-title {
+            margin-top: clamp(28px, 6vh, 40px);
+            font-weight: 700;
+            color: #fff;
+            font-size: clamp(22px, 6vw, 27px);
+            line-height: 1.25;
+            letter-spacing: -0.3px;
+            text-align: center;
+        }
+
+        .ob-text {
+            margin-top: 14px;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: clamp(12.5px, 3.6vw, 14.5px);
+            line-height: 1.7;
+            font-weight: 400;
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .ob-text b {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .ob-title.ob-anim-in { animation: obTitleIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .ob-text.ob-anim-in { animation: obTitleIn 0.55s 0.06s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+        @keyframes obTitleIn {
+            from { opacity: 0; transform: translateY(16px); filter: blur(4px); }
+            to { opacity: 1; transform: none; filter: blur(0); }
+        }
+
+        .ob-dots {
+            display: flex;
+            gap: 8px;
+            margin: clamp(22px, 4vh, 30px) 0 18px;
+        }
+
+        .ob-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.35);
+            transition: all 0.3s;
+        }
+
+        .ob-dot.cur {
+            width: 26px;
+            background: #fff;
+        }
+
+        .ob-next {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.22);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+            transition: transform 0.2s, background 0.2s, opacity 0.3s;
+        }
+
+        .ob-next:active { transform: scale(0.9); }
+        .ob-next:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .ob-next svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .ob-start {
+            display: none;
+            width: 100%;
+            max-width: 360px;
+            padding: 16px;
+            border: none;
+            border-radius: 16px;
+            background: #fff;
+            color: #6d28d9;
+            font-family: 'Unbounded', cursive;
+            font-weight: 700;
+            font-size: clamp(14px, 4vw, 15px);
+            cursor: pointer;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s;
+        }
+
+        .ob-start.show { display: block; animation: obIn 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+        .ob-start:active { transform: scale(0.97); }
+
+        .ob-skip {
+            margin-top: 14px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-family: 'Unbounded', cursive;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 8px 14px;
+            transition: color 0.2s;
+        }
+
+        .ob-skip:hover { color: #fff; }
+
+        .ob-enter { animation: obIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+        @keyframes obIn {
+            from { opacity: 0; transform: translateY(26px) scale(0.96); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @media (max-height: 640px) {
+            .ob-frame { width: min(200px, 56vw); border-radius: 22px; }
+            .ob-title { margin-top: 18px; font-size: 20px; }
+            .ob-text { margin-top: 8px; font-size: 12.5px; }
+            .ob-dots { margin: 16px 0 12px; }
+            .ob-next { width: 52px; height: 52px; }
+            .ob-start { padding: 13px; }
+            .ob-skip { margin-top: 8px; }
+        }
+
+        /* Очень низкие экраны (альбомная ориентация на телефоне) */
+        @media (max-height: 520px) {
+            #onboarding { justify-content: flex-start; }
+            .ob-view { justify-content: center; }
+            .ob-frame { width: min(150px, 40vh, 44vw); }
+            .ob-title { margin-top: 12px; font-size: 17px; }
+            .ob-text { margin-top: 6px; font-size: 12px; max-width: 280px; }
+            .ob-dots { margin: 12px 0 8px; }
+            .ob-next { width: 44px; height: 44px; }
+            .ob-start { padding: 11px; font-size: 13px; }
+        }
+
+        /* Мобильные мелкие экраны: компактнее карточка */
+        @media (max-width: 480px) {
+            .card { border-radius: 24px; }
+            .form-group input { padding: 15px 14px; }
+            .ob-start { max-width: 340px; }
         }
     </style>
 </head>
@@ -386,8 +1087,15 @@
 
             <!-- ФОРМА ВХОДА -->
             <div id="loginSection" class="form-section">
-                <form method="POST" id="loginForm" onsubmit="return validateLoginAgreement(event)">
+                <form method="POST" id="loginForm" onsubmit="return submitLogin(event)">
                     <input type="hidden" name="action" value="login">
+                    <input type="hidden" name="auth_type" id="authType" value="password">
+
+                    <!-- Переключатель способа входа -->
+                    <div class="login-modes">
+                        <button type="button" class="login-mode active" data-mode="password" onclick="setLoginMode('password')">🔑 Пароль</button>
+                        <button type="button" class="login-mode" data-mode="code" onclick="setLoginMode('code')">🔢 Код</button>
+                    </div>
 
                     <div class="form-group">
                         <label>Номер телефона</label>
@@ -399,17 +1107,39 @@
                                autocomplete="tel">
                     </div>
 
-                    <div class="form-group">
-                        <label>Пароль</label>
-                        <input type="password" name="password" id="loginPassword"
-                               placeholder="••••••••"
-                               required
-                               autocomplete="current-password">
+                    <!-- Вход по паролю -->
+                    <div class="login-pane" id="loginPanePassword">
+                        <div class="form-group">
+                            <label>Пароль</label>
+                            <input type="password" name="password" id="loginPassword"
+                                   placeholder="••••••••"
+                                   required
+                                   autocomplete="current-password">
+                        </div>
+                        <div class="remember-row">
+                            <input type="checkbox" name="remember" id="remember" checked>
+                            <label for="remember">Запомнить меня</label>
+                        </div>
                     </div>
 
-                    <div class="remember-row">
-                        <input type="checkbox" name="remember" id="remember" checked>
-                        <label for="remember">Запомнить меня</label>
+                    <!-- Вход по коду -->
+                    <div class="login-pane hidden" id="loginPaneCode">
+                        <div class="form-group">
+                            <label>Код входа</label>
+                            <div class="code-row">
+                                <input type="text" name="code" id="loginCode"
+                                       placeholder="•••••"
+                                       maxlength="5"
+                                       inputmode="numeric"
+                                       pattern="[0-9]{5}"
+                                       autocomplete="one-time-code"
+                                       oninput="this.value=this.value.replace(/\D/g,'').slice(0,5)">
+                                <button type="button" class="btn-code" id="sendCodeBtn" onclick="sendLoginCode()">Получить код</button>
+                            </div>
+                            <div class="input-hint" id="codeStatus">
+                                Код придёт в системный чат @sputnik
+                            </div>
+                        </div>
                     </div>
 
                     <!-- ===== ГАЛОЧКА СОГЛАШЕНИЯ ДЛЯ ВХОДА ===== -->
@@ -426,6 +1156,8 @@
                         ⚠️ Необходимо принять условия соглашения
                     </div>
 
+                    <div class="reg-status" id="loginStatus"></div>
+
                     <button type="submit" class="btn" id="loginBtn">Войти</button>
                 </form>
 
@@ -436,60 +1168,115 @@
 
             <!-- ФОРМА РЕГИСТРАЦИИ -->
             <div id="registerSection" class="form-section hidden">
-                <form method="POST" id="registerForm" onsubmit="return validateRegisterAgreement(event)">
-                    <input type="hidden" name="action" value="register_step1">
+                <form method="POST" id="registerForm" onsubmit="return submitRegistration(event)">
 
-                    <div class="form-group">
-                        <label>Номер телефона</label>
-                        <input type="tel" name="phone" id="regPhone"
-                               placeholder="+7 999 123 45 67"
-                               required
-                               inputmode="tel"
-                               autocomplete="tel"
-                               oninput="checkPhoneNumber(this.value)">
-                        <div class="input-hint">
-                            <span>🇷🇺 Россия</span>
-                            <span class="input-status" id="phoneStatus"></span>
+                    <!-- Степпер -->
+                    <div class="reg-stepper">
+                        <span class="reg-dot" id="regDot1"></span>
+                        <span class="reg-line" id="regLine1"></span>
+                        <span class="reg-dot" id="regDot2"></span>
+                        <span class="reg-line" id="regLine2"></span>
+                        <span class="reg-dot" id="regDot3"></span>
+                    </div>
+                    <div class="reg-status" id="regStatus"></div>
+
+                    <!-- ШАГ 1: телефон и пароль -->
+                    <div class="reg-pane" id="regStep1">
+                        <div class="form-group">
+                            <label>Номер телефона</label>
+                            <input type="tel" name="phone" id="regPhone"
+                                   placeholder="+7 999 123 45 67"
+                                   required
+                                   inputmode="tel"
+                                   autocomplete="tel"
+                                   oninput="checkPhoneNumber(this.value)">
+                            <div class="input-hint">
+                                <span>🇷🇺 Россия</span>
+                                <span class="input-status" id="phoneStatus"></span>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label>Придумайте пароль</label>
-                        <input type="password" name="password" id="regPassword"
-                               placeholder="Минимум 8 символов"
-                               required
-                               autocomplete="new-password"
-                               oninput="checkPasswordStrength(this.value)">
-                        <div class="input-hint" id="passwordHint">
-                            <span>🔒 Надёжный пароль</span>
+                        <div class="form-group">
+                            <label>Придумайте пароль</label>
+                            <input type="password" name="password" id="regPassword"
+                                   placeholder="Минимум 8 символов"
+                                   required
+                                   autocomplete="new-password"
+                                   oninput="checkPasswordStrength(this.value)">
+                            <div class="input-hint" id="passwordHint">
+                                <span>🔒 Надёжный пароль</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="form-group">
-                        <label>Повторите пароль</label>
-                        <input type="password" id="regPasswordConfirm"
-                               placeholder="••••••••"
-                               required
-                               autocomplete="new-password"
-                               oninput="checkPasswordsMatch()">
-                        <div class="input-hint" id="passwordMatchHint"></div>
-                    </div>
-
-                    <!-- ===== ГАЛОЧКА СОГЛАШЕНИЯ ДЛЯ РЕГИСТРАЦИИ ===== -->
-                    <div class="agreement-row" id="registerAgreementRow">
-                        <input type="checkbox" id="registerAgreementCheck" onchange="updateRegisterAgreement()">
-                        <div class="agreement-text">
-                            Я принимаю условия
-                            <span class="link" onclick="window.open('/terms', '_blank')">Пользовательского соглашения</span>
-    и
-    <span class="link" onclick="window.open('/privacy', '_blank')">Политики конфиденциальности</span>
+                        <div class="form-group">
+                            <label>Повторите пароль</label>
+                            <input type="password" id="regPasswordConfirm"
+                                   placeholder="••••••••"
+                                   required
+                                   autocomplete="new-password"
+                                   oninput="checkPasswordsMatch()">
+                            <div class="input-hint" id="passwordMatchHint"></div>
                         </div>
-                    </div>
-                    <div class="agreement-error" id="registerAgreementError">
-                        ⚠️ Необходимо принять условия соглашения
+
+                        <!-- ===== ГАЛОЧКА СОГЛАШЕНИЯ ДЛЯ РЕГИСТРАЦИИ ===== -->
+                        <div class="agreement-row" id="registerAgreementRow">
+                            <input type="checkbox" id="registerAgreementCheck" onchange="updateRegisterAgreement()">
+                            <div class="agreement-text">
+                                Я принимаю условия
+                                <span class="link" onclick="window.open('/terms', '_blank')">Пользовательского соглашения</span>
+        и
+        <span class="link" onclick="window.open('/privacy', '_blank')">Политики конфиденциальности</span>
+                            </div>
+                        </div>
+                        <div class="agreement-error" id="registerAgreementError">
+                            ⚠️ Необходимо принять условия соглашения
+                        </div>
+
+                        <button type="button" class="btn" id="regNext1" disabled onclick="regStep(2)">Далее</button>
                     </div>
 
-                    <button type="submit" class="btn" id="registerBtn" disabled>Продолжить</button>
+                    <!-- ШАГ 2: имя и username -->
+                    <div class="reg-pane hidden" id="regStep2">
+                        <div class="form-group">
+                            <label>Ваше имя</label>
+                            <input type="text" id="regName"
+                                   placeholder="Как вас зовут?"
+                                   maxlength="50"
+                                   autocomplete="name"
+                                   oninput="updateRegNext2()">
+                            <div class="input-hint">
+                                <span>Имя увидят ваши контакты</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Имя пользователя</label>
+                            <div class="username-wrap">
+                                <span class="username-at">@</span>
+                                <input type="text" id="regUsername"
+                                       placeholder="username"
+                                       maxlength="32"
+                                       autocomplete="username"
+                                       oninput="checkUsername(this.value)">
+                            </div>
+                            <div class="input-hint" id="usernameStatus"></div>
+                        </div>
+
+                        <button type="button" class="btn btn-ghost" onclick="regStep(1)">Назад</button>
+                        <button type="button" class="btn" id="regNext2" disabled onclick="regStep(3)">Далее</button>
+                    </div>
+
+                    <!-- ШАГ 3: аватарка -->
+                    <div class="reg-pane hidden" id="regStep3">
+                        <div class="reg-avatar-title">Выберите аватарку</div>
+                        <div class="avatar-grid" id="avatarGrid"></div>
+                        <div class="input-hint" style="justify-content:center">
+                            <span>Можно выбрать готовую или продолжить без неё</span>
+                        </div>
+
+                        <button type="button" class="btn btn-ghost" onclick="regStep(2)">Назад</button>
+                        <button type="submit" class="btn" id="registerBtn">Создать аккаунт</button>
+                    </div>
                 </form>
 
                 <button class="btn btn-secondary" onclick="switchTab('login')">
@@ -499,7 +1286,60 @@
         </div>
     </div>
 
-    <script>
+    <!-- ===== ЭКРАН «АККАУНТ ЗАБЛОКИРОВАН» ===== -->
+    <div id="bannedOverlay" class="banned-overlay" style="display:none;">
+        <div class="banned-card">
+            <div class="banned-icon">❄️</div>
+            <h2>Аккаунт заблокирован</h2>
+            <p class="banned-reason" id="bannedReason"></p>
+            <p class="banned-hint">Аккаунт заморожен администратором за нарушение. Вы можете создать новый аккаунт.</p>
+            <button type="button" class="btn" onclick="switchTab('register'); hideBanned();">Создать новый аккаунт</button>
+            <button type="button" class="btn btn-secondary" onclick="hideBanned()">Назад</button>
+        </div>
+    </div>
+
+    <!-- ===== ОЗНАКОМЛЕНИЕ КАК В ТГ (тёмная тема, анимированные сцены) ===== -->
+    <div id="onboarding" aria-hidden="true">
+        <div class="ob-view">
+            <div class="ob-frame" id="obFrame">
+                <div class="ob-scene" id="obScene"></div>
+                <video id="obVideo" loop muted playsinline autoplay preload="metadata">
+                    <source id="obVideoMp4" type="video/mp4">
+                    <source id="obVideoWebm" type="video/webm">
+                </video>
+            </div>
+            <div class="ob-title" id="obTitle"></div>
+            <div class="ob-text" id="obText"></div>
+        </div>
+        <div class="ob-dots" id="obDots"></div>
+        <button class="ob-start" id="obStart">Продолжить</button>
+        <button class="ob-next" id="obNext" aria-label="Далее">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+            </svg>
+        </button>
+        <button class="ob-skip" id="obSkip">Пропустить</button>
+    </div>
+
+    <script id="mainJS">
+        // ===== CSRF: автоматически добавляем заголовок ко всем не-GET fetch-запросам =====
+        (function () {
+            const _fetch = window.fetch;
+            window.fetch = function (url, opts) {
+                opts = opts || {};
+                if (!opts.method || opts.method.toUpperCase() === 'GET') {
+                    return _fetch.apply(this, arguments);
+                }
+                opts.headers = opts.headers instanceof Headers ? opts.headers : new Headers(opts.headers || {});
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta && !opts.headers.has('X-CSRF-Token')) {
+                    opts.headers.set('X-CSRF-Token', meta.content);
+                }
+                return _fetch.call(this, url, opts);
+            };
+        })();
+
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
         let phoneCheckTimeout = null;
         let phoneExists = false;
@@ -563,6 +1403,188 @@
             return true;
         }
 
+        // ===== ВХОД ЧЕРЕЗ FETCH (инлайн-ошибки, без перезагрузки) =====
+        function submitLogin(event) {
+            event.preventDefault();
+            if (!validateLoginAgreement(event)) return false;
+
+            const status = document.getElementById('loginStatus');
+            const authType = document.getElementById('authType').value;
+            const phone = document.getElementById('loginPhone').value;
+            const btn = document.getElementById('loginBtn');
+
+            if (!phone) {
+                status.textContent = 'Введите номер телефона';
+                return false;
+            }
+
+            let password = '';
+            let code = '';
+            if (authType === 'code') {
+                code = document.getElementById('loginCode').value.trim();
+                if (code.length !== 5) {
+                    status.textContent = 'Введите 5-значный код';
+                    return false;
+                }
+            } else {
+                password = document.getElementById('loginPassword').value;
+                if (!password) {
+                    status.textContent = 'Введите пароль';
+                    return false;
+                }
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Вход...';
+            status.textContent = '';
+
+            const body = new URLSearchParams();
+            body.append('action', 'login');
+            body.append('auth_type', authType);
+            body.append('phone', phone);
+            body.append('password', password);
+            body.append('code', code);
+            if (document.getElementById('remember').checked) body.append('remember', 'on');
+
+            fetch('/auth', {
+                method: 'POST',
+                body: body,
+                redirect: 'manual',
+                credentials: 'same-origin'
+            })
+            .then(r => {
+                if (r.type === 'opaqueredirect' || r.redirected || r.status === 302) {
+                    window.location.href = '/chat';
+                    return;
+                }
+                return r.json().then(j => ({ status: r.status, j }));
+            })
+            .then(res => {
+                if (!res) return;
+                if (res.status >= 400) {
+                    if (res.j && res.j.banned) {
+                        showBanned(res.j.ban_reason || res.j.error);
+                        btn.disabled = false;
+                        btn.textContent = 'Войти';
+                        return;
+                    }
+                    status.textContent = res.j.error || 'Ошибка входа';
+                    btn.disabled = false;
+                    btn.textContent = 'Войти';
+                }
+            })
+            .catch(() => {
+                status.textContent = 'Ошибка соединения с сервером';
+                btn.disabled = false;
+                btn.textContent = 'Войти';
+            });
+
+            return false;
+        }
+
+        // ===== ЭКРАН «АККАУНТ ЗАБЛОКИРОВАН» =====
+        function showBanned(reason) {
+            document.getElementById('bannedReason').textContent = reason || 'Нарушение правил';
+            document.getElementById('bannedOverlay').style.display = 'flex';
+        }
+        function hideBanned() {
+            document.getElementById('bannedOverlay').style.display = 'none';
+        }
+
+        // ===== ПЕРЕКЛЮЧЕНИЕ «ПАРОЛЬ / КОД» =====
+        function setLoginMode(mode) {
+            const authType = document.getElementById('authType');
+            const pwdPane = document.getElementById('loginPanePassword');
+            const codePane = document.getElementById('loginPaneCode');
+            const status = document.getElementById('loginStatus');
+            const codeStatus = document.getElementById('codeStatus');
+            const sendBtn = document.getElementById('sendCodeBtn');
+
+            document.querySelectorAll('.login-mode').forEach(b => {
+                b.classList.toggle('active', b.dataset.mode === mode);
+            });
+
+            authType.value = mode;
+            status.textContent = '';
+
+            if (mode === 'code') {
+                pwdPane.classList.add('hidden');
+                codePane.classList.remove('hidden');
+                codeStatus.className = 'input-hint';
+                codeStatus.textContent = 'Код придёт в системный чат @sputnik';
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Получить код';
+                document.getElementById('loginCode').focus();
+            } else {
+                codePane.classList.add('hidden');
+                pwdPane.classList.remove('hidden');
+                document.getElementById('loginPassword').focus();
+            }
+        }
+
+        // ===== ОТПРАВКА КОДА ВХОДА =====
+        function sendLoginCode() {
+            const phone = document.getElementById('loginPhone').value.trim();
+            const status = document.getElementById('codeStatus');
+            const btn = document.getElementById('sendCodeBtn');
+
+            if (!phone) {
+                status.className = 'input-hint err';
+                status.textContent = 'Сначала введите номер телефона';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Отправка...';
+            status.className = 'input-hint';
+            status.textContent = 'Отправляем код в @sputnik...';
+
+            const body = new URLSearchParams();
+            body.append('phone', phone);
+
+            fetch('/api/auth/send_login_code', {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin'
+            })
+            .then(r => r.json().then(j => ({ status: r.status, j })))
+            .then(res => {
+                if (res.status >= 400) {
+                    if (res.j && res.j.banned) {
+                        showBanned(res.j.ban_reason || res.j.error);
+                        btn.disabled = false;
+                        btn.textContent = 'Получить код';
+                        return;
+                    }
+                    status.className = 'input-hint err';
+                    status.textContent = res.j.error || 'Не удалось отправить код';
+                    btn.disabled = false;
+                    btn.textContent = 'Получить код';
+                    return;
+                }
+                status.className = 'input-hint ok';
+                status.textContent = res.j.message || 'Код отправлен в @sputnik';
+                let t = 60;
+                const timer = setInterval(() => {
+                    t--;
+                    if (t <= 0) {
+                        clearInterval(timer);
+                        btn.disabled = false;
+                        btn.textContent = 'Получить код снова';
+                    } else {
+                        btn.textContent = `Повторить через ${t}s`;
+                    }
+                }, 1000);
+                document.getElementById('loginCode').focus();
+            })
+            .catch(() => {
+                status.className = 'input-hint err';
+                status.textContent = 'Ошибка соединения с сервером';
+                btn.disabled = false;
+                btn.textContent = 'Получить код';
+            });
+        }
+
         // ===== ПРОВЕРКА СОГЛАШЕНИЯ ДЛЯ РЕГИСТРАЦИИ =====
         function updateRegisterAgreement() {
             registerAgreementAccepted = document.getElementById('registerAgreementCheck').checked;
@@ -577,7 +1599,7 @@
                 row.classList.remove('accepted');
             }
 
-            updateRegisterButton();
+            updateRegNext1();
         }
 
         function validateRegisterAgreement(event) {
@@ -626,10 +1648,18 @@
             if (tab === 'login') {
                 loginSection.classList.remove('hidden');
                 registerSection.classList.add('hidden');
+                loginSection.classList.remove('entering');
+                void loginSection.offsetWidth;
+                loginSection.classList.add('entering');
                 document.getElementById('loginPhone').focus();
             } else {
                 loginSection.classList.add('hidden');
                 registerSection.classList.remove('hidden');
+                registerSection.classList.remove('entering');
+                void registerSection.offsetWidth;
+                registerSection.classList.add('entering');
+                regStep(1);
+                updateRegNext1();
                 document.getElementById('regPhone').focus();
             }
 
@@ -669,7 +1699,7 @@
                 status.textContent = '';
                 status.className = 'input-status';
                 phoneExists = false;
-                updateRegisterButton();
+                updateRegNext1();
                 return;
             }
 
@@ -704,13 +1734,13 @@
                         status.className = 'input-status success';
                     }
 
-                    updateRegisterButton();
+                    updateRegNext1();
                 })
                 .catch(() => {
                     status.textContent = '❌ Ошибка проверки';
                     status.className = 'input-status error';
                     phoneExists = false;
-                    updateRegisterButton();
+                    updateRegNext1();
                 });
             }, 500);
         }
@@ -746,7 +1776,7 @@
 
             hint.innerHTML = `<span>${message}</span>`;
             checkPasswordsMatch();
-            updateRegisterButton();
+            updateRegNext1();
         }
 
         // ===== ПРОВЕРКА СОВПАДЕНИЯ ПАРОЛЕЙ =====
@@ -766,100 +1796,191 @@
                 passwordsMatch = false;
             }
 
-            updateRegisterButton();
+            updateRegNext1();
         }
 
-        // ===== ОБНОВЛЕНИЕ КНОПКИ РЕГИСТРАЦИИ =====
-        function updateRegisterButton() {
-            const registerBtn = document.getElementById('registerBtn');
-            const phone = document.getElementById('regPhone').value;
-            const digits = phone.replace(/\D/g, '');
+        // ===== ОБНОВЛЕНИЕ КНОПКИ "ДАЛЕЕ" (ШАГ 1) =====
+        function updateRegNext1() {
+            const btn = document.getElementById('regNext1');
+            if (!btn) return;
+            const digits = document.getElementById('regPhone').value.replace(/\D/g, '');
+            const ok = digits.length >= 11 && passwordValid && passwordsMatch && registerAgreementAccepted && !(phoneExists && registrationComplete);
+            btn.disabled = !ok;
+        }
 
-            if (phoneExists && !registrationComplete) {
-                registerBtn.textContent = 'Завершить регистрацию';
-            } else if (phoneExists && registrationComplete) {
-                registerBtn.textContent = 'Перейти ко входу';
-            } else {
-                registerBtn.textContent = 'Продолжить';
+        // ===== ПЕРЕКЛЮЧЕНИЕ ШАГОВ РЕГИСТРАЦИИ =====
+        function regStep(n) {
+            for (let i = 1; i <= 3; i++) {
+                const pane = document.getElementById('regStep' + i);
+                if (pane) pane.classList.toggle('hidden', i !== n);
+                const dot = document.getElementById('regDot' + i);
+                if (dot) dot.classList.toggle('on', i <= n);
             }
+            const line1 = document.getElementById('regLine1');
+            const line2 = document.getElementById('regLine2');
+            if (line1) line1.classList.toggle('on', n > 1);
+            if (line2) line2.classList.toggle('on', n > 2);
 
-            // Кнопка активна только если всё валидно И соглашение принято
-            const isValid = digits.length >= 11 && passwordValid && passwordsMatch && registerAgreementAccepted;
-            registerBtn.disabled = !isValid;
+            document.getElementById('regStatus').textContent = '';
+
+            if (n === 2) {
+                setTimeout(() => document.getElementById('regName').focus(), 120);
+            }
+            if (n === 3) {
+                renderAvatarGrid();
+                setTimeout(() => document.getElementById('registerBtn').focus(), 120);
+            }
         }
 
-        // ===== ОБРАБОТКА ФОРМ =====
-        document.getElementById('registerForm').addEventListener('submit', function(e) {
-            // Дополнительная проверка
-            if (!validateRegisterAgreement(e)) {
+        // ===== ШАГ 2: имя и username =====
+        let usernameTimeout = null;
+        let usernameAvailable = false;
+
+        function updateRegNext2() {
+            const btn = document.getElementById('regNext2');
+            if (!btn) return;
+            const name = document.getElementById('regName').value.trim();
+            const un = document.getElementById('regUsername').value.trim();
+            btn.disabled = !(name && un && usernameAvailable);
+        }
+
+        function checkUsername(value) {
+            const v = value.trim().toLowerCase();
+            const status = document.getElementById('usernameStatus');
+
+            if (!v) {
+                status.innerHTML = '';
+                usernameAvailable = false;
+                updateRegNext2();
+                return;
+            }
+            if (!/^[a-zA-Z0-9_]+$/.test(v)) {
+                status.innerHTML = '<span style="color:#ef4444;">❌ Только латиница, цифры и _</span>';
+                usernameAvailable = false;
+                updateRegNext2();
+                return;
+            }
+            if (v.length < 3) {
+                status.innerHTML = '<span style="color:#f59e0b;">Минимум 3 символа</span>';
+                usernameAvailable = false;
+                updateRegNext2();
                 return;
             }
 
-            const phone = document.getElementById('regPhone').value;
-            const registerBtn = document.getElementById('registerBtn');
-
-            if (phoneExists && !registrationComplete) {
-                e.preventDefault();
-                registerBtn.disabled = true;
-                registerBtn.innerHTML = '<span class="spinner"></span> Загрузка...';
-
-                const formData = new FormData();
-                formData.append('action', 'register_step1');
-                formData.append('phone', phone);
-                formData.append('password', document.getElementById('regPassword').value);
-
-                fetch('/auth', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (response.redirected) {
-                        window.location.href = response.url;
+            status.innerHTML = '<span class="spinner"></span> Проверка...';
+            clearTimeout(usernameTimeout);
+            usernameTimeout = setTimeout(() => {
+                fetch(`/api/auth/check_username?username=${encodeURIComponent(v)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.available) {
+                        status.innerHTML = '<span style="color:#10b981;">✅ Свободно</span>';
+                        usernameAvailable = true;
                     } else {
-                        return response.text();
+                        status.innerHTML = '<span style="color:#ef4444;">❌ Занято</span>';
+                        usernameAvailable = false;
                     }
-                })
-                .then(html => {
-                    if (html) {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const error = doc.querySelector('.error-message');
-                        if (error) {
-                            alert(error.textContent);
-                        }
-                        registerBtn.disabled = false;
-                        updateRegisterButton();
-                    }
+                    updateRegNext2();
                 })
                 .catch(() => {
-                    registerBtn.disabled = false;
-                    updateRegisterButton();
-                    alert('Ошибка соединения');
+                    status.innerHTML = '<span style="color:#ef4444;">❌ Ошибка проверки</span>';
+                    usernameAvailable = false;
+                    updateRegNext2();
                 });
+            }, 400);
+        }
 
-                return;
-            }
+        // ===== ШАГ 3: аватарки =====
+        const REG_AVATARS = [
+            '/static/avatar-swg/avatar1.jpg',
+            '/static/avatar-swg/avatar2.jpg',
+            '/static/avatar-swg/avatar3.jpg',
+            '/static/avatar-swg/avatar4.jpg',
+            '/static/avatar-swg/avatar5.png',
+            '/static/avatar-swg/avatar6.png',
+            '/static/avatar-swg/avatar7.png',
+            '/static/avatar-swg/avatar8.png',
+            '/static/avatar-swg/avatar9.png'
+        ];
+        let selectedAvatar = null;
+
+        function renderAvatarGrid() {
+            const g = document.getElementById('avatarGrid');
+            if (!g || g.dataset.rendered) return;
+            g.dataset.rendered = '1';
+            let h = '<div class="avatar-opt none' + (selectedAvatar === null ? ' selected' : '') + '" data-av="" onclick="selectAvatar(\'\')"><span>—</span></div>';
+            REG_AVATARS.forEach(a => {
+                h += '<div class="avatar-opt' + (selectedAvatar === a ? ' selected' : '') + '" data-av="' + a + '" onclick="selectAvatar(\'' + a + '\')"><img src="' + a + '" alt="аватар" loading="lazy"></div>';
+            });
+            g.innerHTML = h;
+        }
+
+        function selectAvatar(path) {
+            selectedAvatar = path;
+            document.querySelectorAll('#avatarGrid .avatar-opt').forEach(el => {
+                el.classList.toggle('selected', el.dataset.av === path);
+            });
+        }
+
+        // ===== ОТПРАВКА РЕГИСТРАЦИИ =====
+        function submitRegistration(event) {
+            event.preventDefault();
+            if (!validateRegisterAgreement(event)) return;
+
+            const status = document.getElementById('regStatus');
+            const phone = document.getElementById('regPhone').value;
+            const password = document.getElementById('regPassword').value;
+            const name = document.getElementById('regName').value.trim();
+            const un = document.getElementById('regUsername').value.trim();
 
             if (phoneExists && registrationComplete) {
-                e.preventDefault();
-                switchTab('login');
-                document.getElementById('loginPhone').value = phone;
-                document.getElementById('loginPassword').focus();
+                status.textContent = 'Этот номер уже зарегистрирован. Перейдите ко входу.';
                 return;
             }
-        });
+            if (password.length < 8) { status.textContent = 'Пароль должен быть не менее 8 символов'; return; }
+            if (!name) { status.textContent = 'Введите имя'; regStep(2); return; }
+            if (!usernameAvailable) { status.textContent = 'Проверьте имя пользователя'; regStep(2); return; }
 
-        document.getElementById('registerBtn').addEventListener('click', function(e) {
-            const phone = document.getElementById('regPhone').value;
-            const digits = phone.replace(/\D/g, '');
+            const btn = document.getElementById('registerBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Создание аккаунта...';
+            status.textContent = '';
 
-            if (phoneExists && registrationComplete && digits.length >= 11) {
-                e.preventDefault();
-                switchTab('login');
-                document.getElementById('loginPhone').value = phone;
-                document.getElementById('loginPassword').focus();
-            }
-        });
+            const body = new URLSearchParams();
+            body.append('action', 'register');
+            body.append('phone', phone);
+            body.append('password', password);
+            body.append('display_name', name);
+            body.append('username', un);
+            if (selectedAvatar) body.append('avatar', selectedAvatar);
+
+            fetch('/auth', {
+                method: 'POST',
+                body: body,
+                redirect: 'manual',
+                credentials: 'same-origin'
+            })
+            .then(r => {
+                if (r.type === 'opaqueredirect' || r.redirected || r.status === 302) {
+                    window.location.href = '/chat';
+                    return;
+                }
+                return r.json().then(j => ({ status: r.status, j }));
+            })
+            .then(res => {
+                if (!res) return;
+                if (res.status >= 400) {
+                    status.textContent = res.j.error || 'Ошибка регистрации';
+                    btn.disabled = false;
+                    btn.textContent = 'Создать аккаунт';
+                }
+            })
+            .catch(() => {
+                status.textContent = 'Ошибка соединения с сервером';
+                btn.disabled = false;
+                btn.textContent = 'Создать аккаунт';
+            });
+        }
 
         document.getElementById('loginPhone').addEventListener('input', function() {
             this.value = formatPhoneNumber(this.value);
@@ -882,9 +2003,232 @@
                 });
             });
 
-            // Убеждаемся что кнопка регистрации неактивна
-            updateRegisterButton();
+            // Сбрасываем мастер регистрации на первый шаг
+            renderAvatarGrid();
+            regStep(1);
+            updateRegNext1();
         });
     </script>
+
+    <script id="onbJS">
+        (function () {
+            'use strict';
+
+            function $ (id) { return document.getElementById(id); }
+
+            /* =====================================================================
+               ОЗНАКОМЛЕНИЕ КАК В ТЕЛЕГРАМЕ — тёмная тема.
+               Каждый слайд — анимированная SVG-сцена (сгенерированные человечки):
+                 slide 1 — мессенджер-персонаж с пузырями чата,
+                 slide 2 — инкогнито-человечек со щитом приватности,
+                 slide 3 — бумажный самолётик (всё под рукой).
+
+               Хотите своё видео вместо сцены? Положите файлы в static/video-sput/
+               и укажите их имена в SLIDES (video / webm) — видео проиграется поверх сцены.
+               ===================================================================== */
+            var SLIDES = [
+                {
+                    video: 'intro1.mp4',
+                    webm:  'intro1.webm',
+                    title: 'Мгновенные сообщения',
+                    text:  'Общайтесь с друзьями и близкими. Сообщения доставляются <b>мгновенно</b>.',
+                    scene: `<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="obg1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+    <radialGradient id="obh1" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity=".4"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="110" cy="112" r="80" fill="url(#obh1)" class="s-halo"/>
+  <g class="s-bubble b1">
+    <rect x="14" y="46" width="66" height="40" rx="19" fill="#0f172a" stroke="#38bdf8" stroke-opacity=".55"/>
+    <circle cx="34" cy="66" r="4" fill="#38bdf8" class="s-typing"/>
+    <circle cx="47" cy="66" r="4" fill="#38bdf8" class="s-typing t2"/>
+    <circle cx="60" cy="66" r="4" fill="#38bdf8" class="s-typing t3"/>
+  </g>
+  <g class="s-bubble b2">
+    <rect x="138" y="30" width="70" height="42" rx="20" fill="#0f172a" stroke="#a78bfa" stroke-opacity=".5"/>
+    <rect x="154" y="44" width="38" height="6" rx="3" fill="#a78bfa" opacity=".85"/>
+    <rect x="154" y="54" width="26" height="6" rx="3" fill="#a78bfa" opacity=".55"/>
+  </g>
+  <g class="s-creature">
+    <circle cx="110" cy="82" r="16" fill="#1e293b"/>
+    <rect x="105" y="62" width="10" height="12" rx="5" fill="#7dd3fc" class="s-antenna"/>
+    <ellipse cx="110" cy="148" rx="56" ry="48" fill="url(#obg1)"/>
+    <ellipse cx="86" cy="144" rx="8" ry="11" fill="#0b1220"/>
+    <ellipse cx="134" cy="144" rx="8" ry="11" fill="#0b1220"/>
+    <path d="M92 170q18 12 36 0" stroke="#0b1220" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="72" cy="152" r="8" fill="#f472b6" opacity=".85" class="s-cheek c1"/>
+    <circle cx="148" cy="152" r="8" fill="#f472b6" opacity=".85" class="s-cheek c2"/>
+  </g>
+  <circle cx="188" cy="158" r="4" fill="#fbbf24" class="s-star s1"/>
+  <circle cx="28" cy="150" r="3" fill="#f472b6" class="s-star s2"/>
+</svg>`
+                },
+                {
+                    video: 'intro2.mp4',
+                    webm:  'intro2.webm',
+                    title: 'Ваша анонимность',
+                    text:  'Никто не узнает, кто вы. Ваши чаты — <b>только для вас</b>.',
+                    scene: `<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="obh2" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity=".4"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="obg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="110" cy="110" r="80" fill="url(#obh2)" class="s-halo"/>
+  <g class="s-incognito">
+    <ellipse cx="110" cy="98" rx="44" ry="12" fill="#1e293b"/>
+    <path d="M72 98c7-32 21-48 38-48s31 16 38 48z" fill="#1e293b"/>
+    <path d="M84 96c5-24 15-36 26-36s21 12 26 36z" fill="#334155"/>
+    <ellipse cx="110" cy="132" rx="32" ry="29" fill="#e2e8f0"/>
+    <rect x="83" y="120" width="54" height="19" rx="9" fill="#0b1220"/>
+    <line x1="110" y1="122" x2="110" y2="137" stroke="#0b1220" stroke-width="3.5"/>
+  </g>
+  <g class="s-shield">
+    <path d="M172 60l20 8v15c0 13-8 22-20 28-12-6-20-15-20-28V68z" fill="#0f172a" stroke="#22d3ee" stroke-opacity=".7"/>
+    <path d="M172 60l20 8v15c0 13-8 22-20 28-12-6-20-15-20-28V68z" fill="url(#obh2)" class="s-shine"/>
+    <rect x="165" y="77" width="14" height="11" rx="4" fill="#22d3ee"/>
+    <path d="M168 77v-4a4 4 0 0 1 8 0v4" fill="none" stroke="#22d3ee" stroke-width="2.5"/>
+  </g>
+  <circle cx="40" cy="70" r="4" fill="#22d3ee" class="s-star s1"/>
+  <circle cx="60" cy="172" r="3" fill="#8b5cf6" class="s-star s2"/>
+</svg>`
+                },
+                {
+                    video: 'intro3.mp4',
+                    webm:  'intro3.webm',
+                    title: 'Всё под рукой',
+                    text:  'Звонки, каналы и файлы — всё <b>в одном месте</b>.',
+                    scene: `<svg viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="obh3" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity=".35"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="obg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="110" cy="110" r="80" fill="url(#obh3)" class="s-halo"/>
+  <g class="s-plane">
+    <path d="M52 136L202 62l-54 122-26-48z" fill="url(#obg3)" stroke="#fff" stroke-opacity=".4"/>
+    <path d="M146 96l-46 42" stroke="#fff" stroke-opacity=".55" stroke-width="2.5"/>
+  </g>
+  <path d="M26 158q46-22 84-30" fill="none" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" class="s-trail" stroke-dasharray="2 12"/>
+  <circle cx="192" cy="48" r="4" fill="#fbbf24" class="s-star s1"/>
+  <circle cx="168" cy="160" r="3" fill="#f472b6" class="s-star s2"/>
+  <circle cx="48" cy="52" r="3" fill="#22d3ee" class="s-star s3"/>
+</svg>`
+                }
+            ];
+
+            var idx = 0;
+            var busy = false;
+
+            function renderScene (n) {
+                var s = SLIDES[n];
+                $('obTitle').textContent = s.title;
+                $('obText').innerHTML = s.text;
+                $('obScene').innerHTML = s.scene;
+
+                // Плавное появление заголовка и текста на каждом слайде
+                var t = $('obTitle'), x = $('obText');
+                t.classList.remove('ob-anim-in');
+                x.classList.remove('ob-anim-in');
+                void t.offsetWidth;
+                t.classList.add('ob-anim-in');
+                void x.offsetWidth;
+                x.classList.add('ob-anim-in');
+            }
+
+            function setVideo (n) {
+                var s = SLIDES[n];
+                var v = $('obVideo');
+                $('obVideoMp4').src = s.video ? '/static/video-sput/' + s.video : '';
+                $('obVideoWebm').src = s.webm ? '/static/video-sput/' + s.webm : '';
+                v.style.display = 'none';
+                if (s.video || s.webm) v.load();
+            }
+
+            function updateChrome (n) {
+                var d = '';
+                for (var k = 0; k < SLIDES.length; k++) {
+                    d += '<span class="ob-dot' + (k === n ? ' cur' : '') + '"></span>';
+                }
+                $('obDots').innerHTML = d;
+                $('obStart').classList.toggle('show', n === SLIDES.length - 1);
+                $('obNext').style.opacity = n === SLIDES.length - 1 ? '0' : '1';
+            }
+
+            function showSlide (n) {
+                idx = n;
+                var frame = $('obFrame');
+
+                if (busy) { renderScene(n); setVideo(n); updateChrome(n); return; }
+                busy = true;
+
+                frame.classList.add('leaving');
+                setTimeout(function () {
+                    frame.classList.remove('leaving');
+                    renderScene(n);
+                    setVideo(n);
+                    updateChrome(n);
+                    frame.classList.add('entering');
+                    setTimeout(function () {
+                        frame.classList.remove('entering');
+                        busy = false;
+                    }, 480);
+                }, 280);
+            }
+
+            function finishOnboarding () {
+                var ob = $('onboarding');
+                document.documentElement.style.overflow = '';
+                ob.classList.add('hide');
+                setTimeout(function () {
+                    ob.style.display = 'none';
+                    $('loginPhone').focus();
+                }, 500);
+            }
+
+            // Видео загрузилось — показываем поверх сцены
+            $('obVideo').addEventListener('loadeddata', function () {
+                $('obVideo').style.display = 'block';
+            });
+            $('obVideo').addEventListener('canplay', function () {
+                $('obVideo').style.display = 'block';
+            });
+            // Видео нет — остаётся анимированная сцена
+            $('obVideo').addEventListener('error', function () {
+                $('obVideo').style.display = 'none';
+            });
+
+            $('obNext').addEventListener('click', function () {
+                if (idx < SLIDES.length - 1) showSlide(idx + 1);
+                else finishOnboarding();
+            });
+            $('obStart').addEventListener('click', finishOnboarding);
+            $('obSkip').addEventListener('click', finishOnboarding);
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (idx < SLIDES.length - 1) showSlide(idx + 1);
+                    else finishOnboarding();
+                }
+            });
+
+            // Блокируем скролл страницы, пока открыто ознакомление
+            document.documentElement.style.overflow = 'hidden';
+
+            showSlide(0);
+        })();
+    </script>
+
 </body>
 </html>

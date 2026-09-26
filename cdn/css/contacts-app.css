@@ -1,0 +1,921 @@
+/* ===== НОВЫЙ ДИЗАЙН КОНТАКТОВ (СТИЛЬ TELEGRAM) ===== */
+
+/* Основное модальное окно — непрозрачный фон */
+.tg-modal-content {
+    background: #0f0f0f !important;
+    border-radius: 24px;
+    overflow: hidden;
+    color: white;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    width: 100%;
+}
+
+/* Заголовок модалки */
+.tg-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #2c2c2e;
+}
+
+.tg-modal-header .title {
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+
+.tg-modal-header .cancel-btn {
+    background: none;
+    border: none;
+    color: #8e8e93;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.tg-modal-header .done-btn {
+    background: none;
+    border: none;
+    color: #007aff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Тело модалки */
+.tg-modal-body {
+    padding: 20px;
+}
+
+/* Поля ввода — стиль Telegram */
+.tg-input {
+    width: 100%;
+    background: #1c1c1e;
+    border: 1px solid #2c2c2e;
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    font-size: 16px;
+    font-family: var(--font-family);
+    transition: border-color 0.2s;
+    outline: none;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+}
+
+.tg-input:focus {
+    border-color: #007aff;
+}
+
+.tg-input::placeholder {
+    color: #8e8e93;
+}
+
+.tg-label {
+    display: block;
+    font-size: 13px;
+    color: #8e8e93;
+    margin-bottom: 6px;
+}
+
+/* Аватарка в модалке */
+.tg-avatar-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: 600;
+    color: white;
+    margin: 0 auto 20px;
+    overflow: hidden;
+}
+
+.tg-avatar-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Информационные строки (телефон и т.п.) */
+.tg-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #2c2c2e;
+}
+
+.tg-info-row:last-child {
+    border-bottom: none;
+}
+
+.tg-info-row i {
+    width: 24px;
+    color: #007aff;
+    font-size: 18px;
+    text-align: center;
+}
+
+.tg-info-row span {
+    color: white;
+}
+
+/* Меню действий (ещё, переименовать, удалить) */
+.tg-action-menu {
+    background: #0f0f0f !important;
+    border-radius: 24px;
+    overflow: hidden;
+    padding: 6px 0;
+}
+
+.tg-action-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 15px;
+    gap: 16px;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    color: white;
+    font-family: var(--font-family);
+}
+
+.tg-action-item:hover {
+    background: #1c1c1e;
+}
+
+.tg-action-item i {
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
+    color: #007aff;
+}
+
+.tg-action-item.danger {
+    color: #ff3b30;
+}
+
+.tg-action-item.danger i {
+    color: #ff3b30;
+}
+
+.tg-action-divider {
+    height: 1px;
+    background: #2c2c2e;
+    margin: 4px 16px;
+}
+
+/* Кнопки действий */
+.tg-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: var(--font-family);
+    text-align: center;
+}
+
+.tg-btn-primary {
+    background: #007aff;
+    color: white;
+}
+
+.tg-btn-primary:hover {
+    background: #0055cc;
+    transform: translateY(-1px);
+}
+
+.tg-btn-secondary {
+    background: #1c1c1e;
+    color: #8e8e93;
+}
+
+.tg-btn-secondary:hover {
+    background: #2c2c2e;
+}
+
+.tg-btn-danger {
+    background: #ff3b30;
+    color: white;
+}
+
+.tg-btn-danger:hover {
+    background: #dc2626;
+}
+
+/* Список контактов */
+.tg-contacts-list {
+    background: #0f0f0f;
+    border-radius: 24px;
+    overflow: hidden;
+    padding: 4px 0;
+}
+
+.tg-contact-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 12px;
+}
+
+.tg-contact-item:hover {
+    background: #1c1c1e;
+}
+
+.tg-contact-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.tg-contact-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tg-contact-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.tg-contact-name {
+    font-weight: 500;
+    font-size: 15px;
+    color: white;
+}
+
+.tg-contact-username {
+    font-size: 13px;
+    color: #8e8e93;
+}
+
+.tg-contact-more-btn {
+    background: none;
+    border: none;
+    color: #8e8e93;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: color 0.15s;
+}
+
+.tg-contact-more-btn:hover {
+    color: white;
+}
+
+
+
+
+
+
+
+
+
+        /* ===== НОВЫЙ ДИЗАЙН ДЛЯ КОНТАКТОВ И МЕНЮ (СТИЛЬ ТЕЛЕГРАМ) ===== */
+
+/* Контейнер меню */
+.contact-action-menu {
+    background: #0f0f0f; /* Непрозрачный тёмный фон */
+    border-radius: 24px;
+    overflow: hidden;
+    color: white;
+    padding: 6px 0;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.contact-action-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-size: 15px;
+    gap: 16px;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    color: white;
+    font-family: var(--font-family);
+}
+
+.contact-action-item:hover {
+    background: #1c1c1e;
+}
+
+.contact-action-item i {
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
+    color: #007aff;
+}
+
+.contact-action-item.danger {
+    color: #ff3b30;
+}
+
+.contact-action-item.danger i {
+    color: #ff3b30;
+}
+
+.contact-action-divider {
+    height: 1px;
+    background: #2c2c2e;
+    margin: 4px 16px;
+}
+
+/* Стиль для модальных окон контактов */
+.contact-modal-content {
+    background: #0f0f0f;
+    border-radius: 24px;
+    overflow: hidden;
+    color: white;
+    padding: 0;
+}
+
+.contact-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #2c2c2e;
+}
+
+.contact-modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: white;
+}
+
+.contact-modal-body {
+    padding: 20px;
+}
+
+.contact-modal-input {
+    width: 100%;
+    background: #1c1c1e;
+    border: 1px solid #2c2c2e;
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    font-size: 16px;
+    font-family: var(--font-family);
+    transition: border-color 0.2s;
+    margin-bottom: 16px;
+    outline: none;
+}
+
+.contact-modal-input:focus {
+    border-color: #007aff;
+}
+
+.contact-modal-input::placeholder {
+    color: #8e8e93;
+}
+
+.contact-modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.contact-modal-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: var(--font-family);
+    text-align: center;
+}
+
+.contact-modal-btn-primary {
+    background: #007aff;
+    color: white;
+}
+
+.contact-modal-btn-primary:hover {
+    background: #0055cc;
+    transform: translateY(-1px);
+}
+
+.contact-modal-btn-secondary {
+    background: #1c1c1e;
+    color: #8e8e93;
+}
+
+.contact-modal-btn-secondary:hover {
+    background: #2c2c2e;
+}
+
+/* Адаптация для аватара в диалоге */
+.contact-avatar-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: 600;
+    color: white;
+    margin: 0 auto 20px;
+    overflow: hidden;
+}
+
+.contact-avatar-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.contact-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid #2c2c2e;
+}
+
+.contact-info-row:last-child {
+    border-bottom: none;
+}
+
+.contact-info-row i {
+    width: 24px;
+    color: #007aff;
+    font-size: 18px;
+}
+
+
+
+        /* ===== КОНТАКТ В СООБЩЕНИИ ===== */
+        .contact-message {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.05);
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .contact-message:hover {
+            background: rgba(0,0,0,0.1);
+            transform: scale(1.02);
+        }
+
+        .contact-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .contact-info {
+            flex: 1;
+        }
+
+        .contact-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .contact-phone {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        /* ===== ПОИСК В ЧАТЕ ===== */
+        .search-results-inline {
+            margin-top: 16px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .search-result-message {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+            border-radius: 12px;
+        }
+
+        .search-result-message:hover {
+            background: var(--bg-hover);
+        }
+
+        .search-result-message-text {
+            font-size: 13px;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .search-result-message-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .search-highlight {
+            background: rgba(245, 158, 11, 0.3);
+            border-radius: 4px;
+            padding: 0 2px;
+        }
+
+        /* ===== АНИМАЦИИ ===== */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes heartBeat {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px) scale(1.5);
+            }
+        }
+
+        .heart-animation {
+            position: fixed;
+            font-size: 60px;
+            pointer-events: none;
+            z-index: 10000;
+            animation: floatUp 1s ease-out forwards;
+        }
+
+        .like-animation {
+            animation: heartBeat 0.3s ease;
+        }
+
+        /* ===== ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ ===== */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .slider.round {
+            border-radius: 24px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        /* ===== АВАТАРЫ ===== */
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .avatar-option {
+            cursor: pointer;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 3px solid transparent;
+            transition: all var(--transition-fast);
+            aspect-ratio: 1;
+        }
+
+        .avatar-option:hover {
+            transform: scale(1.05);
+            border-color: var(--primary-color);
+        }
+
+        .avatar-option.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.3);
+        }
+
+        .avatar-option img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* ===== ГРУППЫ И КАНАЛЫ ===== */
+        .members-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .member-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .member-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .member-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .member-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .member-info {
+            flex: 1;
+        }
+
+        .member-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .member-role {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ===== МОБИЛЬНАЯ ВЕРСИЯ (full-screen, как Telegram) ===== */
+        @media (max-width: 768px) {
+            * {
+                -webkit-tap-highlight-color: transparent !important;
+            }
+
+            html, body {
+                overflow: hidden !important;
+                position: fixed !important;
+                width: 100% !important;
+                height: 100% !important;
+                touch-action: pan-y !important;
+            }
+
+            .app {
+                position: relative !important;
+                width: 100% !important;
+                height: 100% !important;
+                overflow: hidden !important;
+            }
+
+            .sidebar {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                z-index: 1 !important;
+                transform: translateX(0) !important;
+                transition: transform 0.25s ease-out !important;
+                background: var(--bg-secondary) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+
+            .sidebar.chat-open {
+                transform: translateX(-100%) !important;
+            }
+
+            .chat-area {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                z-index: 2 !important;
+                transform: translateX(100%) !important;
+                transition: transform 0.25s ease-out !important;
+                background: var(--bg-primary) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+            }
+
+            .chat-area.chat-open {
+                transform: translateX(0) !important;
+            }
+
+            .back-btn {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                min-width: 44px !important;
+                min-height: 44px !important;
+                font-size: 22px !important;
+                color: var(--primary-color) !important;
+            }
+
+            .messages-area {
+                padding-bottom: 80px !important;
+            }
+
+            .message-input-area {
+                padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+            }
+
+            @supports (padding: max(0px)) {
+                .chat-header-area {
+                    padding-top: max(8px, env(safe-area-inset-top)) !important;
+                }
+                .message-input-area {
+                    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+                }
+            }
+        }
+
+        /* ===== ПК ВЕРСИЯ (sidebar + чат рядом) ===== */
+        @media (min-width: 769px) {
+            .back-btn {
+                display: none !important;
+            }
+
+            /* В профильных модалках стрелка назад нужна и на ПК */
+            .other-profile .banner .top-bar .back-btn,
+            .profile-modal .banner .top-bar .back-btn {
+                display: flex !important;
+            }
+
+            .sidebar {
+                width: var(--sidebar-width);
+                flex-shrink: 0;
+            }
+
+            .chat-area {
+                flex: 1;
+            }
+        }
+
+        /* ===== ПЛАНШЕТЫ ===== */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .sidebar {
+                width: 320px;
+            }
+        }
+
+        /* ===== TEMP MESSAGE STYLES ===== */
+        .message.temp-message {
+            opacity: 0.7;
+        }
+
+        .preview-item {
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            background: var(--bg-secondary);
+        }
+
+        .preview-info {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .preview-summary {
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 12px;
+            margin: 16px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Анимация для сердечка */
+@keyframes heartBeat {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+@keyframes floatUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-100px) scale(1.5);
+    }
+}
+
+.heart-animation {
+    position: fixed;
+    font-size: 40px;
+    pointer-events: none;
+    z-index: 10000;
+    animation: floatUp 1s ease-out forwards;
+}
+
+/* Кнопка лайка в истории */
+#storyLikeBtn i {
+    transition: transform 0.2s;
+}
+
+#storyLikeBtn:active i {
+    transform: scale(1.3);
+    color: #ff4757;
+}
+
