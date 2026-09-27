@@ -81,6 +81,17 @@ from database import (
     add_group_join_request, get_group_join_request_status, get_group_join_requests,
     approve_group_join_request, reject_group_join_request,
     add_channel_post_view, is_chat_muted, set_chat_mute,
+    # v0.58.0 — кружки, альбомы, форматирование, стикеры, премиум, 2FA, passcode
+    get_user_premium, is_premium_active, set_user_premium_emoji,
+    _premium_pack,
+    activate_premium_promo, get_cloud_password_info, set_cloud_password, clear_cloud_password,
+    check_cloud_password, get_app_lock_info, set_app_passcode, check_app_passcode,
+    create_scheduled_message, get_scheduled_messages, get_scheduled_message,
+    update_scheduled_message, delete_scheduled_message, due_scheduled_messages,
+    create_sticker, get_user_stickers, get_favorite_stickers, sticker_by_path,
+    toggle_sticker_favorite, delete_sticker,
+    next_album_id, set_message_album, get_album_messages, reorder_album,
+    export_user_data, add_contact_with_name, find_users_by_phones,
 )
 
 from werkzeug.security import check_password_hash  # не используется напрямую
@@ -200,6 +211,8 @@ os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'audio'), exist_ok=True)
 os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'wallpapers'), exist_ok=True)
 os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'stories'), exist_ok=True)
 os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'story_music'), exist_ok=True)
+os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'stickers'), exist_ok=True)
+os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'video_messages'), exist_ok=True)
 os.makedirs(os.path.join('static', 'avatar-swg'), exist_ok=True)
 
 # Инициализация БД
@@ -418,6 +431,13 @@ def auth():
                                     'banned': True, 'ban_reason': info['ban_reason']}), 403
                 if not user['registration_complete']:
                     return jsonify({'error': 'Регистрация не завершена. Используйте регистрацию.'}), 400
+                # --- Этап 2: облачный пароль поверх кода входа ---
+                info = get_cloud_password_info(user['id'])
+                if info and info.get('enabled'):
+                    return jsonify({
+                        'success': False, 'twofa_required': True,
+                        'phone': phone, 'hint': info.get('hint') or None
+                    })
                 return complete_login(user, remember, method='code')
 
             # Вход по паролю
@@ -1093,6 +1113,29 @@ def api_get_chat(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+def _parse_sched_dt(value):
+    """Парсит дату отправки в ЛОКАЛЬНОЕ наивное время (как в БД).
+
+    Браузер шлёт `new Date(...).toISOString()` — это всегда UTC с суффиксом
+    `Z`. Если просто выкинуть `Z` и сравнить с datetime.now(), то сообщение
+    «на час позже» окажется в прошлом на величину смещения часового пояса.
+    Поэтому: если во времени есть зона — переводим в локальную и отбрасываем
+    её; если зоны нет — считаем, что клиент уже прислал локальное время.
+    """
+    s = str(value or '').strip()
+    if not s:
+        return None
+    if s.endswith(('Z', 'z')):
+        s = s[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(s)
+    except Exception:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone().replace(tzinfo=None)
+    return dt
+
+
 @app.route('/api/send_message', methods=['POST'])
 @rate_limit(limit=40, window=60)
 def api_send_message():
@@ -1124,6 +1167,55 @@ def api_send_message():
 
         if not (chat_id or group_id or channel_id):
             return jsonify({'error': 'Не указан чат'}), 400
+
+        def _schedule_message(_cid, _gid, _chid, _content, _reply, _when, _files,
+                              _ftype, _dur):
+            """Создаёт отложенное сообщение вместо немедленной отправки."""
+            when = _parse_sched_dt(_when)
+            if when is None:
+                return jsonify({'success': False, 'error': 'Некорректная дата'}), 400
+            if when <= datetime.now():
+                return jsonify({'success': False, 'error': 'Время уже прошло'}), 400
+            if when > datetime.now() + timedelta(days=365):
+                return jsonify({'success': False, 'error': 'Максимум на год вперёд'}), 400
+
+            f_type = f_path = f_name = None
+            f_size = f_dur = None
+            if _files and _files[0] and _files[0].filename:
+                f = _files[0]
+                f_name = secure_filename(f.filename)
+                ext = f_name.rsplit('.', 1)[1].lower() if '.' in f_name else ''
+                if _ftype == 'video_circle' and ext in ('mp4', 'webm', 'mov', 'm4v', '3gp'):
+                    f_type, folder = 'video_circle', 'video_messages'
+                elif ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+                    f_type, folder = 'photo', 'photos'
+                elif ext in ('mp4', 'webm', 'avi', 'mov'):
+                    f_type, folder = 'video', 'videos'
+                elif ext in ('mp3', 'wav', 'ogg', 'm4a'):
+                    f_type, folder = 'audio', 'audio'
+                else:
+                    f_type, folder = 'document', 'files'
+                os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], folder), exist_ok=True)
+                uniq = f"{uuid.uuid4().hex}.{ext}"
+                disk = os.path.join(app.config['UPLOAD_FOLDER'], folder, uniq)
+                f.save(disk)
+                f_size = os.path.getsize(disk)
+                f_path = f"uploads/{folder}/{uniq}"
+                f_dur = _dur
+                if not _content:
+                    _content = f"[Файл] {f_name}"
+
+            row = create_scheduled_message(
+                sender_id=session['user_id'], chat_id=_cid, group_id=_gid, channel_id=_chid,
+                content=_content or '', scheduled_for=when, file_type=f_type, file_path=f_path,
+                file_name=f_name, file_size=f_size, media_duration=f_dur, reply_to_id=_reply)
+            if not row:
+                return jsonify({'success': False, 'error': 'Не удалось создать'}), 500
+            try:
+                row['scheduled_for'] = when.isoformat()
+            except Exception:
+                pass
+            return jsonify({'success': True, 'scheduled': row})
 
         # ---- Telegram-проверки для групп ----
         if group_id:
@@ -1163,15 +1255,39 @@ def api_send_message():
         messages = []
         files = request.files.getlist('files')
 
+        # Кружок — короткое круговое видеосообщение (file_type задаёт клиент)
+        force_type = (request.form.get('file_type') or '').strip()
+        # Голосовые отправляют voice_duration, кружки — media_duration
+        media_duration = request.form.get('media_duration') or request.form.get('voice_duration')
+        try:
+            media_duration = float(media_duration) if media_duration else None
+        except (TypeError, ValueError):
+            media_duration = None
+
+        # Отправка отложенным сообщением
+        scheduled_for = (request.form.get('scheduled_for') or '').strip()
+        if scheduled_for:
+            return _schedule_message(
+                chat_id, group_id, channel_id, content, reply_to_id,
+                scheduled_for, files, force_type, media_duration
+            )
+
+        # Альбом: клиент отправляет несколько медиа одним блоком
+        as_album = (request.form.get('album') or '').lower() in ('1', 'true', 'yes')
+        album_id = next_album_id() if as_album else None
+
         if files:
-            for file in files:
+            for idx, file in enumerate(files):
                 if file and file.filename:
                     file_type = None
                     file_path = None
                     file_name = secure_filename(file.filename)
                     ext = file_name.rsplit('.', 1)[1].lower() if '.' in file_name else ''
 
-                    if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
+                    if force_type == 'video_circle' and ext in ('mp4', 'webm', 'mov', 'm4v', '3gp'):
+                        file_type = 'video_circle'
+                        folder = 'video_messages'
+                    elif ext in ['png', 'jpg', 'jpeg', 'gif', 'webp']:
                         file_type = 'photo'
                         folder = 'photos'
                     elif ext in ['mp4', 'webm', 'avi', 'mov']:
@@ -1196,16 +1312,23 @@ def api_send_message():
                         group_id=group_id,
                         channel_id=channel_id,
                         sender_id=session['user_id'],
-                        content=content if len(files) == 1 else f"[Файл] {file_name}",
+                        content=content if (len(files) == 1 or idx == 0) else '',
                         file_type=file_type,
                         file_path=file_path,
                         file_name=file_name,
                         file_size=file_size,
                         reply_to_id=reply_to_id,
+                        media_duration=media_duration,
                         expire_after=expire_after
                     )
 
                     if message:
+                        message['media_duration'] = media_duration
+                        if album_id:
+                            set_message_album(message['id'], album_id, idx)
+                            message['album_id'] = album_id
+                            message['album_order'] = idx
+                            message['album_size'] = len(files)
                         messages.append(dict(message))
         else:
             message = send_message(
@@ -3424,6 +3547,15 @@ def api_add_account():
             return jsonify({'success': False, 'error': 'Неверный или просроченный код входа'}), 401
         if user['is_deleted'] or not user['registration_complete']:
             return jsonify({'success': False, 'error': 'Аккаунт недоступен'}), 401
+        # Если у добавляемого аккаунта включён облачный пароль — требуем его
+        # (сессию НЕ меняем: пользователь остаётся в текущем аккаунте)
+        info = get_cloud_password_info(user['id'])
+        if info and info.get('enabled'):
+            cp = str(data.get('cloud_password') or '')
+            if not check_cloud_password(user['id'], cp):
+                return jsonify({'success': False, 'twofa_required': True,
+                                'phone': phone, 'hint': info.get('hint') or None,
+                                'error': 'Требуется облачный пароль'})
     else:
         password = data.get('password')
         if not phone or not password:
@@ -4349,9 +4481,691 @@ def maybe_start_https():
     return True
 
 
+# =============================================================================
+#  v0.58.0 — НОВЫЕ МЕХАНИКИ: кружки, альбомы, форматирование, стикеры,
+#            отложенные сообщения, импорт контактов, премиум, 2FA, passcode
+# =============================================================================
+
+
+def _scope_ids():
+    """Текущий чат из формы/JSON: (chat_id, group_id, channel_id)."""
+    src = request.form if request.form else (request.get_json(silent=True) or {})
+    def _i(v):
+        try:
+            return int(float(v)) if v not in (None, '') else None
+        except (TypeError, ValueError):
+            return None
+    return (_i(src.get('chat_id')), _i(src.get('group_id')), _i(src.get('channel_id')))
+
+
+def _room_of(chat_id, group_id, channel_id):
+    return f"chat_{chat_id}" if chat_id else (f"group_{group_id}" if group_id
+                                              else f"channel_{channel_id}")
+
+
+# ---------------------- ОТЛОЖЕННЫЕ СООБЩЕНИЯ ----------------------
+@app.route('/api/scheduled_messages', methods=['GET'])
+def api_scheduled_list():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    status = request.args.get('status', 'pending')
+    return jsonify({'scheduled': get_scheduled_messages(session['user_id'],
+                                                        status if status != 'all' else None)})
+
+
+@app.route('/api/scheduled_messages/<int:mid>', methods=['POST', 'DELETE'])
+def api_scheduled_item(mid):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    uid = session['user_id']
+
+    if request.method == 'DELETE':
+        delete_scheduled_message(mid, uid)
+        return jsonify({'success': True})
+
+    data = request.get_json(silent=True) or {}
+    fields = {}
+    if 'content' in data:
+        fields['content'] = (data.get('content') or '')[:8000]
+    if 'scheduled_for' in data:
+        when = _parse_sched_dt(data['scheduled_for'])
+        if when is None:
+            return jsonify({'success': False, 'error': 'Некорректная дата'}), 400
+        if when <= datetime.now():
+            return jsonify({'success': False, 'error': 'Время уже прошло'}), 400
+        fields['scheduled_for'] = when
+    if 'status' in data:
+        fields['status'] = data['status']
+    if not fields:
+        return jsonify({'success': False, 'error': 'Нет полей для изменения'}), 400
+
+    # «Отправить сейчас»: статус sent воркер не подхватывает (берёт только
+    # pending), поэтому доставляем сообщение сразу здесь.
+    if fields.get('status') == 'sent':
+        row = get_scheduled_message(mid, uid)
+        if not row:
+            return jsonify({'success': False, 'error': 'Сообщение не найдено'}), 404
+        if row.get('status') != 'pending':
+            return jsonify({'success': False, 'error': 'Сообщение уже отправлено'}), 400
+        ok = _deliver_scheduled(row)
+        update_scheduled_message(mid, uid,
+                                 status='sent' if ok else 'failed')
+        if not ok:
+            return jsonify({'success': False, 'error': 'Не удалось отправить'}), 500
+        return jsonify({'success': True,
+                        'scheduled': get_scheduled_message(mid, uid)})
+
+    update_scheduled_message(mid, uid, **fields)
+    row = get_scheduled_message(mid, uid)
+    return jsonify({'success': True, 'scheduled': row})
+
+
+def _deliver_scheduled(row):
+    """Отправляет накопившееся отложенное сообщение."""
+    msg = send_message(
+        chat_id=row.get('chat_id'), group_id=row.get('group_id'), channel_id=row.get('channel_id'),
+        sender_id=row['sender_id'], content=row.get('content'),
+        file_type=row.get('file_type'), file_path=row.get('file_path'),
+        file_name=row.get('file_name'), file_size=row.get('file_size'),
+        reply_to_id=row.get('reply_to_id'), media_duration=row.get('media_duration'))
+    if not msg:
+        return False
+    if row.get('file_type') == 'video_circle':
+        msg['media_duration'] = row.get('media_duration')
+    room = _room_of(row.get('chat_id'), row.get('group_id'), row.get('channel_id'))
+    try:
+        if msg.get('delivered', True):
+            socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+        socketio.emit('scheduled_sent', {'scheduled_id': row['id'], 'message': dict(msg)},
+                      to=str(row['sender_id']))
+    except Exception as e:
+        print(f"[scheduled] emit error (non-fatal): {e}")
+    return True
+
+
+def schedule_worker():
+    """Фоновый поток: отправляет отложенные сообщения в срок."""
+    import threading
+    import time as _time
+
+    def _loop():
+        while True:
+            _time.sleep(10)
+            try:
+                for row in due_scheduled_messages(limit=10):
+                    ok = _deliver_scheduled(row)
+                    conn = get_db()
+                    cur = dict_cursor(conn)
+                    cur.execute('UPDATE scheduled_messages SET status = %s WHERE id = %s',
+                                ('sent' if ok else 'failed', row['id']))
+                    conn.commit()
+                    conn.close()
+            except Exception as e:
+                print(f"[scheduled] worker error (non-fatal): {e}")
+
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
+    return t
+
+
+# ---------------------- КРУЖКИ ----------------------
+@app.route('/api/send_video_message', methods=['POST'])
+@rate_limit(limit=30, window=60)
+def api_send_video_message():
+    """Кружок: короткое круговое видеосообщение (1-60 сек)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    chat_id, group_id, channel_id = _scope_ids()
+    if not (chat_id or group_id or channel_id):
+        return jsonify({'success': False, 'error': 'Не указан чат'}), 400
+
+    file = request.files.get('video')
+    if not file or not file.filename:
+        return jsonify({'success': False, 'error': 'Нет видео'}), 400
+
+    fn = secure_filename(file.filename)
+    ext = (fn.rsplit('.', 1)[1].lower() if '.' in fn else 'mp4')
+    if ext not in ('mp4', 'webm', 'mov', 'm4v', '3gp'):
+        ext = 'mp4'
+
+    folder = 'video_messages'
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], folder), exist_ok=True)
+    uniq = f"{uuid.uuid4().hex}.{ext}"
+    disk = os.path.join(app.config['UPLOAD_FOLDER'], folder, uniq)
+    file.save(disk)
+
+    dur = request.form.get('media_duration')
+    try:
+        dur = float(dur) if dur else None
+    except (TypeError, ValueError):
+        dur = None
+
+    msg = send_message(
+        chat_id=chat_id, group_id=group_id, channel_id=channel_id,
+        sender_id=session['user_id'], content=(request.form.get('content') or '')[:2000],
+        file_type='video_circle', file_path=f"uploads/{folder}/{uniq}",
+        file_name=fn, file_size=os.path.getsize(disk),
+        reply_to_id=request.form.get('reply_to_id') or None,
+        media_duration=dur)
+    if not msg:
+        return jsonify({'success': False, 'error': 'Не удалось сохранить'}), 500
+    msg['media_duration'] = dur
+
+    room = _room_of(chat_id, group_id, channel_id)
+    if msg.get('delivered', True):
+        socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+    return jsonify({'success': True, 'message': dict(msg)})
+
+
+@app.route('/api/video_message/<int:mid>/viewed', methods=['POST'])
+def api_video_message_viewed(mid):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('UPDATE messages SET views_count = COALESCE(views_count, 0) + 1 WHERE id = %s', (mid,))
+    conn.commit()
+    cur.execute('SELECT views_count FROM messages WHERE id = %s', (mid,))
+    row = cur.fetchone()
+    conn.close()
+    return jsonify({'success': True, 'views': (row or {}).get('views_count', 0)})
+
+
+# ---------------------- АЛЬБОМЫ МЕДИА ----------------------
+@app.route('/api/album/<int:album_id>')
+def api_get_album(album_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    rows = get_album_messages(album_id)
+    items = [{
+        'id': r['id'],
+        'file_path': r.get('file_path'),
+        'file_type': r.get('file_type'),
+        'file_name': r.get('file_name'),
+        'content': r.get('content'),
+        'album_order': r.get('album_order') or 0,
+        'sender_id': r.get('sender_id'),
+        'can_reorder': r.get('sender_id') == session['user_id'],
+    } for r in rows]
+    return jsonify({'album_id': album_id, 'items': items})
+
+
+@app.route('/api/album/<int:album_id>/reorder', methods=['POST'])
+def api_reorder_album(album_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    ids = data.get('message_ids') or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify({'success': False, 'error': 'Нужен список message_ids'}), 400
+    saved = reorder_album(album_id, ids, session['user_id'])
+    return jsonify({'success': True, 'order': saved})
+
+
+# ---------------------- СТИКЕРЫ ----------------------
+@app.route('/api/stickers', methods=['GET'])
+def api_stickers_list():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    fav = request.args.get('favorites') == '1'
+    return jsonify({'stickers': get_favorite_stickers(session['user_id']) if fav
+                    else get_user_stickers(session['user_id'])})
+
+
+@app.route('/api/stickers/upload', methods=['POST'])
+@rate_limit(limit=60, window=60)
+def api_stickers_upload():
+    """Создание стикера: PNG/WebP 512x512 (клиент уже обрезал в квадрат)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'success': False, 'error': 'Нет файла'}), 400
+
+    emoji = (request.form.get('emoji') or '').strip()[:16] or None
+    caption = (request.form.get('caption') or '').strip()[:200] or None
+    is_fav = (request.form.get('is_favorite') or '').lower() in ('1', 'true', 'yes')
+    set_name = (request.form.get('set_name') or 'Мои стикеры').strip()[:60] or 'Мои стикеры'
+
+    folder = 'stickers'
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], folder), exist_ok=True)
+    uniq = f"{uuid.uuid4().hex}.png"
+    disk = os.path.join(app.config['UPLOAD_FOLDER'], folder, uniq)
+    file.save(disk)
+
+    # Нормализуем в PNG 512x512 с прозрачностью
+    try:
+        im = Image.open(disk).convert('RGBA')
+        im = im.resize((512, 512), Image.LANCZOS)
+        im.save(disk, 'PNG')
+    except Exception as e:
+        print(f"[stickers] normalize error: {e}")
+        os.remove(disk)
+        return jsonify({'success': False, 'error': 'Не удалось обработать изображение'}), 400
+
+    rel = f"uploads/{folder}/{uniq}"
+    row = create_sticker(session['user_id'], rel, emoji=emoji, caption=caption,
+                         is_favorite=is_fav, set_name=set_name)
+    return jsonify({'success': True, 'sticker': {'id': row['id'] if row else None,
+                                                 'file_path': rel, 'emoji': emoji,
+                                                 'caption': caption, 'is_favorite': is_fav}})
+
+
+@app.route('/api/stickers/<int:sid>/favorite', methods=['POST'])
+def api_sticker_favorite(sid):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    res = toggle_sticker_favorite(session['user_id'], sid)
+    if res is None:
+        return jsonify({'success': False, 'error': 'Стикер не найден'}), 404
+    return jsonify({'success': True, **res})
+
+
+@app.route('/api/stickers/<int:sid>', methods=['DELETE'])
+def api_sticker_delete(sid):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    delete_sticker(session['user_id'], sid)
+    return jsonify({'success': True})
+
+
+@app.route('/api/stickers/from_message', methods=['POST'])
+@rate_limit(limit=60, window=60)
+def api_sticker_from_message():
+    """Добавляет изображение из сообщения в мои стикеры (обрезка в квадрат)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    src = (data.get('file_path') or '').strip()
+    if not src:
+        return jsonify({'success': False, 'error': 'Не указано изображение'}), 400
+
+    # Защита от выхода за пределы папки uploads
+    safe = os.path.normpath(os.path.join(app.config['UPLOAD_FOLDER'],
+                                         src.replace('uploads/', '', 1)))
+    root = os.path.abspath(app.config['UPLOAD_FOLDER'])
+    if not os.path.abspath(safe).startswith(root) or not os.path.isfile(safe):
+        return jsonify({'success': False, 'error': 'Файл не найден'}), 404
+
+    folder = 'stickers'
+    os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], folder), exist_ok=True)
+    uniq = f"{uuid.uuid4().hex}.png"
+    disk = os.path.join(app.config['UPLOAD_FOLDER'], folder, uniq)
+    try:
+        im = Image.open(safe).convert('RGBA')
+        # Обрезка по центру в квадрат
+        w, h = im.size
+        side = min(w, h)
+        im = im.crop(((w - side) // 2, (h - side) // 2,
+                      (w - side) // 2 + side, (h - side) // 2 + side))
+        im = im.resize((512, 512), Image.LANCZOS)
+        im.save(disk, 'PNG')
+    except Exception as e:
+        print(f"[stickers] from_message error: {e}")
+        return jsonify({'success': False, 'error': 'Не удалось обработать'}), 400
+
+    rel = f"uploads/{folder}/{uniq}"
+    row = create_sticker(session['user_id'], rel,
+                         emoji=(data.get('emoji') or '').strip()[:16] or None,
+                         caption=(data.get('caption') or '').strip()[:200] or None,
+                         is_favorite=True)
+    return jsonify({'success': True, 'sticker': {'id': row['id'] if row else None,
+                                                 'file_path': rel, 'is_favorite': True}})
+
+
+@app.route('/api/send_sticker', methods=['POST'])
+@rate_limit(limit=60, window=60)
+def api_send_sticker():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    chat_id, group_id, channel_id = _scope_ids()
+    if not (chat_id or group_id or channel_id):
+        return jsonify({'success': False, 'error': 'Не указан чат'}), 400
+
+    path = (data.get('file_path') or '').strip()
+    sticker = sticker_by_path(session['user_id'], path) if path else None
+    if not path:
+        return jsonify({'success': False, 'error': 'Стикер не указан'}), 400
+
+    msg = send_message(
+        chat_id=chat_id, group_id=group_id, channel_id=channel_id,
+        sender_id=session['user_id'],
+        content=(data.get('content') or '')[:2000],
+        file_type='sticker', file_path=path,
+        file_name=sticker.get('caption') if sticker else 'sticker')
+    if not msg:
+        return jsonify({'success': False, 'error': 'Не удалось отправить'}), 500
+    if sticker:
+        msg['sticker_id'] = sticker['id']
+        msg['sticker_emoji'] = sticker.get('emoji')
+
+    room = _room_of(chat_id, group_id, channel_id)
+    if msg.get('delivered', True):
+        socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+    return jsonify({'success': True, 'message': dict(msg)})
+
+
+# ---------------------- ИМПОРТ КОНТАКТОВ ----------------------
+@app.route('/api/contacts/import', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_contacts_import():
+    """Импорт контактов: принимает список {name, phones:[...]} и ищет совпадения."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    raw = data.get('contacts')
+    if not isinstance(raw, list) or not raw:
+        return jsonify({'success': False, 'error': 'Список контактов пуст'}), 400
+    if len(raw) > 5000:
+        return jsonify({'success': False, 'error': 'Слишком много контактов (макс. 5000)'}), 400
+
+    entries = []
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        name = str(c.get('name') or '').strip()[:120]
+        phones = c.get('phones')
+        if isinstance(phones, str):
+            phones = [phones]
+        if not isinstance(phones, list):
+            phones = []
+        phones = [str(p).strip() for p in phones if str(p or '').strip()][:10]
+        if phones:
+            entries.append((name, phones))
+    if not entries:
+        return jsonify({'success': False, 'error': 'Не найдено ни одного номера'}), 400
+
+    found = find_users_by_phones([p for _, ps in entries for p in ps],
+                                 exclude_user_id=session['user_id'])
+    by_phone = {f['phone']: f for f in found}
+
+    added, matched = 0, []
+    for name, phones in entries:
+        target = None
+        for p in phones:
+            digits = re.sub(r'\D', '', p)
+            cand = by_phone.get('+' + digits)
+            if cand:
+                target = cand
+                break
+        if not target:
+            continue
+        ok, _msg = add_contact_with_name(session['user_id'], target['id'], name or None)
+        if ok:
+            added += 1
+        matched.append({'name': name, 'user': target})
+
+    return jsonify({
+        'success': True,
+        'imported': added,
+        'scanned': len(entries),
+        'not_found': max(0, len(entries) - len(matched)),
+        'matched': matched[:200],
+    })
+
+
+# ---------------------- ПРЕМИУМ ----------------------
+@app.route('/api/premium', methods=['GET'])
+def api_premium_status():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(get_user_premium(session['user_id']) or {})
+
+
+@app.route('/api/premium/users', methods=['GET'])
+def api_premium_users():
+    """Кто из пользователей с активным Premium — для звёздочек рядом с именами.
+
+    Отдаём только id и эмодзи: никаких телефонов, email или прочего."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    now_iso = datetime.utcnow().isoformat()
+    conn = get_db()
+    cur = dict_cursor(conn)
+    # Кандидаты: сначала грубый отсев по строке, точную проверку даты
+    # делает _premium_pack (там корректно разбираются Z и таймзоны)
+    cur.execute('''SELECT id, premium_until, premium_emoji FROM users
+                   WHERE premium_until IS NOT NULL
+                     AND is_deleted = FALSE
+                   LIMIT 5000''')
+    rows = cur.fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        pack = _premium_pack(r)
+        if pack.get('is_premium'):
+            out.append({'id': r['id'], 'emoji': (pack.get('premium_emoji') or '⭐️')[:4]})
+    return jsonify({'users': out})
+
+
+@app.route('/api/premium/activate', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_premium_activate():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    ok, res = activate_premium_promo(session['user_id'], data.get('code'))
+    if not ok:
+        return jsonify({'success': False, 'error': res}), 400
+    try:
+        send_system_message(session['user_id'],
+                            f"⭐️ Sputnik Premium активирован!\n\n"
+                            f"Промокод: {res['code']}\n"
+                            f"Срок: +{res['days']} дн.\n"
+                            f"Действует до: {res['premium_until'][:10]}")
+    except Exception:
+        pass
+    return jsonify({'success': True, 'premium': get_user_premium(session['user_id'])})
+
+
+@app.route('/api/premium/emoji', methods=['POST'])
+def api_premium_emoji():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not is_premium_active(session['user_id']):
+        return jsonify({'success': False, 'error': 'Только для Premium'}), 403
+    data = request.get_json(silent=True) or {}
+    emoji = (data.get('emoji') or '').strip()[:16] or '⭐️'
+    set_user_premium_emoji(session['user_id'], emoji)
+    return jsonify({'success': True, 'premium': get_user_premium(session['user_id'])})
+
+
+@app.route('/api/premium/export', methods=['POST'])
+@rate_limit(limit=5, window=300)
+def api_premium_export():
+    """Экспорт данных аккаунта в JSON (только для Premium)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not is_premium_active(session['user_id']):
+        return jsonify({'success': False,
+                        'error': 'Экспорт данных доступен только с Sputnik Premium'}), 403
+
+    data = request.get_json(silent=True) or {}
+    pretty = bool(data.get('pretty', True))
+    user = get_user_by_id(session['user_id'])
+    payload = export_user_data(session['user_id'])
+    if not payload:
+        return jsonify({'success': False, 'error': 'Аккаунт не найден'}), 404
+
+    body = json.dumps(payload, ensure_ascii=False, default=str, indent=2 if pretty else None)
+    username = (user.get('username') if user else None) or f"user_{session['user_id']}"
+    try:
+        send_system_message(session['user_id'],
+                            f"📦 Экспорт данных аккаунта выполнен.\n"
+                            f"Файл: sputnik_{username}.json\n"
+                            f"Сообщений: {payload['counts']['messages']}, "
+                            f"чатов: {payload['counts']['chats']}, "
+                            f"групп: {payload['counts']['groups']}, "
+                            f"каналов: {payload['counts']['channels']}")
+    except Exception:
+        pass
+
+    return app.response_class(
+        body, mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename="sputnik_{username}.json"'})
+
+
+# ---------------------- 2FA: ОБЛАЧНЫЙ ПАРОЛЬ ----------------------
+@app.route('/api/2fa/status', methods=['GET'])
+def api_2fa_status():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(get_cloud_password_info(session['user_id']) or {})
+
+
+@app.route('/api/2fa/setup', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_2fa_setup():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    pw = data.get('password') or ''
+    if len(pw) < 4:
+        return jsonify({'success': False, 'error': 'Пароль минимум 4 символа'}), 400
+    set_cloud_password(session['user_id'], pw, data.get('hint'), data.get('recovery_email'))
+    try:
+        send_system_message(session['user_id'],
+                            "🔐 Включена двухэтапная проверка (облачный пароль).\n"
+                            "Теперь при входе по коду потребуется ещё облачный пароль.\n"
+                            "Если забудете пароль — восстановление по email.")
+    except Exception:
+        pass
+    return jsonify({'success': True, **get_cloud_password_info(session['user_id'])})
+
+
+@app.route('/api/2fa/disable', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_2fa_disable():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    if not check_cloud_password(session['user_id'], data.get('password') or ''):
+        return jsonify({'success': False, 'error': 'Неверный облачный пароль'}), 403
+    clear_cloud_password(session['user_id'])
+    return jsonify({'success': True})
+
+
+@app.route('/api/2fa/verify', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_2fa_verify():
+    """Проверка облачного пароля после входа по коду (этап 2)."""
+    data = request.get_json(silent=True) or {}
+    phone = '+' + re.sub(r'\D', '', str(data.get('phone') or '')).lstrip('+')
+    pw = data.get('password') or ''
+    if not phone or not pw:
+        return jsonify({'success': False, 'error': 'Введите телефон и облачный пароль'}), 400
+
+    user = check_phone_exists(phone)
+    if not user:
+        return jsonify({'success': False, 'error': 'Аккаунт не найден'}), 404
+    if is_user_banned(user['id']):
+        return jsonify({'success': False, 'error': 'Аккаунт заблокирован'}), 403
+
+    res = check_cloud_password(user['id'], pw)
+    if res is None:
+        # 2FA не настроена — вход разрешён
+        return jsonify({'success': True, 'twofa_required': False,
+                        'redirect': url_for('chat_page')})
+    if not res:
+        return jsonify({'success': False, 'error': 'Неверный облачный пароль'}), 401
+
+    user = get_user_by_id(user['id'])
+    complete_login(user, True, method='code')
+    # complete_login() возвращает Response с redirect — для JS отдаём сам URL
+    return jsonify({'success': True, 'twofa_required': True,
+                    'redirect': url_for('chat_page')})
+
+
+@app.route('/api/2fa/recover', methods=['POST'])
+@rate_limit(limit=5, window=300)
+def api_2fa_recover():
+    """Восстановление доступа: сброс облачного пароля по коду входа + email."""
+    data = request.get_json(silent=True) or {}
+    phone = '+' + re.sub(r'\D', '', str(data.get('phone') or '')).lstrip('+')
+    code = str(data.get('code') or '').strip()
+    email = str(data.get('email') or '').strip().lower()
+    if not (phone and code and email):
+        return jsonify({'success': False, 'error': 'Телефон, код входа и email'}), 400
+
+    user = check_phone_exists(phone)
+    if not user:
+        return jsonify({'success': False, 'error': 'Аккаунт не найден'}), 404
+
+    info = get_cloud_password_info(user['id'])
+    if not info or not info.get('enabled'):
+        return jsonify({'success': False, 'error': '2FA не настроена'}), 400
+
+    stored_email = (info.get('recovery_email') or info.get('email') or '')
+    if not stored_email or stored_email.lower() != email:
+        return jsonify({'success': False,
+                        'error': 'Email не совпадает с указанным при настройке'}), 403
+
+    # Подтверждаем входным кодом
+    verified = verify_login_code(phone, code)
+    if not verified:
+        return jsonify({'success': False, 'error': 'Неверный или просроченный код входа'}), 401
+
+    clear_cloud_password(user['id'])
+    try:
+        send_system_message(user['id'],
+                            "♻️ Облачный пароль сброшен по запросу восстановления.\n"
+                            "Установите новый пароль в Настройки → Конфиденциальность.")
+    except Exception:
+        pass
+    return jsonify({'success': True})
+
+
+# ---------------------- PASSCODE (блокировка приложения) ----------------------
+@app.route('/api/app_lock/status', methods=['GET'])
+def api_app_lock_status():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(get_app_lock_info(session['user_id']) or {'enabled': False})
+
+
+@app.route('/api/app_lock/set', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_app_lock_set():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('passcode') or '')
+    if len(code) < 4:
+        return jsonify({'success': False, 'error': 'Код минимум 4 цифры'}), 400
+    set_app_passcode(session['user_id'], code, data.get('hint'),
+                     int(data.get('autolock') or 0), True)
+    return jsonify({'success': True, **get_app_lock_info(session['user_id'])})
+
+
+@app.route('/api/app_lock/off', methods=['POST'])
+@rate_limit(limit=10, window=60)
+def api_app_lock_off():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    if not check_app_passcode(session['user_id'], str(data.get('passcode') or '')):
+        return jsonify({'success': False, 'error': 'Неверный код'}), 403
+    set_app_passcode(session['user_id'], None, None, 0, False)
+    return jsonify({'success': True})
+
+
+@app.route('/api/app_lock/verify', methods=['POST'])
+@rate_limit(limit=20, window=60)
+def api_app_lock_verify():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    res = check_app_passcode(session['user_id'], str((request.get_json(silent=True) or {}).get('passcode') or ''))
+    if res is None:
+        return jsonify({'success': True, 'required': False})
+    return jsonify({'success': bool(res), 'required': True})
+
+
 if __name__ == '__main__':
     local_ip = get_local_ip()
     print(f"\n[START] Server starting on http://localhost:5000 (net: http://{local_ip}:5000)")
     schedule_story_cleanup()
+    schedule_worker()
     maybe_start_https()
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

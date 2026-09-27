@@ -290,6 +290,7 @@ table.data tbody tr.clickable:hover { background: #1e1e21; }
             <button class="t" data-tab="stats" onclick="switchTab('stats')"><i class="fas fa-chart-bar"></i> Статистика</button>
             <button class="t" data-tab="journal" onclick="switchTab('journal')"><i class="fas fa-clipboard-list"></i> Журнал</button>
             <button class="t" data-tab="logins" onclick="switchTab('logins')"><i class="fas fa-sign-in-alt"></i> Входы</button>
+            <button class="t" data-tab="premium" onclick="switchTab('premium')"><i class="fas fa-crown"></i> Premium</button>
             <button class="t" data-tab="viewer" onclick="switchTab('viewer')"><i class="fas fa-eye"></i> Просмотр аккаунта</button>
         </div>
         <button id="refreshBtn" class="tbtn" style="margin-left:auto;" onclick="refreshCurrentTab()"><i class="fas fa-sync-alt"></i> Обновить</button>
@@ -314,8 +315,34 @@ table.data tbody tr.clickable:hover { background: #1e1e21; }
             </div>
             <div id="loginLogTable"></div>
         </div>
-        <div id="tabViewer" style="display:none;">
+        <div id="tabPremium" style="display:none;">
+            <div class="stats-row" id="premiumStatsRow"></div>
             <div class="vf-card">
+                <div class="section-h"><i class="fas fa-ticket"></i> Создать промокод</div>
+                <div class="vf-hint">Промокод — латинские буквы, цифры, дефис и подчёркивание (3-32 символа). Укажите, сколько раз его можно активировать и на какой срок выдаётся Premium.</div>
+                <div class="vf-row">
+                    <input id="pmCode" placeholder="SPUTNIK2026" autocomplete="off" style="text-transform:uppercase;">
+                    <input id="pmDays" type="number" min="1" max="3650" placeholder="Дней (30)" value="30">
+                    <input id="pmMax" type="number" min="1" max="100000" placeholder="Активаций (1)" value="1">
+                </div>
+                <div class="vf-row">
+                    <input id="pmNote" placeholder="Заметка (необязательно)">
+                    <input id="pmExpires" placeholder="Действует до (ГГГГ-ММ-ДД, необязательно)">
+                </div>
+                <button class="vf-btn primary" onclick="createPromo()"><i class="fas fa-plus"></i> Создать промокод</button>
+            </div>
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-ticket"></i> Промокоды</div>
+                <div class="vf-hint">Статус, лимит и счётчик активаций. Можно отключить или удалить промокод.</div>
+            </div>
+            <div id="promoTable"></div>
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-history"></i> Активации</div>
+                <div class="vf-hint">Кто и когда активировал какой промокод.</div>
+            </div>
+            <div id="premiumActivationsTable"></div>
+        </div>
+        <div id="tabViewer" style="display:none;">            <div class="vf-card">
                 <div class="section-h"><i class="fas fa-eye"></i> Просмотр аккаунта (только чтение)</div>
                 <div class="vf-hint">Введите телефон, username и/или уникальный ID пользователя — откроется его «зеркальный» профиль со всеми чатами. Отправлять сообщения от его имени нельзя.</div>
                 <div class="vf-row">
@@ -440,7 +467,7 @@ function switchTab(tab) {
     document.querySelectorAll('.tabs .t').forEach(b => {
         b.classList.toggle('active', b.dataset.tab === tab);
     });
-    ['users', 'groups', 'channels', 'stats', 'journal', 'logins', 'viewer'].forEach(t => {
+    ['users', 'groups', 'channels', 'stats', 'journal', 'logins', 'premium', 'viewer'].forEach(t => {
         document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = (t === tab) ? 'block' : 'none';
     });
     if (tab === 'users') loadUsers();
@@ -449,6 +476,7 @@ function switchTab(tab) {
     if (tab === 'stats') loadStats();
     if (tab === 'journal') loadJournal();
     if (tab === 'logins') loadLoginLog();
+    if (tab === 'premium') loadPremium();
 }
 
 function refreshCurrentTab() {
@@ -957,6 +985,116 @@ function loadLoginLog() {
         .catch(e => {
             el.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
         });
+}
+
+// ================= PREMIUM =================
+function loadPremium() {
+    const st = document.getElementById('premiumStatsRow');
+    const pt = document.getElementById('promoTable');
+    const at = document.getElementById('premiumActivationsTable');
+    st.innerHTML = '<div id="loader"><i class="fas fa-spinner fa-spin"></i> Загрузка Premium...</div>';
+    fetch(U.premium_promos, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) throw new Error(d.error);
+            const s = d.stats || {};
+            st.innerHTML = `
+                <div class="stat"><div class="sv">${s.active_users || 0}</div><div class="sl">Премиум-аккаунтов</div></div>
+                <div class="stat"><div class="sv">${s.promos_total || 0}</div><div class="sl">Промокодов</div></div>
+                <div class="stat"><div class="sv">${s.activations_total || 0}</div><div class="sl">Активаций</div></div>`;
+
+            const promos = d.promos || [];
+            if (!promos.length) {
+                pt.innerHTML = '<div class="empty">Промокодов пока нет</div>';
+            } else {
+                let rows = '';
+                promos.forEach(p => {
+                    const used = p.used || 0;
+                    const max = p.max_activations || 0;
+                    const exhausted = used >= max;
+                    const badge = !p.is_active
+                        ? '<span class="badge gray">отключён</span>'
+                        : exhausted
+                            ? '<span class="badge frz">лимит исчерпан</span>'
+                            : '<span class="badge ok">активен</span>';
+                    rows += `<tr>
+                        <td><code style="background:rgba(102,126,234,0.14);color:#a5b4fc;border-radius:6px;padding:2px 8px;font-size:13px;">${esc(p.code)}</code></td>
+                        <td>${p.days} дн.</td>
+                        <td>${used} / ${max}</td>
+                        <td>${esc(p.expires_at ? fmtDate(p.expires_at) : '—')}</td>
+                        <td>${esc(p.created_at ? fmtDateTime(p.created_at) : '—')}</td>
+                        <td>${badge}</td>
+                        <td>
+                            <button class="vf-btn" onclick="togglePromo(${p.id}, ${p.is_active ? 'false' : 'true'})">
+                                ${p.is_active ? 'Отключить' : 'Включить'}</button>
+                            <button class="vf-btn" onclick="deletePromo(${p.id}, '${esc(p.code)}')">Удалить</button>
+                        </td>
+                    </tr>`;
+                });
+                pt.innerHTML = `
+                    <table class="data">
+                        <thead><tr><th>Промокод</th><th>Срок</th><th>Активации</th><th>Действует до</th><th>Создан</th><th>Статус</th><th></th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
+
+            const acts = d.activations || [];
+            if (!acts.length) {
+                at.innerHTML = '<div class="empty">Активаций пока нет</div>';
+            } else {
+                let rows = '';
+                acts.forEach(a => {
+                    rows += `<tr>
+                        <td>${a.id}</td>
+                        <td>${fmtDateTime(a.created_at)}</td>
+                        <td><b>${esc(a.display_name || a.username || '—')}</b><br><span style="color:#8e8e93;font-size:12px;">@${esc(a.username || '—')}</span></td>
+                        <td style="color:#8e8e93;">${esc(a.phone || '—')}</td>
+                        <td><code style="color:#a5b4fc;">${esc(a.promo_code || 'вручную')}</code></td>
+                        <td>${a.days} дн.</td>
+                        <td>${esc(a.expires_at ? fmtDate(a.expires_at) : '—')}</td>
+                    </tr>`;
+                });
+                at.innerHTML = `
+                    <table class="data">
+                        <thead><tr><th>#</th><th>Когда</th><th>Пользователь</th><th>Телефон</th><th>Промокод</th><th>Срок</th><th>Действует до</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+            }
+        })
+        .catch(e => {
+            st.innerHTML = '<div class="empty">Ошибка: ' + esc(e.message) + '</div>';
+        });
+}
+
+function createPromo() {
+    const code = document.getElementById('pmCode').value.trim().toUpperCase();
+    const days = parseInt(document.getElementById('pmDays').value, 10) || 30;
+    const max = parseInt(document.getElementById('pmMax').value, 10) || 1;
+    const note = document.getElementById('pmNote').value.trim();
+    const exp = document.getElementById('pmExpires').value.trim();
+    if (!code) { alert('Введите промокод'); return; }
+    post(U.premium_create, {
+        code, days, max_activations: max, note,
+        expires_at: exp ? exp + 'T00:00:00' : null
+    }).then(d => {
+        if (d.success) {
+            document.getElementById('pmCode').value = '';
+            document.getElementById('pmNote').value = '';
+            document.getElementById('pmExpires').value = '';
+            loadPremium();
+        } else {
+            alert(d.error || 'Ошибка создания');
+        }
+    });
+}
+
+function togglePromo(id, isActive) {
+    post(U.premium_update + '/' + id, { is_active: isActive === 'true' }).then(() => loadPremium());
+}
+
+function deletePromo(id, code) {
+    if (!confirm('Удалить промокод ' + code + '?')) return;
+    post(U.premium_delete + '/' + id, {}).then(() => loadPremium());
 }
 
 // ================= ПРОСМОТР АККАУНТА (READ-ONLY) =================

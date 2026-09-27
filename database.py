@@ -960,6 +960,93 @@ def init_db():
     cur3.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_groups_username ON groups(username) WHERE username IS NOT NULL AND username != \'\'')
     cur3.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_channels_username ON channels(username) WHERE username IS NOT NULL AND username != \'\'')
 
+    # ===== v0.58.0: кружки, альбомы, форматирование, стикеры, премиум, 2FA =====
+
+    # Кружки: длительность видеосообщения
+    cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_duration REAL')
+    # Альбомы медиа: сообщения одного альбома делят album_id
+    cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_id INTEGER')
+    cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_order INTEGER DEFAULT 0')
+
+    # Премиум (Sputnik Premium)
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_emoji TEXT')
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS premium_promos (
+            id SERIAL PRIMARY KEY,
+            code TEXT UNIQUE NOT NULL,
+            days INTEGER NOT NULL DEFAULT 30,
+            max_activations INTEGER NOT NULL DEFAULT 1,
+            activations INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            note TEXT,
+            created_by TEXT,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            expires_at TIMESTAMPTZ
+        )
+    ''')
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS premium_activations (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            promo_id INTEGER,
+            promo_code TEXT,
+            days INTEGER NOT NULL DEFAULT 30,
+            started_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            expires_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            UNIQUE(promo_id, user_id)
+        )
+    ''')
+
+    # 2FA: облачный пароль поверх кода входа + подсказка + восстановление по email
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS cloud_password_hash TEXT')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS cloud_password_hint TEXT')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS recovery_email TEXT')
+
+    # Блокировка приложения passcode (как в Telegram)
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_passcode_hash TEXT')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_passcode_hint TEXT')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_lock_enabled BOOLEAN DEFAULT FALSE')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_lock_autolock INTEGER DEFAULT 0')
+    cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_passcode_len INTEGER DEFAULT 4')
+
+    # Отложенные сообщения
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS scheduled_messages (
+            id SERIAL PRIMARY KEY,
+            sender_id INTEGER NOT NULL,
+            chat_id INTEGER,
+            group_id INTEGER,
+            channel_id INTEGER,
+            content TEXT,
+            file_type TEXT,
+            file_path TEXT,
+            file_name TEXT,
+            file_size INTEGER,
+            media_duration REAL,
+            reply_to_id INTEGER,
+            scheduled_for TIMESTAMPTZ NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
+
+    # Стикеры пользователя (в т.ч. избранные)
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS stickers (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            emoji TEXT,
+            caption TEXT,
+            set_name TEXT DEFAULT 'Мои стикеры',
+            is_favorite BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
+    cur3.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_stickers_user_path ON stickers(user_id, file_path)')
+
     conn3.commit()
     conn3.close()
 
@@ -2786,7 +2873,7 @@ def send_message(chat_id=None, group_id=None, channel_id=None, sender_id=None, c
                  file_type=None, file_path=None, file_name=None, file_size=None,
                  reply_to_id=None, forwarded_from_id=None, forwarded_from_user_id=None,
                  forwarded_from_username=None, forwarded_from_display_name=None,
-                 expire_after=None, poll_id=None):
+                 expire_after=None, poll_id=None, media_duration=None):
     conn = get_db()
     cur = dict_cursor(conn)
 
@@ -2813,12 +2900,12 @@ def send_message(chat_id=None, group_id=None, channel_id=None, sender_id=None, c
     cur.execute('''
         INSERT INTO messages (chat_id, group_id, channel_id, sender_id, content, file_type, file_path, file_name, file_size,
                              reply_to_id, forwarded_from_id, forwarded_from_user_id, forwarded_from_username, forwarded_from_display_name,
-                             expires_at, poll_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             expires_at, poll_id, media_duration)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     ''', (chat_id, group_id, channel_id, sender_id, content, file_type, file_path, file_name, file_size,
           reply_to_id, forwarded_from_id, forwarded_from_user_id, forwarded_from_username, forwarded_from_display_name,
-          expires_at, poll_id))
+          expires_at, poll_id, media_duration))
     message_id = cur.fetchone()['id']
     conn.commit()
 
@@ -4789,6 +4876,719 @@ def can_forward_message(sender_id, target_id):
     # Аналогично can_send_message, но для пересылок
     return can_send_message(sender_id, target_id)
 
+
+# =============================================================================
+#  v0.58.0 — КРУЖКИ / АЛЬБОМЫ / ФОРМАТИРОВАНИЕ / СТИКЕРЫ / ПРЕМИУМ / 2FA / PASSCODE
+# =============================================================================
+
+# ---------- ПРЕМИУМ ----------
+def get_user_premium(user_id):
+    """Возвращает словарь с информацией о премиуме пользователя."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT id, premium_until, premium_emoji FROM users WHERE id = %s', (user_id,))
+    u = cur.fetchone()
+    conn.close()
+    if not u:
+        return None
+    return _premium_pack(u)
+
+
+def _premium_pack(row):
+    until = row.get('premium_until')
+    active = False
+    if until:
+        try:
+            if isinstance(until, str):
+                until_dt = datetime.fromisoformat(until.replace('Z', ''))
+            else:
+                until_dt = until
+            active = until_dt > datetime.now()
+        except Exception:
+            active = False
+    return {
+        'is_premium': active,
+        'premium_until': until,
+        'premium_emoji': row.get('premium_emoji') or '⭐️',
+    }
+
+
+def is_premium_active(user_id):
+    p = get_user_premium(user_id)
+    return bool(p and p['is_premium'])
+
+
+def set_user_premium_emoji(user_id, emoji):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('UPDATE users SET premium_emoji = %s WHERE id = %s', (emoji, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ---------- ПРОМОКОДЫ ПРЕМИУМА ----------
+def create_premium_promo(code, days, max_activations, note=None, expires_at=None, created_by='admin'):
+    code = (code or '').strip().upper()
+    if not code or not re.match(r'^[A-Z0-9_-]{3,32}$', code):
+        return None, 'Промокод: 3-32 символа, латиница, цифры, дефис и подчёркивание'
+    try:
+        days = int(days)
+        max_activations = int(max_activations)
+    except (TypeError, ValueError):
+        return None, 'Срок и лимит должны быть числами'
+    if days < 1:
+        return None, 'Срок премиума должен быть минимум 1 день'
+    if max_activations < 1:
+        return None, 'Лимит активаций должен быть минимум 1'
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT id FROM premium_promos WHERE code = %s', (code,))
+    if cur.fetchone():
+        conn.close()
+        return None, 'Такой промокод уже существует'
+    cur.execute('''
+        INSERT INTO premium_promos (code, days, max_activations, note, expires_at, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id
+    ''', (code, days, max_activations, (note or '').strip() or None, expires_at, created_by))
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(row) if row else None, None
+
+
+def list_premium_promos():
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        SELECT p.*, (SELECT COUNT(*) FROM premium_activations a WHERE a.promo_id = p.id) AS used
+        FROM premium_promos p ORDER BY p.id DESC
+    ''')
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def update_premium_promo(promo_id, is_active=None, days=None, max_activations=None):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    sets, params = [], []
+    if is_active is not None:
+        sets.append('is_active = ?')
+        params.append(bool(is_active))
+    if days is not None:
+        sets.append('days = ?')
+        params.append(int(days))
+    if max_activations is not None:
+        sets.append('max_activations = ?')
+        params.append(int(max_activations))
+    if not sets:
+        conn.close()
+        return False
+    params.append(promo_id)
+    cur.execute('UPDATE premium_promos SET %s WHERE id = ?' % ', '.join(sets), tuple(params))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_premium_promo(promo_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('DELETE FROM premium_promos WHERE id = %s', (promo_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def activate_premium_promo(user_id, code):
+    """Активирует промокод. Возвращает (ok, payload_or_error)."""
+    code = (code or '').strip().upper()
+    if not code:
+        return False, 'Введите промокод'
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT * FROM premium_promos WHERE code = %s', (code,))
+        promo = cur.fetchone()
+        if not promo:
+            return False, 'Промокод не найден'
+        if not promo.get('is_active'):
+            return False, 'Промокод отключён'
+
+        # Срок действия самого промокода
+        if promo.get('expires_at'):
+            try:
+                exp = promo['expires_at']
+                if isinstance(exp, str):
+                    exp = datetime.fromisoformat(exp.replace('Z', ''))
+                if exp < datetime.now():
+                    return False, 'Срок действия промокода истёк'
+            except Exception:
+                pass
+
+        # Один пользователь — одна активация промокода
+        cur.execute('SELECT id FROM premium_activations WHERE promo_id = %s AND user_id = %s',
+                    (promo['id'], user_id))
+        if cur.fetchone():
+            return False, 'Вы уже активировали этот промокод'
+
+        used = cur.execute('SELECT COUNT(*) AS c FROM premium_activations WHERE promo_id = %s',
+                           (promo['id'],)).fetchone()['c']
+        if used >= (promo.get('max_activations') or 0):
+            return False, 'Промокод исчерпал лимит активаций'
+
+        days = int(promo.get('days') or 30)
+
+        # Продлеваем с текущего момента (или с момента окончания текущего премиума)
+        cur.execute('SELECT premium_until FROM users WHERE id = %s', (user_id,))
+        row = cur.fetchone()
+        base = datetime.now()
+        if row and row.get('premium_until'):
+            try:
+                prev = row['premium_until']
+                if isinstance(prev, str):
+                    prev = datetime.fromisoformat(prev.replace('Z', ''))
+                if prev > base:
+                    base = prev
+            except Exception:
+                pass
+        new_until = base + timedelta(days=days)
+
+        cur.execute('UPDATE users SET premium_until = %s WHERE id = %s', (new_until, user_id))
+        cur.execute('''
+            INSERT INTO premium_activations (user_id, promo_id, promo_code, days, expires_at)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (user_id, promo['id'], code, days, new_until))
+        conn.commit()
+        return True, {
+            'code': code,
+            'days': days,
+            'premium_until': new_until.isoformat(),
+        }
+    finally:
+        conn.close()
+
+
+def list_premium_activations(limit=200):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        SELECT a.*, u.username, u.display_name, u.phone
+        FROM premium_activations a LEFT JOIN users u ON u.id = a.user_id
+        ORDER BY a.id DESC LIMIT %s
+    ''', (int(limit),))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def premium_stats():
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute("SELECT COUNT(*) AS c FROM users WHERE premium_until IS NOT NULL AND premium_until > datetime('now')")
+    active = cur.fetchone()['c']
+    cur.execute('SELECT COUNT(*) AS c FROM premium_promos')
+    promos = cur.fetchone()['c']
+    cur.execute('SELECT COUNT(*) AS c FROM premium_activations')
+    acts = cur.fetchone()['c']
+    conn.close()
+    return {'active_users': active, 'promos_total': promos, 'activations_total': acts}
+
+
+# ---------- 2FA: ОБЛАЧНЫЙ ПАРОЛЬ ----------
+def set_cloud_password(user_id, plain_password, hint=None, recovery_email=None):
+    if not plain_password or len(plain_password) < 4:
+        return False
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        UPDATE users SET cloud_password_hash = %s, cloud_password_hint = %s, recovery_email = %s
+        WHERE id = %s
+    ''', (_hash_secret(plain_password), (hint or '').strip() or None,
+          (recovery_email or '').strip() or None, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def clear_cloud_password(user_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''UPDATE users SET cloud_password_hash = NULL, cloud_password_hint = NULL WHERE id = %s''',
+                (user_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def check_cloud_password(user_id, plain_password):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT cloud_password_hash FROM users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row.get('cloud_password_hash'):
+        return None  # 2FA не настроена
+    return _verify_secret(row['cloud_password_hash'], plain_password or '')
+
+
+def get_cloud_password_info(user_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT cloud_password_hash, cloud_password_hint, recovery_email, email
+                   FROM users WHERE id = %s''', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        'enabled': bool(row.get('cloud_password_hash')),
+        'hint': row.get('cloud_password_hint'),
+        'recovery_email': row.get('recovery_email'),
+        'email': row.get('email'),
+    }
+
+
+# ---------- PASSCODE (блокировка приложения) ----------
+def set_app_passcode(user_id, plain_passcode, hint=None, autolock=0, enabled=True):
+    if enabled and (not plain_passcode or len(str(plain_passcode)) < 4):
+        return False
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        UPDATE users SET app_passcode_hash = %s, app_passcode_hint = %s,
+                         app_lock_enabled = %s, app_lock_autolock = %s,
+                         app_passcode_len = %s
+        WHERE id = %s
+    ''', (_hash_secret(str(plain_passcode)) if enabled else None,
+          (hint or '').strip() or None, bool(enabled), int(autolock or 0),
+          len(str(plain_passcode)) if enabled and plain_passcode else 0,
+          user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def check_app_passcode(user_id, plain_passcode):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT app_passcode_hash, app_lock_enabled FROM users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row.get('app_lock_enabled') or not row.get('app_passcode_hash'):
+        return None
+    return _verify_secret(row['app_passcode_hash'], str(plain_passcode or ''))
+
+
+def get_app_lock_info(user_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT app_passcode_hash, app_passcode_hint, app_lock_enabled, app_lock_autolock,
+                        app_passcode_len
+                   FROM users WHERE id = %s''', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        'enabled': bool(row.get('app_lock_enabled') and row.get('app_passcode_hash')),
+        'hint': row.get('app_passcode_hint'),
+        'autolock': row.get('app_lock_autolock') or 0,
+        # Сколько цифр в коде — фронтенд по этому числу знает, когда пора проверять
+        'passcode_length': int(row.get('app_passcode_len') or 4),
+    }
+
+
+# ---------- ХЕШИ ДЛЯ СЕКРЕТОВ (2FA / PASSCODE) ----------
+def _hash_secret(plain):
+    return hashlib.sha256(('sp1n:' + str(plain)).encode('utf-8')).hexdigest()
+
+
+def _verify_secret(stored, plain):
+    if not stored:
+        return False
+    return hashlib.sha256(('sp1n:' + str(plain)).encode('utf-8')).hexdigest() == stored
+
+
+# ---------- ОТЛОЖЕННЫЕ СООБЩЕНИЯ ----------
+def create_scheduled_message(sender_id, chat_id, group_id, channel_id, content,
+                             scheduled_for, file_type=None, file_path=None,
+                             file_name=None, file_size=None, media_duration=None,
+                             reply_to_id=None):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        INSERT INTO scheduled_messages
+            (sender_id, chat_id, group_id, channel_id, content, file_type, file_path,
+             file_name, file_size, media_duration, reply_to_id, scheduled_for)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    ''', (sender_id, chat_id, group_id, channel_id, content, file_type, file_path,
+          file_name, file_size, media_duration, reply_to_id, scheduled_for))
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_scheduled_messages(user_id, status='pending'):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if status:
+        cur.execute('''SELECT * FROM scheduled_messages WHERE sender_id = %s AND status = %s
+                       ORDER BY scheduled_for ASC''', (user_id, status))
+    else:
+        cur.execute('''SELECT * FROM scheduled_messages WHERE sender_id = %s
+                       ORDER BY scheduled_for ASC''', (user_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_scheduled_message(message_id, user_id=None):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if user_id:
+        cur.execute('SELECT * FROM scheduled_messages WHERE id = %s AND sender_id = %s',
+                    (message_id, user_id))
+    else:
+        cur.execute('SELECT * FROM scheduled_messages WHERE id = %s', (message_id,))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_scheduled_message(message_id, sender_id, **fields):
+    allowed = {'content', 'scheduled_for', 'status', 'file_path', 'file_name'}
+    sets, params = [], []
+    for k, v in fields.items():
+        if k in allowed:
+            sets.append(k + ' = ?')
+            params.append(v)
+    if not sets:
+        return False
+    params.extend([message_id, sender_id])
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('UPDATE scheduled_messages SET %s WHERE id = ? AND sender_id = ?' % ', '.join(sets),
+                tuple(params))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_scheduled_message(message_id, sender_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('DELETE FROM scheduled_messages WHERE id = %s AND sender_id = %s',
+                (message_id, sender_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def due_scheduled_messages(now=None, limit=20):
+    now = now or datetime.now()
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT * FROM scheduled_messages
+                   WHERE status = 'pending' AND scheduled_for <= %s
+                   ORDER BY scheduled_for ASC LIMIT %s''', (now, int(limit)))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+# ---------- СТИКЕРЫ ----------
+def create_sticker(user_id, file_path, emoji=None, caption=None, is_favorite=False, set_name='Мои стикеры'):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        INSERT INTO stickers (user_id, file_path, emoji, caption, is_favorite, set_name)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT(user_id, file_path) DO UPDATE SET
+            emoji = COALESCE(excluded.emoji, stickers.emoji),
+            caption = COALESCE(excluded.caption, stickers.caption),
+            is_favorite = TRUE
+        RETURNING id
+    ''', (user_id, file_path, emoji, caption, bool(is_favorite), set_name or 'Мои стикеры'))
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_stickers(user_id, favorites_only=False):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if favorites_only:
+        cur.execute('''SELECT * FROM stickers WHERE user_id = %s AND is_favorite = TRUE
+                       ORDER BY id DESC''', (user_id,))
+    else:
+        cur.execute('SELECT * FROM stickers WHERE user_id = %s ORDER BY id DESC', (user_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_favorite_stickers(user_id):
+    return get_user_stickers(user_id, favorites_only=True)
+
+
+def sticker_by_path(user_id, file_path):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT * FROM stickers WHERE user_id = %s AND file_path = %s', (user_id, file_path))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def toggle_sticker_favorite(user_id, sticker_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT is_favorite FROM stickers WHERE id = %s AND user_id = %s', (sticker_id, user_id))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+    new_val = not bool(row['is_favorite'])
+    cur.execute('UPDATE stickers SET is_favorite = %s WHERE id = %s AND user_id = %s',
+                (new_val, sticker_id, user_id))
+    conn.commit()
+    conn.close()
+    return {'is_favorite': new_val}
+
+
+def delete_sticker(user_id, sticker_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('DELETE FROM stickers WHERE id = %s AND user_id = %s', (sticker_id, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ---------- АЛЬБОМЫ МЕДИА ----------
+def next_album_id():
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT COALESCE(MAX(album_id), 0) + 1 AS n FROM messages WHERE album_id IS NOT NULL')
+    row = cur.fetchone()
+    conn.close()
+    return int(row['n']) if row else 1
+
+
+def set_message_album(message_id, album_id, order):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('UPDATE messages SET album_id = %s, album_order = %s WHERE id = %s',
+                (album_id, int(order), message_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_album_messages(album_id, user_id=None):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT * FROM messages WHERE album_id = %s
+                   ORDER BY album_order ASC, id ASC''', (album_id,))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def reorder_album(album_id, message_ids, user_id=None):
+    """Сохраняет новый порядок фото в альбоме."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT id, sender_id FROM messages WHERE album_id = %s', (album_id,))
+        rows = [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    by_id = {r['id']: r for r in rows}
+    for i, mid in enumerate(message_ids):
+        row = by_id.get(int(mid))
+        # Переставлять может только автор альбома
+        if not row:
+            continue
+        if user_id is not None and row['sender_id'] != user_id:
+            continue
+        by_id[int(mid)] = row
+    saved = []
+    for i, mid in enumerate(message_ids):
+        mid = int(mid)
+        if mid not in by_id:
+            continue
+        set_message_album(mid, album_id, i)
+        saved.append(mid)
+    return saved
+
+
+# ---------- ЭКСПОРТ ДАННЫХ АККАУНТА ----------
+def export_user_data(user_id):
+    """Полная выгрузка аккаунта в структуру, пригодную для json.dump."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    out = {'format': 'sputnik-account-export', 'version': 1, 'profile': {}, 'chats': [],
+           'groups': [], 'channels': [], 'contacts': [], 'favorites': [],
+           'stickers': [], 'settings': {}, 'premium': {}, 'counts': {}}
+
+    cur.execute('''SELECT id, unique_id, phone, username, display_name, bio, birthday,
+                          avatar, created_at, last_seen, email,
+                          privacy_last_seen, privacy_photo, privacy_forward,
+                          privacy_calls, privacy_messages,
+                          theme, font_size, bubble_radius, font_family,
+                          my_message_color, their_message_color, wallpaper, wallpaper_image,
+                          banner_color, banner_image, premium_until, premium_emoji,
+                          (premium_until IS NOT NULL AND premium_until > datetime('now')) AS is_premium,
+                          registration_complete
+                   FROM users WHERE id = %s''', (user_id,))
+    u = cur.fetchone()
+    if not u:
+        conn.close()
+        return None
+    u = dict(u)
+    u.pop('password', None)
+    out['profile'] = u
+    out['settings'] = get_user_settings(user_id) or {}
+    out['premium'] = get_user_premium(user_id) or {}
+
+    cur.execute('''SELECT c.id, c.user1_id, c.user2_id, c.created_at,
+                          u1.username AS u1_username, u1.display_name AS u1_name, u1.unique_id AS u1_uid,
+                          u2.username AS u2_username, u2.display_name AS u2_name, u2.unique_id AS u2_uid
+                   FROM chats c
+                   LEFT JOIN users u1 ON u1.id = c.user1_id
+                   LEFT JOIN users u2 ON u2.id = c.user2_id
+                   WHERE c.user1_id = %s OR c.user2_id = %s''', (user_id, user_id))
+    for r in cur.fetchall():
+        r = dict(r)
+        me_is_1 = r['user1_id'] == user_id
+        other_id = r['user2_id'] if me_is_1 else r['user1_id']
+        other_name = r['u2_name'] if me_is_1 else r['u1_name']
+        other_username = r['u2_username'] if me_is_1 else r['u1_username']
+        msgs = get_messages(chat_id=r['id'], user_id=user_id, limit=100000)
+        out['chats'].append({
+            'chat_id': r['id'],
+            'chat_type': 'personal',
+            'title': other_name or other_username or 'Избранное',
+            'other_username': other_username,
+            'other_unique_id': (r['u2_uid'] if me_is_1 else r['u1_uid']),
+            'created_at': r['created_at'],
+            'messages': [dict(m) for m in msgs],
+        })
+
+    cur.execute('''SELECT g.id, g.name, g.username, g.created_at,
+                          (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS members
+                   FROM groups g JOIN group_members gm ON gm.group_id = g.id
+                   WHERE gm.user_id = %s GROUP BY g.id''', (user_id,))
+    for r in cur.fetchall():
+        r = dict(r)
+        msgs = get_messages(group_id=r['id'], user_id=user_id, limit=100000)
+        out['groups'].append({
+            'group_id': r['id'], 'title': r['name'], 'username': r['username'],
+            'members': r['members'], 'created_at': r['created_at'],
+            'messages': [dict(m) for m in msgs],
+        })
+
+    cur.execute('''SELECT ch.id, ch.name, ch.username, ch.created_at,
+                          (SELECT COUNT(*) FROM channel_subscribers cs WHERE cs.channel_id = ch.id) AS subs
+                   FROM channels ch JOIN channel_subscribers cs ON cs.channel_id = ch.id
+                   WHERE cs.user_id = %s GROUP BY ch.id''', (user_id,))
+    for r in cur.fetchall():
+        r = dict(r)
+        msgs = get_messages(channel_id=r['id'], user_id=user_id, limit=100000)
+        out['channels'].append({
+            'channel_id': r['id'], 'title': r['name'], 'username': r['username'],
+            'subscribers': r['subs'], 'created_at': r['created_at'],
+            'messages': [dict(m) for m in msgs],
+        })
+
+    cur.execute('''SELECT cu.id AS contact_id, cu.username, cu.unique_id, cu.display_name, cu.phone
+                   FROM contacts c JOIN users cu ON cu.id = c.contact_id
+                   WHERE c.user_id = %s''', (user_id,))
+    out['contacts'] = [dict(r) for r in cur.fetchall()]
+
+    cur.execute('SELECT * FROM favorites WHERE user_id = %s ORDER BY id', (user_id,))
+    out['favorites'] = [dict(r) for r in cur.fetchall()]
+
+    cur.execute('SELECT * FROM stickers WHERE user_id = %s ORDER BY id', (user_id,))
+    out['stickers'] = [dict(r) for r in cur.fetchall()]
+
+    out['counts'] = {
+        'chats': len(out['chats']),
+        'groups': len(out['groups']),
+        'channels': len(out['channels']),
+        'messages': sum(len(c['messages']) for c in out['chats'])
+                     + sum(len(g['messages']) for g in out['groups'])
+                     + sum(len(c['messages']) for c in out['channels']),
+        'contacts': len(out['contacts']),
+        'favorites': len(out['favorites']),
+        'stickers': len(out['stickers']),
+    }
+    conn.close()
+    return out
+
+
+# ---------- ИМПОРТ КОНТАКТОВ ----------
+def add_contact_with_name(user_id, contact_user_id, name=None):
+    """Добавляет пользователя в контакты (с сохранением локального имени)."""
+    if user_id == contact_user_id:
+        return False, 'Нельзя добавить себя'
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT id FROM users WHERE id = %s AND registration_complete = TRUE',
+                    (contact_user_id,))
+        if not cur.fetchone():
+            return False, 'Аккаунт не найден'
+        cur.execute('''INSERT INTO contacts (user_id, contact_id) VALUES (%s, %s)
+                       ON CONFLICT(user_id, contact_id) DO NOTHING''', (user_id, contact_user_id))
+        if name:
+            cur.execute('''INSERT INTO contact_names (user_id, contact_id, name) VALUES (%s, %s, %s)
+                           ON CONFLICT(user_id, contact_id) DO UPDATE SET name = excluded.name''',
+                        (user_id, contact_user_id, name))
+        conn.commit()
+        return True, 'Контакт добавлен'
+    finally:
+        conn.close()
+
+
+def find_users_by_phones(phones, exclude_user_id=None):
+    """Ищет зарегистрированных пользователей по списку номеров телефона."""
+    if not phones:
+        return []
+    clean = []
+    for p in phones:
+        digits = re.sub(r'\D', '', str(p or ''))
+        if len(digits) >= 7:
+            clean.append('+' + digits)
+    if not clean:
+        return []
+    conn = get_db()
+    cur = dict_cursor(conn)
+    out = []
+    chunk = 400
+    for i in range(0, len(clean), chunk):
+        part = clean[i:i + chunk]
+        marks = ', '.join(['%s'] * len(part))
+        sql = ('SELECT id, unique_id, phone, username, display_name, avatar FROM users '
+               'WHERE phone IN (%s) AND registration_complete = TRUE AND is_deleted = FALSE' % marks)
+        params = list(part)
+        if exclude_user_id:
+            sql += ' AND id != %s'
+            params.append(exclude_user_id)
+        cur.execute(sql, tuple(params))
+        for r in cur.fetchall():
+            out.append(dict(r))
+    conn.close()
+    return out
 
 
 if __name__ == '__main__':

@@ -31,6 +31,7 @@
 <link rel="stylesheet" href="/cdn/css/modal-universal.css">
 <link rel="stylesheet" href="/cdn/css/mobile.css">
 <link rel="stylesheet" href="/cdn/css/community.css">
+<link rel="stylesheet" href="/cdn/css/composer.css">
 </head>
 <body class="{{ body_class }}">
 <div class="app">
@@ -204,16 +205,45 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+
+            <!-- Панель форматирования (появляется при выделении текста) -->
+            <div class="fmt-bar" id="fmtBar" style="display:none;">
+                <button class="fmt-btn" data-fmt="bold" title="Жирный"><b>Ж</b></button>
+                <button class="fmt-btn" data-fmt="italic" title="Курсив"><i>К</i></button>
+                <button class="fmt-btn" data-fmt="underline" title="Подчёркнутый"><u>Ч</u></button>
+                <button class="fmt-btn" data-fmt="strike" title="Зачёркнутый"><s>З</s></button>
+                <button class="fmt-btn" data-fmt="code" title="Монокод">‹›</button>
+                <button class="fmt-btn" data-fmt="spoiler" title="Спойлер">👁</button>
+                <button class="fmt-btn" data-fmt="link" title="Ссылка">🔗</button>
+                <span class="fmt-sep"></span>
+                <button class="fmt-btn" data-fmt="mono-all" title="Весь текст кодом">全部</button>
+                <button class="fmt-btn fmt-close" data-fmt="__close" title="Скрыть"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Панель отложенного сообщения -->
+            <div class="sched-strip" id="schedStrip" style="display:none;">
+                <i class="fas fa-clock"></i>
+                <span id="schedStripText">Отправка отложена</span>
+                <button class="cancel-reply-btn" onclick="cancelSchedule()"><i class="fas fa-times"></i></button>
+            </div>
+
             <div class="input-wrapper">
                 <div class="composer-box">
                     <div class="composer-inner">
                         <button class="attach-btn" id="attachBtn" onclick="toggleAttachMenu(event)" title="Прикрепить файл">
                             <i class="fas fa-paperclip"></i>
                         </button>
-                        <textarea class="message-input" id="messageInput" placeholder="Написать сообщение..." rows="1"></textarea>
+                        <textarea class="message-input" id="messageInput" placeholder="Написать сообщение..." rows="1"
+                                  autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
                         <div class="composer-actions">
+                            <button class="attach-btn" id="emojiBtn" onclick="toggleEmojiPanel(event)" title="Эмодзи и стикеры">
+                                <i class="far fa-smile"></i>
+                            </button>
                             <button class="attach-btn" id="micBtn" onclick="toggleVoiceRecording(event)" title="Голосовое сообщение">
                                 <i class="fas fa-microphone"></i>
+                            </button>
+                            <button class="attach-btn" id="circleBtn" onclick="startVideoMessage()" title="Кружок (видеосообщение)">
+                                <i class="fas fa-video"></i>
                             </button>
                             <button class="attach-btn" id="burnBtn" onclick="toggleBurnMenu(event)" title="Самоуничтожение сообщения" style="display:none;">
                                 <i class="fas fa-hourglass-half"></i>
@@ -221,12 +251,34 @@
                             <button class="attach-btn" id="pollBtn" onclick="openPollCreator()" title="Опрос">
                                 <i class="fas fa-poll-h"></i>
                             </button>
+                            <button class="attach-btn" id="timerBtn" onclick="openScheduleSheet(event)" title="Отложить сообщение">
+                                <i class="fas fa-clock"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
                     <i class="fas fa-paper-plane"></i>
                 </button>
+            </div>
+
+            <!-- Панель эмодзи / стикеров -->
+            <div class="emoji-panel" id="emojiPanel" style="display:none;">
+                <div class="emoji-tabs" id="emojiTabs">
+                    <button class="emoji-tab active" data-etab="emoji"><i class="far fa-smile"></i><span>Эмодзи</span></button>
+                    <button class="emoji-tab" data-etab="favstickers"><i class="fas fa-star"></i><span>Избранные</span></button>
+                    <button class="emoji-tab" data-etab="stickers"><i class="fas fa-sticker-mood"></i><span>Стикеры</span></button>
+                    <button class="emoji-tab" data-etab="create"><i class="fas fa-plus-circle"></i><span>Создать</span></button>
+                    <span class="emoji-tabs-spacer"></span>
+                    <button class="emoji-collapse" onclick="closeEmojiPanel()"><i class="fas fa-chevron-down"></i></button>
+                </div>
+                <div class="emoji-search-row">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="emojiSearch" placeholder="Поиск эмодзи..." autocomplete="off">
+                    <button class="emoji-clear" id="emojiClear" style="display:none;" onclick="clearEmojiSearch()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="emoji-body" id="emojiBody"></div>
+                <div class="emoji-cat-bar" id="emojiCatBar"></div>
             </div>
 
             <!-- Меню скрепки -->
@@ -239,8 +291,50 @@
                     <span class="attach-menu-icon attach-icon-file"><i class="fas fa-file"></i></span>
                     <span class="attach-menu-label">Файл</span>
                 </div>
+                <div class="attach-menu-item" onclick="startVideoMessage()">
+                    <span class="attach-menu-icon attach-icon-circle"><i class="fas fa-video"></i></span>
+                    <span class="attach-menu-label">Кружок</span>
+                </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- ===== КРУЖКИ: запись видеосообщения ===== -->
+<div class="vm-overlay" id="vmOverlay" style="display:none;">
+    <div class="vm-stage">
+        <video class="vm-preview" id="vmPreview" autoplay playsinline muted></video>
+        <div class="vm-ring" id="vmRing">
+            <div class="vm-mask"></div>
+        </div>
+        <div class="vm-timer" id="vmTimer">0:00</div>
+        <div class="vm-hint" id="vmHint">Нажмите и держите, чтобы записать</div>
+    </div>
+    <div class="vm-controls">
+        <button class="vm-btn vm-cancel" onclick="closeVideoMessage()"><i class="fas fa-times"></i></button>
+        <button class="vm-btn vm-record" id="vmRecordBtn" onclick="startVideoRecording()"><i class="fas fa-circle"></i></button>
+        <button class="vm-btn vm-flip" id="vmFlipBtn" onclick="flipVideoCamera()"><i class="fas fa-sync-alt"></i></button>
+    </div>
+    <div class="vm-preview-bar" id="vmPreviewBar" style="display:none;">
+        <button class="vm-chip" onclick="discardVideoMessage()"><i class="fas fa-trash"></i> Удалить</button>
+        <button class="vm-chip vm-chip-send" onclick="sendVideoMessage()"><i class="fas fa-paper-plane"></i> Отправить кружок</button>
+    </div>
+</div>
+
+<!-- ===== ПРЕДПРОСМОТР АЛЬБОМА + ПЕРЕСТАНОВКА ФОТО ===== -->
+<div class="album-viewer" id="albumViewer" style="display:none;">
+    <div class="album-viewer-top">
+        <button class="av-btn" onclick="closeAlbumViewer()"><i class="fas fa-times"></i></button>
+        <div class="av-counter" id="albumCounter">1 / 1</div>
+        <div class="av-spacer"></div>
+        <button class="av-btn av-edit" id="albumEditBtn" style="display:none;" onclick="toggleAlbumEdit()">
+            <i class="fas fa-shuffle"></i>
+        </button>
+    </div>
+    <div class="album-viewer-main" id="albumViewerMain"></div>
+    <div class="album-reorder" id="albumReorderBar" style="display:none;">
+        <div class="album-reorder-hint"><i class="fas fa-arrows-alt"></i> Меняйте фото местами — тапните на фото, затем выберите позицию</div>
+        <div class="album-strip" id="albumStrip"></div>
     </div>
 </div>
 
@@ -370,6 +464,14 @@
             <div class="burger-item-icon"><i class="fas fa-shield-alt"></i></div>
             <span>Активные сессии</span>
         </div>
+        <div class="burger-item burger-item-premium" onclick="openPremium()">
+            <div class="burger-item-icon burger-item-icon-premium">
+                <img src="/static/icons/premium.png" alt="" onerror="this.style.display='none';">
+                <i class="fas fa-crown"></i>
+            </div>
+            <span>Sputnik Premium</span>
+            <span class="badge" id="premiumBadge" style="display:none;">PRO</span>
+        </div>
 
         <div class="burger-divider"></div>
         <div class="theme-toggle-item" onclick="toggleNightMode()">
@@ -466,6 +568,8 @@
 <input type="file" id="docsFileInput" style="display:none;" multiple>
 <input type="file" id="storyFileInput" style="display:none;" accept="image/*,video/*">
 <input type="file" id="storyReplaceInput" style="display:none;" accept="image/*,video/*">
+<input type="file" id="stickerUploadInput" style="display:none;" accept="image/*">
+<input type="file" id="contactVCardInput" style="display:none;" accept=".vcf,text/vcard,text/x-vcard">
 
 <script>
     // ===== CURRENT USER (injected by Jinja, server-side data) ====="
@@ -477,6 +581,13 @@
     };
 </script>
 <script src="/cdn/js/core.js"></script>
+<script src="/cdn/js/emoji-data.js"></script>
+<script src="/cdn/js/formatting.js"></script>
+<script src="/cdn/js/stickers.js"></script>
+<script src="/cdn/js/composer.js"></script>
+<script src="/cdn/js/albums.js"></script>
+<script src="/cdn/js/premium.js"></script>
+<script src="/cdn/js/security.js"></script>
 <script src="/cdn/js/messages.js"></script>
 <script src="/cdn/js/chats.js"></script>
 <script src="/cdn/js/context-menu.js"></script>

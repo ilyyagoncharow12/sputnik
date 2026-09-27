@@ -404,6 +404,28 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(response => response.json())
     .then(data => {
+        if (data.twofa_required) {
+            // У добавляемого аккаунта включён облачный пароль
+            const pw = prompt('Облачный пароль для ' + (data.phone || phone) +
+                (data.hint ? '\nПодсказка: ' + data.hint : ''));
+            if (!pw) return;
+            payload.cloud_password = pw;
+            return fetch('/api/auth/add_account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(r2 => r2.json())
+            .then(d2 => {
+                if (d2.success) {
+                    closeModal('tempModal');
+                    alert('✅ Аккаунт добавлен!');
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка: ' + (d2.error || 'Неверный облачный пароль'));
+                }
+            });
+        }
         if (data.success) {
             closeModal('tempModal');
             alert('✅ Аккаунт добавлен!');

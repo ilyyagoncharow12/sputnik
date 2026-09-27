@@ -37,6 +37,7 @@ function showContextMenu(e, id, content, el) {
                     el.querySelector('.message-file')?.textContent?.includes('.ogg');
 
     const hasFile = el.querySelector('.message-media img, .message-media video, .message-file') !== null;
+    const isImage = el.querySelector('.message-media img') !== null;
     const isTextOnly = !hasFile && content && content.length > 0;
 
     const combinedMenu = document.createElement('div');
@@ -162,6 +163,16 @@ function showContextMenu(e, id, content, el) {
             icon: 'fa-music',
             text: 'Добавить в профиль',
             action: 'add_to_profile',
+            special: true
+        });
+    }
+
+    // Сохранить картинку в мои стикеры (только для фото)
+    if (isImage && filePath && typeof saveStickerFromMessage === 'function') {
+        menuItems.push({
+            icon: 'fa-sticker',
+            text: 'В мои стикеры',
+            action: 'save_sticker',
             special: true
         });
     }
@@ -399,8 +410,16 @@ function showContextMenu(e, id, content, el) {
         // Скачивание файла
         downloadCurrentFile();
     } else if (action === 'add_to_profile') {
-        // Добавление аудио в плейлист профиля
+        // Добавляет аудио в профиль
         addAudioToProfile();
+    } else if (action === 'save_sticker') {
+        // Сохраняет картинку из сообщения в мои стикеры
+        const el = currentContextMessage && currentContextMessage.element;
+        const raw = (el && (el.querySelector('.message-media img')?.getAttribute('src') ||
+                            el.querySelector('.message-media video')?.getAttribute('src'))) || '';
+        const cleanPath = raw.replace(window.location.origin + '/', '').replace(/^\/+/, '');
+        if (cleanPath) saveStickerFromMessage(cleanPath);
+        else showToast('Не удалось определить картинку');
     } else if (action === 'pin') {
         pinCurrentMessage();
     } else if (action === 'delete') {

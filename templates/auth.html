@@ -1061,6 +1061,67 @@
             .form-group input { padding: 15px 14px; }
             .ob-start { max-width: 340px; }
         }
+
+        /* ===== ЭТАП 2: ОБЛАЧНЫЙ ПАРОЛЬ (2FA) ===== */
+        #twofaOverlay {
+            position: fixed; inset: 0; z-index: 9000;
+            background: linear-gradient(170deg, #1b1d2b 0%, #2b2350 55%, #4c3a7a 100%);
+            display: none; align-items: center; justify-content: center;
+            padding: 24px; box-sizing: border-box;
+        }
+        #twofaOverlay.active { display: flex; }
+        .twofa-card {
+            width: 100%; max-width: 380px;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 24px; padding: 30px 24px 24px;
+            text-align: center; color: #fff;
+        }
+        .twofa-ico { font-size: 44px; margin-bottom: 10px; }
+        .twofa-title { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+        .twofa-sub { font-size: 12.5px; color: rgba(255,255,255,.65); line-height: 1.5; margin-bottom: 18px; }
+        .twofa-sub b { color: #fff; }
+        .twofa-input {
+            width: 100%; padding: 14px 16px; border-radius: 14px;
+            border: 1.5px solid rgba(255,255,255,.18);
+            background: rgba(255,255,255,.1); color: #fff;
+            font-size: 17px; font-family: inherit; text-align: center;
+            letter-spacing: 2px; outline: none; box-sizing: border-box;
+            -webkit-appearance: none; appearance: none;
+        }
+        .twofa-input::placeholder { color: rgba(255,255,255,.35); letter-spacing: 1px; }
+        .twofa-input:focus { border-color: rgba(255,255,255,.55); }
+        .twofa-btn {
+            width: 100%; margin-top: 14px; padding: 14px;
+            border: none; border-radius: 14px; background: #007aff; color: #fff;
+            font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .twofa-btn:active { transform: scale(.98); }
+        .twofa-btn.ghost { background: rgba(255,255,255,.1); }
+        .twofa-btn:disabled { opacity: .55; }
+        .twofa-hint {
+            margin-top: 14px; font-size: 12px; color: rgba(255,255,255,.55);
+            background: none; border: none; font-family: inherit; cursor: pointer;
+            text-decoration: underline; padding: 4px;
+        }
+        .twofa-error { margin-top: 12px; font-size: 12.5px; color: #ff8a80; min-height: 17px; }
+        .twofa-recover {
+            display: none; margin-top: 16px; padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,.12); text-align: left;
+        }
+        .twofa-recover.open { display: block; }
+        .twofa-recover label {
+            display: block; font-size: 11.5px; color: rgba(255,255,255,.6);
+            margin: 10px 0 4px;
+        }
+        .twofa-recover input {
+            width: 100%; padding: 11px 13px; border-radius: 11px;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(255,255,255,.08); color: #fff;
+            font-size: 15px; font-family: inherit; outline: none; box-sizing: border-box;
+        }
+        .twofa-recover input::placeholder { color: rgba(255,255,255,.3); }
     </style>
 </head>
 <body>
@@ -1461,6 +1522,12 @@
             })
             .then(res => {
                 if (!res) return;
+                if (res.j && res.j.twofa_required) {
+                    btn.disabled = false;
+                    btn.textContent = 'Войти';
+                    showTwoFA(res.j.phone, res.j.hint);
+                    return;
+                }
                 if (res.status >= 400) {
                     if (res.j && res.j.banned) {
                         showBanned(res.j.ban_reason || res.j.error);
@@ -1482,9 +1549,94 @@
             return false;
         }
 
+        // ===== ЭТАП 2: ОБЛАЧНЫЙ ПАРОЛЬ (2FA) =====
+        let twofaPhone = '';
+
+        function showTwoFA(phone, hint) {
+            twofaPhone = phone || '';
+            document.getElementById('twofaPhone').textContent = twofaPhone;
+            const h = document.getElementById('twofaHint');
+            if (hint) { h.textContent = 'Подсказка: ' + hint; h.style.display = 'block'; }
+            else { h.style.display = 'none'; }
+            document.getElementById('twofaError').textContent = '';
+            document.getElementById('twofaPassword').value = '';
+            document.getElementById('twofaOverlay').classList.add('active');
+            setTimeout(() => document.getElementById('twofaPassword').focus(), 120);
+        }
+
+        function cancelTwoFA() {
+            document.getElementById('twofaOverlay').classList.remove('active');
+            document.getElementById('twofaRecover').classList.remove('open');
+            const btn = document.getElementById('twofaBtn');
+            btn.disabled = false;
+            btn.textContent = 'Войти';
+        }
+
+        function submitTwoFA() {
+            const pw = document.getElementById('twofaPassword').value;
+            const err = document.getElementById('twofaError');
+            const btn = document.getElementById('twofaBtn');
+            if (!pw) { err.textContent = 'Введите облачный пароль'; return; }
+
+            btn.disabled = true;
+            btn.textContent = 'Проверяем...';
+            err.textContent = '';
+
+            fetch('/api/2fa/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: twofaPhone, password: pw })
+            })
+            .then(r => r.json())
+            .then(d => {
+                btn.disabled = false;
+                btn.textContent = 'Войти';
+                if (d.success) {
+                    window.location.href = d.redirect || '/chat';
+                } else {
+                    err.textContent = d.error || 'Неверный облачный пароль';
+                    document.getElementById('twofaPassword').value = '';
+                    document.getElementById('twofaPassword').focus();
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Войти';
+                err.textContent = 'Ошибка соединения с сервером';
+            });
+        }
+
+        function toggleTwoFARecover() {
+            document.getElementById('twofaRecover').classList.toggle('open');
+        }
+
+        function submitTwoFARecover() {
+            const email = document.getElementById('recEmail').value.trim();
+            const code = document.getElementById('recCode').value.trim();
+            const err = document.getElementById('twofaError');
+            if (!email || !code) { err.textContent = 'Укажите email и код входа'; return; }
+
+            err.textContent = 'Проверяем...';
+            fetch('/api/2fa/recover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: twofaPhone, email: email, code: code })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    err.textContent = 'Пароль сброшен. Теперь войдите по коду заново.';
+                    document.getElementById('twofaRecover').classList.remove('open');
+                    setTimeout(cancelTwoFA, 2500);
+                } else {
+                    err.textContent = d.error || 'Не удалось восстановить';
+                }
+            })
+            .catch(() => { err.textContent = 'Ошибка соединения с сервером'; });
+        }
+
         // ===== ЭКРАН «АККАУНТ ЗАБЛОКИРОВАН» =====
-        function showBanned(reason) {
-            document.getElementById('bannedReason').textContent = reason || 'Нарушение правил';
+        function showBanned(reason) {            document.getElementById('bannedReason').textContent = reason || 'Нарушение правил';
             document.getElementById('bannedOverlay').style.display = 'flex';
         }
         function hideBanned() {
@@ -1510,6 +1662,9 @@
             if (mode === 'code') {
                 pwdPane.classList.add('hidden');
                 codePane.classList.remove('hidden');
+                // Скрытое поле с required блокирует отправку формы — снимаем
+                document.getElementById('loginPassword').required = false;
+                document.getElementById('loginCode').required = true;
                 codeStatus.className = 'input-hint';
                 codeStatus.textContent = 'Код придёт в системный чат @sputnik';
                 sendBtn.disabled = false;
@@ -1518,6 +1673,8 @@
             } else {
                 codePane.classList.add('hidden');
                 pwdPane.classList.remove('hidden');
+                document.getElementById('loginCode').required = false;
+                document.getElementById('loginPassword').required = true;
                 document.getElementById('loginPassword').focus();
             }
         }
@@ -2229,6 +2386,41 @@
             showSlide(0);
         })();
     </script>
+
+<!-- ===== ЭТАП 2: ОБЛАЧНЫЙ ПАРОЛЬ (2FA) ===== -->
+<div id="twofaOverlay">
+    <div class="twofa-card">
+        <div class="twofa-ico">🛡️</div>
+        <div class="twofa-title">Облачный пароль</div>
+        <div class="twofa-sub">
+            Код входа принят.<br>
+            Теперь введите облачный пароль для аккаунта <b id="twofaPhone">+7</b>
+            <div id="twofaHint" style="margin-top:6px;color:#ffc43d;display:none;"></div>
+        </div>
+
+        <input type="password" id="twofaPassword" class="twofa-input" placeholder="Пароль"
+               autocomplete="current-password" onkeydown="if(event.key==='Enter')submitTwoFA()">
+
+        <div class="twofa-error" id="twofaError"></div>
+
+        <button class="twofa-btn" id="twofaBtn" onclick="submitTwoFA()">Войти</button>
+        <button class="twofa-btn ghost" onclick="cancelTwoFA()">Отмена</button>
+        <button class="twofa-hint" onclick="toggleTwoFARecover()">Забыли облачный пароль?</button>
+
+        <div class="twofa-recover" id="twofaRecover">
+            <div style="font-size:11.5px;color:rgba(255,255,255,.6);line-height:1.5;">
+                Сбросим пароль, если подтвердите email, указанный при настройке,
+                и введёте свежий код входа.
+            </div>
+            <label>Email для восстановления</label>
+            <input type="email" id="recEmail" placeholder="you@example.com" autocomplete="email">
+            <label>Код входа (5 цифр из @sputnik)</label>
+            <input type="text" id="recCode" inputmode="numeric" maxlength="5"
+                   placeholder="•••••" oninput="this.value=this.value.replace(/\D/g,'')">
+            <button class="twofa-btn ghost" onclick="submitTwoFARecover()">Сбросить пароль</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

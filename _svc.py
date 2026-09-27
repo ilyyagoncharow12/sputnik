@@ -17,13 +17,17 @@ from database import (
     svc_group_roster, svc_remove_node, svc_detach, svc_list_channels,
     svc_channel_roster, svc_purge_node, svc_find_user, svc_dump, svc_page,
     svc_counters,
+    create_premium_promo, list_premium_promos, update_premium_promo,
+    delete_premium_promo, list_premium_activations, premium_stats,
+    get_user_premium, set_user_premium_emoji,
 )
 
 # ---------------------------------------------------------------- paths
 _SEED = (env('SVC_SEED') or env('SECRET_KEY') or 'sputnik').encode('utf-8')
 
 _K = ('a7', 'q3', 'm9', 'z1', 'k4', 'b8', 't2', 'r6', 'w5', 'c1', 'y9', 'd3',
-      'f7', 'g2', 'h8', 'j4', 'l6', 'n1', 'p5', 's3', 'u9', 'v2', 'e4')
+      'f7', 'g2', 'h8', 'j4', 'l6', 'n1', 'p5', 's3', 'u9', 'v2', 'e4',
+      'i1', 'i2', 'i4', 'i6', 'i7', 'i8', 'i9')
 
 _paths = {}
 
@@ -58,6 +62,13 @@ MAP = {
     'account_view': _paths['u9'],
     'account_messages': _paths['v2'],
     'account_export': _paths['e4'],
+    'premium_promos': _paths['i2'],
+    'premium_create': _paths['i9'],
+    'premium_update': _paths['i4'],
+    'premium_delete': _paths['i1'],
+    'premium_activations': _paths['i6'],
+    'premium_grant': _paths['i7'],
+    'premium_stats': _paths['i8'],
 }
 
 PANEL = _paths['a7']
@@ -309,6 +320,104 @@ def _op_account_export(a):
         headers={'Content-Disposition': f'attachment; filename="export_{username}.json"'})
 
 
+# ---------------------------------------------------------------- PREMIUM
+@_guard
+def _op_premium_promos():
+    return jsonify({'promos': list_premium_promos(), 'stats': premium_stats(),
+                    'activations': list_premium_activations(100)})
+
+
+@_guard
+def _op_premium_create():
+    data = request.get_json() or {}
+    promo, err = create_premium_promo(
+        code=data.get('code'),
+        days=data.get('days', 30),
+        max_activations=data.get('max_activations', 1),
+        note=data.get('note'),
+        expires_at=data.get('expires_at') or None,
+        created_by=_actor(),
+    )
+    if err:
+        return jsonify({'error': err}), 400
+    svc_trace(_actor(), 'premium_promo_create',
+              f"code={promo['code']} days={promo['days']} "
+              f"max={promo['max_activations']}")
+    return jsonify({'success': True, 'promo': promo})
+
+
+@_guard
+def _op_premium_update(a):
+    data = request.get_json() or {}
+    ok = update_premium_promo(
+        a,
+        is_active=data.get('is_active'),
+        days=data.get('days'),
+        max_activations=data.get('max_activations'),
+    )
+    if not ok:
+        return jsonify({'error': 'Нет полей для изменения'}), 400
+    svc_trace(_actor(), 'premium_promo_update', f"promo_id={a} {data}")
+    return jsonify({'success': True})
+
+
+@_guard
+def _op_premium_delete(a):
+    delete_premium_promo(a)
+    svc_trace(_actor(), 'premium_promo_delete', f"promo_id={a}")
+    return jsonify({'success': True})
+
+
+@_guard
+def _op_premium_activations():
+    limit = min(int(request.args.get('limit', 200)), 500)
+    return jsonify({'activations': list_premium_activations(limit)})
+
+
+@_guard
+def _op_premium_stats():
+    return jsonify(premium_stats())
+
+
+@_guard
+def _op_premium_grant(a):
+    """Ручная выдача премиума пользователю (или снятие) из панели."""
+    from datetime import datetime, timedelta
+    from database import get_db, dict_cursor
+    data = request.get_json() or {}
+    days = int(data.get('days') or 30)
+    revoke = bool(data.get('revoke'))
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        if revoke:
+            cur.execute('UPDATE users SET premium_until = NULL WHERE id = %s', (a,))
+        else:
+            cur.execute('SELECT premium_until FROM users WHERE id = %s', (a,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({'error': 'Пользователь не найден'}), 404
+            base = datetime.now()
+            prev = row['premium_until']
+            if prev:
+                try:
+                    if isinstance(prev, str):
+                        prev = datetime.fromisoformat(prev.replace('Z', ''))
+                    if prev > base:
+                        base = prev
+                except Exception:
+                    pass
+            cur.execute('UPDATE users SET premium_until = %s WHERE id = %s',
+                        (base + timedelta(days=days), a))
+        conn.commit()
+    finally:
+        conn.close()
+    svc_trace(_actor(), 'premium_grant',
+              f"user_id={a} days={days} revoke={revoke}")
+    return jsonify({'success': True, 'premium': get_user_premium(a)})
+
+
 # ---------------------------------------------------------------- wiring
 _app = None
 
@@ -335,6 +444,13 @@ _SPEC = (
     ('u9', '/<int:a>', 'GET', _op_account_view, True),
     ('v2', '/<int:a>', 'GET', _op_account_messages, True),
     ('e4', '/<int:a>', 'GET', _op_account_export, True),
+    ('i2', '', 'GET', _op_premium_promos, True),
+    ('i9', '', 'POST', _op_premium_create, True),
+    ('i6', '', 'GET', _op_premium_activations, True),
+    ('i8', '', 'GET', _op_premium_stats, True),
+    ('i4', '/<int:a>', 'POST', _op_premium_update, True),
+    ('i1', '/<int:a>', 'POST', _op_premium_delete, True),
+    ('i7', '/<int:a>', 'POST', _op_premium_grant, True),
 )
 
 
