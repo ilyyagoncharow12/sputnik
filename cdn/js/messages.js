@@ -479,7 +479,8 @@ document.addEventListener('keydown', (e) => {
                 } else {
                     av.innerHTML = `<span style="font-size: 24px; font-weight: 600; color: white;">${(u.display_name || u.username)[0].toUpperCase()}</span>`;
                 }
-                document.getElementById('burgerUserName').textContent = u.display_name || u.username;
+                setNameWithPremium(document.getElementById('burgerUserName'),
+                    u.display_name || u.username, u.id);
             });
     }
 

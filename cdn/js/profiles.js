@@ -69,7 +69,7 @@ function openUserProfileModal(userId) {
                                         </div>
 
                                         <div class="name-wrap">
-                                            <div class="display-name">${escapeHtml(displayName)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
+                                            <div class="display-name">${premiumNameHTML(displayName, userId)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
                                             <div class="username">@${escapeHtml(user.username)}</div>
                                             <div class="id">ID: ${user.unique_id}</div>
                                         </div>
@@ -135,8 +135,7 @@ function openUserProfileModal(userId) {
                                 </div>
                             `;
 
-                            document.getElementById('tempModalBody').innerHTML = html;
-                            openModal('tempModal');
+                            premiumMount(html);
                         })
                         .catch(() => {
                             // Если плейлист не загрузился — показываем профиль без него
@@ -156,7 +155,7 @@ function openUserProfileModal(userId) {
                                         </div>
 
                                         <div class="name-wrap">
-                                            <div class="display-name">${escapeHtml(displayName)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
+                                            <div class="display-name">${premiumNameHTML(displayName, userId)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
                                             <div class="username">@${escapeHtml(user.username)}</div>
                                             <div class="id">ID: ${user.unique_id}</div>
                                         </div>
@@ -220,8 +219,7 @@ function openUserProfileModal(userId) {
                                 </div>
                             `;
 
-                            document.getElementById('tempModalBody').innerHTML = html;
-                            openModal('tempModal');
+                            premiumMount(html);
                         });
                 })
                 .catch(err => {
@@ -472,7 +470,7 @@ function openMyProfile() {
                             html += '</div>';
 
                             html += '<div class="name-wrap">';
-                            html += `<div class="display-name">${escapeHtml(u.display_name || u.username)}</div>`;
+                            html += `<div class="display-name">${premiumNameHTML(u.display_name || u.username, u.id)}</div>`;
                             html += `<div class="username">@${escapeHtml(u.username)}</div>`;
                             html += `<div class="id">ID: ${u.unique_id}</div>`;
                             html += '</div>';
@@ -502,8 +500,7 @@ function openMyProfile() {
                             html += '</div>'; // modal-content
                             html += '</div>'; // other-profile
 
-                            document.getElementById('tempModalBody').innerHTML = html;
-                            openModal('tempModal');
+                            premiumMount(html);
                         })
                         .catch(() => {
                             let html = '<div class="other-profile">';
@@ -523,7 +520,7 @@ function openMyProfile() {
                             }
                             html += '</div>';
                             html += '<div class="name-wrap">';
-                            html += `<div class="display-name">${escapeHtml(u.display_name || u.username)}</div>`;
+                            html += `<div class="display-name">${premiumNameHTML(u.display_name || u.username, u.id)}</div>`;
                             html += `<div class="username">@${escapeHtml(u.username)}</div>`;
                             html += `<div class="id">ID: ${u.unique_id}</div>`;
                             html += '</div>';
@@ -547,8 +544,7 @@ function openMyProfile() {
                             html += '</div>';
                             html += '</div>';
 
-                            document.getElementById('tempModalBody').innerHTML = html;
-                            openModal('tempModal');
+                            premiumMount(html);
                         });
                 });
         });

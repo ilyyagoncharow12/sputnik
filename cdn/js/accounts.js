@@ -49,166 +49,346 @@ const COUNTRIES = [
     { code: 'GR', name: 'Греция',         dial: '+30',    flag: '🇬🇷', minLen: 10, maxLen: 10 }
 ];
 
-// Открыть модалку добавления аккаунта
-function openAddAccountModal() {
-    closeBurgerMenu();
+/* ======================= ФОРМАТ НОМЕРА ======================= */
+/* РАЗ-ЗА-ЗА для RU/KZ, остальным — тройками. */
+function addFormatDigits(d, c) {
+    if (!d) return '';
+    if (c && (c.code === 'RU' || c.code === 'KZ')) {
+        if (d.length <= 3) return d;
+        if (d.length <= 6) return d.slice(0, 3) + ' ' + d.slice(3);
+        if (d.length <= 8) return d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6);
+        return d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6, 8) + ' ' + d.slice(8);
+    }
+    // 10 цифр — «555 012 3456» (как в США), иначе тройками
+    if (d.length === 10) return d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6);
+    let out = d.slice(0, 3), i = 3;
+    while (i < d.length) { out += ' ' + d.slice(i, i + 3); i += 3; }
+    return out;
+}
 
-    // Строим выпадающий список стран
-    const countriesHtml = COUNTRIES.map(c => `
+/* ======================= АВТО-РАСПОЗНАВАНИЕ ======================= */
+/* Отделяет код страны от номера. Возвращает {country, digits} либо
+   null, если код не распознан. */
+function addParsePhone(raw) {
+    const s = String(raw || '');
+    const hadPlus = /^\s*\+/.test(s);
+    let digits = s.replace(/\D/g, '');
+    if (!digits) return null;
+
+    // Сначала пробуем выбранную страну — у RU и KZ один код +7,
+    // не надо «перекидывать» номер на другую страну того же кода.
+    const cur = window._addCountry;
+    if (cur) {
+        const cd = cur.dial.replace(/\D/g, '');
+        if (digits.indexOf(cd) === 0 && digits.length - cd.length >= cur.minLen) {
+            return { country: cur, digits: digits.slice(cd.length) };
+        }
+    }
+
+    // Иначе ищем по списку: длинные коды первыми (+995 до +7).
+    const sorted = [...COUNTRIES].sort(
+        (a, b) => b.dial.replace(/\D/g, '').length - a.dial.replace(/\D/g, '').length
+    );
+    for (const c of sorted) {
+        const cd = c.dial.replace(/\D/g, '');
+        if (digits.indexOf(cd) === 0 && digits.length - cd.length >= c.minLen) {
+            return { country: c, digits: digits.slice(cd.length) };
+        }
+    }
+
+    // Плюс был, но код не узнали — не выдумываем: отдаём «как есть».
+    if (hadPlus) return { country: cur, digits: null };
+    return { country: cur, digits: digits };
+}
+
+function addFullPhone() {
+    const c = window._addCountry || COUNTRIES[0];
+    return c.dial + (window._addDigits || '');
+}
+
+/* Перерисовывает превью полного номера и счётчик цифр. */
+function addPaint() {
+    const c = window._addCountry || COUNTRIES[0];
+    const d = window._addDigits || '';
+    const full = document.getElementById('addPhoneFull');
+    const hint = document.getElementById('addPhoneHint');
+    // Полный номер показываем слитно, иначе форматирование по тройкам
+    // склеивало код и номер вроде «+79 991 234 567».
+    if (full) full.textContent = d ? (c.dial + d) : c.dial;
+    if (!hint) return;
+
+    if (!d) {
+        hint.textContent = `Код страны ${c.dial} выбран отдельно — введите только номер`;
+        hint.style.color = '#8a8a92';
+        return;
+    }
+    if (d.length < c.minLen) {
+        hint.textContent = `Не хватает цифр: нужно ${c.minLen}, введено ${d.length}`;
+        hint.style.color = '#ef4444';
+        return;
+    }
+    if (d.length > c.maxLen) {
+        hint.textContent = `Лишние цифры: максимум ${c.maxLen}`;
+        hint.style.color = '#ef4444';
+        return;
+    }
+    hint.textContent = `Номер готов: ${c.dial} ${d.length} из ${c.minLen}–${c.maxLen} цифр`;
+    hint.style.color = '#34c759';
+}
+
+function addSetCountry(c, keepDigits) {
+    window._addCountry = c;
+    const f = document.getElementById('addSelFlag');
+    const k = document.getElementById('addSelCode');
+    if (f) f.textContent = c.flag;
+    if (k) k.textContent = c.dial;
+    if (!keepDigits) {
+        const inp = document.getElementById('addPhone');
+        if (inp) inp.value = '';
+        window._addDigits = '';
+    }
+    addPaint();
+}
+
+// Разметка списка стран
+function addCountriesHtml() {
+    return COUNTRIES.map(c => `
         <div class="add-country-item" data-code="${c.code}" data-dial="${c.dial}" data-min="${c.minLen}" data-max="${c.maxLen}">
             <span class="add-cflag">${c.flag}</span>
             <span class="add-cname">${c.name}</span>
             <span class="add-ccode">${c.dial}</span>
         </div>
     `).join('');
+}
 
-    // По умолчанию — Россия
-    const defCountry = COUNTRIES[0];
-
-    let html = `
-        <div style="padding: 4px 0; color: white;">
-            <div class="profile-field">
-                <label>Номер телефона</label>
-                <div style="display:flex;gap:8px;margin-bottom:4px">
-                    <div style="position:relative">
-                        <button type="button" id="addCountryBtn" style="display:flex;align-items:center;gap:4px;padding:10px 12px;background:#232323;border:1.5px solid transparent;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit;color:white;height:46px;white-space:nowrap;transition:border-color .2s" onmouseover="this.style.borderColor='#2ea6ff'" onmouseout="this.style.borderColor='transparent'">
-                            <span id="addSelFlag">${defCountry.flag}</span>
-                            <span id="addSelCode" style="font-weight:600">${defCountry.dial}</span>
-                            <span style="font-size:8px;color:#6a6a72;margin-left:2px">▾</span>
-                        </button>
-                        <div id="addCountryDD" style="display:none;position:absolute;top:100%;left:0;min-width:240px;background:#2b2b32;border:1px solid #44444c;border-radius:10px;max-height:280px;overflow:hidden;z-index:200;box-shadow:0 8px 40px rgba(0,0,0,.6)">
-                            <div style="padding:6px 8px;border-bottom:1px solid #44444c">
-                                <input type="text" id="addCountrySearch" placeholder="Поиск..." style="width:100%;padding:8px 10px;background:#3a3a42;border:none;border-radius:6px;font-size:13px;font-family:inherit;color:white;outline:none" oninput="filterAddCountries(this.value)">
-                            </div>
-                            <div id="addCountryList" style="overflow-y:auto;max-height:230px">${countriesHtml}</div>
-                        </div>
+// Общая часть: выбор страны + поле номера
+function addPhoneBlock(mobile) {
+    const def = COUNTRIES[0];
+    return `
+        <div class="profile-field">
+            <label>${mobile ? 'Страна' : 'Код страны'}</label>
+            <div class="aa-cc-wrap">
+                <button type="button" id="addCountryBtn" class="aa-cc-btn" aria-haspopup="listbox" aria-expanded="false">
+                    <span id="addSelFlag">${def.flag}</span>
+                    <span id="addSelCode">${def.dial}</span>
+                    <i class="fas fa-chevron-down aa-cc-caret"></i>
+                </button>
+                <div id="addCountryDD" class="aa-cc-dd" role="listbox">
+                    <div class="aa-cc-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="addCountrySearch" placeholder="Страна или код" oninput="filterAddCountries(this.value)">
                     </div>
-                    <div style="flex:1">
-                        <input type="tel" id="addPhone" class="modal-input" placeholder="000 000 00 00" inputmode="numeric" style="height:46px;font-size:16px;letter-spacing:.3px">
-                    </div>
+                    <div id="addCountryList" class="aa-cc-list">${addCountriesHtml()}</div>
                 </div>
-            </div>
-            <div class="profile-field">
-                <label>Способ входа</label>
-                <div style="display:flex;gap:6px;background:#232323;padding:4px;border-radius:10px;margin-bottom:12px">
-                    <button type="button" id="addModePwd" onclick="setAddMode('password')" style="flex:1;padding:9px 6px;background:#3a3a42;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;color:white;font-weight:600;transition:all .2s">🔑 Пароль</button>
-                    <button type="button" id="addModeCode" onclick="setAddMode('code')" style="flex:1;padding:9px 6px;background:none;border:none;border-radius:7px;cursor:pointer;font-size:13px;font-family:inherit;color:#8a8a92;font-weight:600;transition:all .2s">🔢 Код</button>
-                </div>
-            </div>
-
-            <div id="addPanePwd" class="profile-field">
-                <label>Пароль</label>
-                <input type="password" id="addPassword" class="modal-input" placeholder="••••••••" style="height:46px">
-            </div>
-
-            <div id="addPaneCode" class="profile-field" style="display:none">
-                <label>Код входа</label>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <input type="text" id="addCode" class="modal-input" placeholder="•••••" maxlength="5" inputmode="numeric" style="flex:1;height:46px;text-align:center;letter-spacing:8px;font-size:18px;font-weight:700" oninput="this.value=this.value.replace(/\D/g,'').slice(0,5)">
-                    <button type="button" id="addSendCodeBtn" onclick="sendAddCode()" style="flex-shrink:0;height:46px;padding:0 14px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:10px;color:#fff;font-size:12px;font-family:inherit;font-weight:700;cursor:pointer;transition:all .2s">Получить код</button>
-                </div>
-                <div id="addCodeStatus" style="font-size:12px;color:#8a8a92;margin-top:8px">Код придёт в системный чат @sputnik</div>
-            </div>
-            <div class="user-profile-buttons">
-                <button class="user-profile-btn user-profile-btn-secondary" onclick="closeModal('tempModal')">Отмена</button>
-                <button class="user-profile-btn user-profile-btn-primary" onclick="addNewAccount()">Войти</button>
             </div>
         </div>
-    `;
-    showModal('Добавить аккаунт', html);
+        <div class="profile-field">
+            <label>${mobile ? 'Номер телефона' : 'Номер телефона'}</label>
+            <input type="tel" id="addPhone" class="modal-input aa-phone"
+                   placeholder="${def.minLen <= 9 ? '00 000 00 00' : '000 000 00 00'}"
+                   inputmode="numeric" autocomplete="off">
+            <div class="aa-full-row">
+                <span class="aa-full-label">Получится:</span>
+                <span class="aa-full-num" id="addPhoneFull">${def.dial}</span>
+            </div>
+            <div class="aa-hint" id="addPhoneHint"></div>
+            <button type="button" class="aa-autofill" id="addAutofillBtn">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                <span>Вставить номер и отделить код страны</span>
+            </button>
+        </div>`;
+}
 
-    // Инициализация после открытия модалки
+// Общая часть: переключатель способа входа + поля
+function addAuthBlock() {
+    return `
+        <div class="profile-field">
+            <label>Способ входа</label>
+            <div class="aa-seg">
+                <button type="button" id="addModePwd" class="aa-seg-btn" onclick="setAddMode('password')">🔑 Пароль</button>
+                <button type="button" id="addModeCode" class="aa-seg-btn" onclick="setAddMode('code')">🔢 Код</button>
+            </div>
+        </div>
+        <div id="addPanePwd" class="profile-field">
+            <label>Пароль от аккаунта</label>
+            <input type="password" id="addPassword" class="modal-input" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div id="addPaneCode" class="profile-field" style="display:none">
+            <label>Код входа</label>
+            <div class="aa-code-row">
+                <input type="text" id="addCode" class="modal-input aa-code" placeholder="•••••" maxlength="5" inputmode="numeric"
+                       oninput="this.value=this.value.replace(/\D/g,'').slice(0,5)">
+                <button type="button" id="addSendCodeBtn" class="aa-code-send" onclick="sendAddCode()">Получить код</button>
+            </div>
+            <div id="addCodeStatus" class="aa-code-status">Код придёт в системный чат @sputnik</div>
+        </div>`;
+}
+
+// ===== Открыть модалку добавления аккаунта =====
+// Два разных варианта: aa--pc (две колонки) и aa--mobile (нижний лист).
+function openAddAccountModal() {
+    closeBurgerMenu();
+
+    const mobile = (typeof isMobile === 'function') ? isMobile() : window.innerWidth <= 768;
+
+    let html;
+    if (mobile) {
+        html = `
+        <div class="aa aa--mobile">
+            <div class="aa-mhead">
+                <button class="aa-mclose" onclick="closeModal('tempModal')" aria-label="Закрыть">
+                    <i class="fas fa-xmark"></i>
+                </button>
+                <div class="aa-mhead-txt">
+                    <div class="aa-mhead-title">Добавить аккаунт</div>
+                    <div class="aa-mhead-sub">Второй номер в Спутнике</div>
+                </div>
+            </div>
+            <div class="aa-mbody">
+                ${addPhoneBlock(true)}
+                ${addAuthBlock()}
+            </div>
+            <div class="aa-mfoot">
+                <button class="aa-btn aa-btn-ghost" onclick="closeModal('tempModal')">Отмена</button>
+                <button class="aa-btn aa-btn-primary" onclick="addNewAccount()">Войти</button>
+            </div>
+        </div>`;
+    } else {
+        html = `
+        <div class="aa aa--pc">
+            <div class="aa-phead">
+                <div class="aa-phead-ico"><i class="fas fa-user-plus"></i></div>
+                <div class="aa-phead-txt">
+                    <div class="aa-phead-title">Добавить аккаунт</div>
+                    <div class="aa-phead-sub">Войдите в Спутник под другим номером — переключайтесь без входа заново</div>
+                </div>
+            </div>
+            <div class="aa-pgrid">
+                <section class="aa-pcol">
+                    <div class="aa-col-title"><span class="aa-dot"></span>Номер телефона</div>
+                    ${addPhoneBlock(false)}
+                </section>
+                <section class="aa-pcol">
+                    <div class="aa-col-title"><span class="aa-dot aa-dot-2"></span>Вход в аккаунт</div>
+                    ${addAuthBlock()}
+                </section>
+            </div>
+            <div class="aa-pfoot">
+                <button class="aa-btn aa-btn-ghost" onclick="closeModal('tempModal')">Отмена</button>
+                <button class="aa-btn aa-btn-primary" onclick="addNewAccount()">Войти</button>
+            </div>
+        </div>`;
+    }
+
+    const body = document.getElementById('tempModalBody');
+    if (body) body.innerHTML = html;
+    const modal = document.getElementById('tempModal');
+    // Свой контейнер + ширина — обычный max-width 420 тут не подходит
+    if (modal) modal.classList.add('addacct-wide');
+    openModal('tempModal');
+
+    // Состояние
+    window._addCountry = COUNTRIES[0];
+    window._addDigits = '';
+    window._addAuthType = 'password';
+
     setTimeout(() => {
         const phoneInput = document.getElementById('addPhone');
         if (!phoneInput) return;
 
-        // Состояние
-        window._addCountry = COUNTRIES[0];
-        window._addDigits = '';
-        window._addAuthType = 'password';
-
-        // Обработчик ввода телефона
-        phoneInput.oninput = function() {
-            let d = this.value.replace(/\D/g, '');
-            const max = window._addCountry.maxLen;
-            if (d.length > max) d = d.slice(0, max);
-            window._addDigits = d;
-            // Форматирование как в России
-            let f = '';
-            if (d.length > 0) {
-                if (d.length <= 3)      f = d;
-                else if (d.length <= 6) f = d.slice(0,3) + ' ' + d.slice(3);
-                else if (d.length <= 8) f = d.slice(0,3) + ' ' + d.slice(3,6) + ' ' + d.slice(6);
-                else                    f = d.slice(0,3) + ' ' + d.slice(3,6) + ' ' + d.slice(6,8) + ' ' + d.slice(8,10);
-            }
-            this.value = f;
-        };
-
-        // Обработчик вставки
-        phoneInput.addEventListener('paste', function() {
-            setTimeout(() => {
-                const raw = this.value.replace(/\s/g, '');
-                const match = raw.match(/^(\+?\d{1,4})(\d+)$/);
-                if (!match) return;
-                const countryPart = match[1].replace(/\D/g, '');
-                const localPart = match[2];
-                const sorted = [...COUNTRIES].sort((a,b) => b.dial.length - a.dial.length);
-                let found = null;
-                for (const c of sorted) {
-                    if (countryPart === c.dial.replace(/\D/g, '')) { found = c; break; }
-                }
-                if (found) {
-                    window._addCountry = found;
-                    document.getElementById('addSelFlag').textContent = found.flag;
-                    document.getElementById('addSelCode').textContent = found.dial;
-                }
-                const max = window._addCountry.maxLen;
-                window._addDigits = localPart.slice(0, max);
-                this.value = window._addDigits;
-                if (document.getElementById('addCountryDD')) {
-                    document.getElementById('addCountryDD').style.display = 'none';
-                }
-            }, 10);
-        });
-
-        // Обработчик выбора страны
-        document.querySelectorAll('.add-country-item').forEach(el => {
-            el.onclick = function() {
-                const code = this.dataset.code;
-                const c = COUNTRIES.find(x => x.code === code);
-                if (!c) return;
-                window._addCountry = c;
-                document.getElementById('addSelFlag').textContent = c.flag;
-                document.getElementById('addSelCode').textContent = c.dial;
-                document.getElementById('addCountryDD').style.display = 'none';
-                // Очищаем телефон при смене страны
-                const inp = document.getElementById('addPhone');
-                inp.value = '';
-                window._addDigits = '';
-                inp.focus();
-            };
-        });
-
-        // Открытие/закрытие списка стран
-        document.getElementById('addCountryBtn').onclick = function(e) {
-            e.stopPropagation();
-            const dd = document.getElementById('addCountryDD');
-            dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-            if (dd.style.display === 'block') {
-                document.getElementById('addCountrySearch').value = '';
-                document.getElementById('addCountrySearch').focus();
+        const dd = document.getElementById('addCountryDD');
+        const ddOpen = on => {
+            if (!dd) return;
+            dd.classList.toggle('open', on);
+            document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', on ? 'true' : 'false');
+            if (on) {
+                const s = document.getElementById('addCountrySearch');
+                if (s) { s.value = ''; s.focus(); }
                 filterAddCountries('');
             }
         };
 
-        // Закрытие при клике снаружи
-        document.addEventListener('click', function addCountryClose(e) {
-            if (!e.target.closest('#addCountryBtn') && !e.target.closest('#addCountryDD')) {
-                const dd = document.getElementById('addCountryDD');
-                if (dd) dd.style.display = 'none';
+        // Ввод номера вручную
+        phoneInput.oninput = function() {
+            let d = this.value.replace(/\D/g, '');
+            const c = window._addCountry;
+            if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
+            window._addDigits = d;
+            this.value = addFormatDigits(d, c);
+            addPaint();
+        };
+
+        // Вставка: отделяем код страны сами
+        const applyPasted = (raw, silent) => {
+            const parsed = addParsePhone(raw);
+            if (!parsed) { if (!silent) showToast('Не похоже на номер телефона'); return; }
+            if (parsed.digits === null) {
+                if (!silent) showToast('Не удалось определить код страны — выберите его вручную');
+                return;
             }
-        }, { once: false });
-    }, 100);
+            const c = parsed.country;
+            window._addCountry = c;
+            document.getElementById('addSelFlag').textContent = c.flag;
+            document.getElementById('addSelCode').textContent = c.dial;
+            let d = parsed.digits;
+            // 8 xxx xx xx xx — российский формат без +7
+            if (c.dial === '+7' && d.length === c.maxLen + 1 && d[0] === '8') d = d.slice(1);
+            if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
+            window._addDigits = d;
+            phoneInput.value = addFormatDigits(d, c);
+            addPaint();
+            ddOpen(false);
+            if (!silent) showToast(`Код ${c.dial} отделён, номер вставлен`);
+        };
+
+        phoneInput.addEventListener('paste', e => {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+            applyPasted(text, false);
+        });
+        phoneInput.addEventListener('focus', () => { if (!phoneInput.value) phoneInput.select?.(); });
+
+        // Кнопка «вставить номер»
+        document.getElementById('addAutofillBtn')?.addEventListener('click', async () => {
+            const typed = phoneInput.value.trim();
+            if (typed) { applyPasted(typed, false); return; }
+            try {
+                const txt = await navigator.clipboard.readText();
+                if (txt && txt.trim()) { applyPasted(txt.trim(), false); }
+                else showToast('Буфер обмена пуст — вставьте номер в поле');
+            } catch (e) {
+                showToast('Вставьте номер в поле — я отделю код страны');
+                phoneInput.focus();
+            }
+        });
+
+        // Выбор страны
+        document.querySelectorAll('.add-country-item').forEach(el => {
+            el.onclick = function() {
+                const c = COUNTRIES.find(x => x.code === this.dataset.code);
+                if (!c) return;
+                addSetCountry(c, false);
+                ddOpen(false);
+                phoneInput.focus();
+            };
+        });
+
+        // Открытие списка стран
+        document.getElementById('addCountryBtn')?.addEventListener('click', e => {
+            e.stopPropagation();
+            ddOpen(!dd?.classList.contains('open'));
+        });
+
+        // Клик снаружи закрывает список стран. Слушатели снимаются
+        // предыдущего открытия, иначе они копятся при каждом показе.
+        document.removeEventListener('click', addCountryOutside);
+        document.removeEventListener('keydown', addCountryEsc);
+        document.addEventListener('click', addCountryOutside);
+        document.addEventListener('keydown', addCountryEsc);
+
+        addPaint();
+        setAddMode('password');
+    }, 60);
 }
 
 // Фильтрация стран в модалке добавления аккаунта
@@ -440,6 +620,38 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 }
 
+/* Закрытие списка стран по клику мимо и по Escape.
+   Именованные функции, чтобы снимать предыдущие слушатели. */
+function addCountryOutside(e) {
+    if (!e.target.closest('.aa-cc-wrap')) {
+        const dd = document.getElementById('addCountryDD');
+        dd?.classList.remove('open');
+        document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function addCountryEsc(e) {
+    if (e.key === 'Escape') {
+        const dd = document.getElementById('addCountryDD');
+        dd?.classList.remove('open');
+        document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
+    }
+}
+
+// Убираем слушатели при закрытии модалки
+const _origCloseModal = typeof closeModal === 'function' ? closeModal : null;
+if (_origCloseModal && !window.__addacctClosePatched) {
+    window.__addacctClosePatched = true;
+    window.closeModal = function (id) {
+        if (id === 'tempModal') {
+            document.removeEventListener('click', addCountryOutside);
+            document.removeEventListener('keydown', addCountryEsc);
+            document.getElementById('tempModal')?.classList.remove('addacct-wide');
+        }
+        return _origCloseModal.apply(this, arguments);
+    };
+}
+
 // ===== Переключение «пароль / код» в добавлении аккаунта =====
 function setAddMode(mode) {
     window._addAuthType = mode;
@@ -448,22 +660,19 @@ function setAddMode(mode) {
     const btnPwd = document.getElementById('addModePwd');
     const btnCode = document.getElementById('addModeCode');
 
+    if (!pwd || !code) return;
     if (mode === 'code') {
         pwd.style.display = 'none';
         code.style.display = '';
-        btnPwd.style.background = 'none';
-        btnPwd.style.color = '#8a8a92';
-        btnCode.style.background = '#3a3a42';
-        btnCode.style.color = 'white';
-        setTimeout(() => document.getElementById('addCode').focus(), 50);
+        btnPwd.classList.remove('on');
+        btnCode.classList.add('on');
+        setTimeout(() => document.getElementById('addCode')?.focus(), 50);
     } else {
         code.style.display = 'none';
         pwd.style.display = '';
-        btnCode.style.background = 'none';
-        btnCode.style.color = '#8a8a92';
-        btnPwd.style.background = '#3a3a42';
-        btnPwd.style.color = 'white';
-        setTimeout(() => document.getElementById('addPassword').focus(), 50);
+        btnCode.classList.remove('on');
+        btnPwd.classList.add('on');
+        setTimeout(() => document.getElementById('addPassword')?.focus(), 50);
     }
 }
 

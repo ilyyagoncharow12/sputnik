@@ -1,4 +1,9 @@
 ﻿    // ===== Р§РђРўР« =====
+    // Кэш Premium может прийти позже первого рендера списка — отдаём
+    // перерисовку наружу, чтобы premium.js мог досоставить значки.
+    window.refreshChatsPremiumMarks = function () {
+        if (typeof renderChatsList === 'function' && currentTab === 'chats') renderChatsList();
+    };
     function loadChatsList() {
         return fetch('/api/get_chats_list')
             .then(r => r.json())
@@ -183,7 +188,10 @@
                     </div>
                     <div class="chat-info">
                         <div class="chat-header-row">
-                            <span class="chat-name">${escapeHtml(c.is_banned ? 'Удалённый аккаунт' : (c.name || 'Чат'))}${c.is_banned ? '<span class="snow-emoji">❄</span>' : ''}</span>
+                            <span class="chat-name">${premiumNameHTML(
+                                c.is_banned ? 'Удалённый аккаунт' : (c.name || 'Чат'),
+                                chatType === 'personal' && !c.is_banned ? openId : null
+                            )}${c.is_banned ? '<span class="snow-emoji">❄</span>' : ''}</span>
                             <span class="chat-time">${formatChatTime(c.last_message_time)}</span>
                         </div>
                         <div class="chat-preview">
@@ -356,12 +364,18 @@ function continueOpenChat(id, type) {
                                            d.other_user.username);
 
                         currentChat.name = displayName;
-                        document.getElementById('chatUserName').innerHTML = escapeHtml(displayName) + (frozenO ? '<span class="snow-emoji">❄</span>' : '');
+                        setNameWithPremium(document.getElementById('chatUserName'), displayName,
+                            frozenO ? null : d.other_user.id);
+                        if (frozenO) document.getElementById('chatUserName')
+                            .insertAdjacentHTML('beforeend', '<span class="snow-emoji">❄</span>');
                     })
                     .catch(() => {
                         // Если ошибка — используем оригинальное
                         currentChat.name = frozenO ? 'Удалённый аккаунт' : (d.other_user.display_name || d.other_user.username);
-                        document.getElementById('chatUserName').innerHTML = escapeHtml(currentChat.name) + (frozenO ? '<span class="snow-emoji">❄</span>' : '');
+                        setNameWithPremium(document.getElementById('chatUserName'), currentChat.name,
+                            frozenO ? null : d.other_user.id);
+                        if (frozenO) document.getElementById('chatUserName')
+                            .insertAdjacentHTML('beforeend', '<span class="snow-emoji">❄</span>');
                     });
 
                 document.getElementById('chatUserAvatar').innerHTML = frozenO ?

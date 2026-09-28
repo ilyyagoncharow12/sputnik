@@ -128,16 +128,29 @@ RATE_LIMIT_REQUESTS = defaultdict(deque)
 
 
 def rate_limit(limit=60, window=60):
-    """Ограничение частоты запросов с одного IP (по умолчанию 60/минуту)."""
+    """Ограничение частоты запросов с одного IP (по умолчанию 60/минуту).
+
+    Счётчик ведётся по паре (endpoint, ip), а не только по IP: иначе все
+    защищённые ручки складывали запросы в один общий счётчик и обычная
+    активность (например, открытие чата) исчерпывала лимит экспорта,
+    из-за чего экспорт отдавал 429 «из ниоткуда»."""
     def decorator(f):
         def wrapper(*args, **kwargs):
             ip = request.remote_addr or 'unknown'
             now = time.time()
-            dq = RATE_LIMIT_REQUESTS[ip]
+            dq = RATE_LIMIT_REQUESTS[(f.__name__, ip)]
             while dq and now - dq[0] > window:
                 dq.popleft()
             if len(dq) >= limit:
-                return jsonify({'error': 'Слишком много запросов. Подождите немного.'}), 429
+                # сколько ждать до освобождения одного слота
+                retry_after = max(1, int(window - (now - dq[0])) + 1)
+                resp = jsonify({
+                    'error': 'Слишком много запросов. Подождите немного.',
+                    'retry_after': retry_after,
+                })
+                resp.status_code = 429
+                resp.headers['Retry-After'] = str(retry_after)
+                return resp
             dq.append(now)
             return f(*args, **kwargs)
         wrapper.__name__ = f.__name__
@@ -4973,7 +4986,7 @@ def api_premium_emoji():
 
 
 @app.route('/api/premium/export', methods=['POST'])
-@rate_limit(limit=5, window=300)
+@rate_limit(limit=20, window=300)
 def api_premium_export():
     """Экспорт данных аккаунта в JSON (только для Premium)."""
     if 'user_id' not in session:

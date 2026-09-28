@@ -694,7 +694,7 @@
                                     ${u.is_banned ? `<span>❄</span>` : (u.avatar ? `<img src="/${u.avatar}">` : `<span>${(u.username || '?')[0].toUpperCase()}</span>`)}
                                 </div>
                                 <div class="search-result-info">
-                                    <div class="search-result-name">${escapeHtml(u.is_banned ? 'Удалённый аккаунт' : (u.display_name || u.username))}${u.is_banned ? '<span class="snow-emoji">❄</span>' : ''}</div>
+                                    <div class="search-result-name">${u.is_banned ? escapeHtml('Удалённый аккаунт') + '<span class="snow-emoji">❄</span>' : premiumNameHTML(u.display_name || u.username, u.id)}</div>
                                     <div class="search-result-type">@${escapeHtml(u.username)} | ${u.phone}</div>
                                 </div>
                             </div>
@@ -812,7 +812,7 @@
                             ${i.is_banned ? `<span>❄</span>` : (i.avatar ? `<img src="/${i.avatar}">` : `<span>${(i.username || '?')[0].toUpperCase()}</span>`)}
                         </div>
                         <div class="search-result-info">
-                            <div class="search-result-name">${escapeHtml(i.is_banned ? 'Удалённый аккаунт' : (i.display_name || i.username))}${i.is_banned ? '<span class="snow-emoji">❄</span>' : ''}</div>
+                            <div class="search-result-name">${i.is_banned ? escapeHtml('Удалённый аккаунт') + '<span class="snow-emoji">❄</span>' : premiumNameHTML(i.display_name || i.username, i.id)}</div>
                             <div class="search-result-type">@${escapeHtml(i.username)} | ${i.phone}</div>
                         </div>
                     </div>
