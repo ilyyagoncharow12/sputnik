@@ -184,9 +184,9 @@ function addPhoneBlock(mobile) {
         </div>
         <div class="profile-field">
             <label>${mobile ? 'Номер телефона' : 'Номер телефона'}</label>
-            <input type="tel" id="addPhone" class="modal-input aa-phone"
+            <input type="text" id="addPhone" class="modal-input aa-phone"
                    placeholder="${def.minLen <= 9 ? '00 000 00 00' : '000 000 00 00'}"
-                   inputmode="numeric" autocomplete="off">
+                   inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false">
             <div class="aa-full-row">
                 <span class="aa-full-label">Получится:</span>
                 <span class="aa-full-num" id="addPhoneFull">${def.dial}</span>
@@ -211,7 +211,7 @@ function addAuthBlock() {
         </div>
         <div id="addPanePwd" class="profile-field">
             <label>Пароль от аккаунта</label>
-            <input type="password" id="addPassword" class="modal-input" placeholder="••••••••" autocomplete="current-password">
+            <input type="password" id="addPassword" class="modal-input" placeholder="••••••••" autocomplete="new-password">
         </div>
         <div id="addPaneCode" class="profile-field" style="display:none">
             <label>Код входа</label>
@@ -301,16 +301,84 @@ function openAddAccountModal() {
             if (!dd) return;
             dd.classList.toggle('open', on);
             document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', on ? 'true' : 'false');
-            if (on) {
-                const s = document.getElementById('addCountrySearch');
-                if (s) { s.value = ''; s.focus(); }
-                filterAddCountries('');
-            }
+            if (!on) { dd.classList.remove('open-up'); dd.style.removeProperty('--dd-h'); return; }
+            const s = document.getElementById('addCountrySearch');
+            if (s) { s.value = ''; if (!mobile) s.focus(); }
+            filterAddCountries('');
+            // Список из 45 стран не влезает в поле под кнопкой: считаем
+            // реальное свободное место (список позиционирован, поэтому
+            // не выдавливает форму) и режем по высоте, а при нехватке
+            // снизу раскрываем вверх.
+            const wr = dd.parentElement.getBoundingClientRect();
+            const below = window.innerHeight - (wr.bottom + 8);
+            const above = wr.top - 8;
+            const up = below < 190 && above > below;
+            dd.classList.toggle('open-up', up);
+            const avail = Math.max(150, Math.min(window.innerHeight * 0.46, (up ? above : below) - 8));
+            dd.style.setProperty('--dd-h', Math.round(avail) + 'px');
         };
 
+        // Поле не должно приходить заполненным: браузер подставляет в
+        // type=tel сохранённый номер, и на пустой форме сразу горело
+        // красное «не хватает цифр». Чистим и при открытии, и на фокусе
+        // (автозаполнение может прийти уже после монтирования).
+        let touched = false;
+        phoneInput.addEventListener('input', () => { touched = true; });
+        phoneInput.addEventListener('focus', () => {
+            if (touched) { phoneInput.select?.(); return; }
+            phoneInput.value = '';
+            window._addDigits = '';
+            addPaint();
+        });
+        phoneInput.value = '';
+        window._addDigits = '';
+        // Пароль/код от прошлого открытия тоже не должны оставаться.
+        // Браузер подставляет сохранённый пароль ПОСЛЕ монтирования,
+        // поэтому чистим и при фокусе (если пользователь не вводил).
+        const pw = document.getElementById('addPassword');
+        const cd = document.getElementById('addCode');
+        if (pw) {
+            pw.value = '';
+            pw.addEventListener('focus', () => {
+                if (pw.value) { pw.value = ''; pw.select?.(); }
+            });
+        }
+        if (cd) cd.value = '';
+
         // Ввод номера вручную
-        phoneInput.oninput = function() {
-            let d = this.value.replace(/\D/g, '');
+        phoneInput.oninput = function (e) {
+            // Браузер любит подставлять в поле сохранённый номер телефона
+            // и шлёт при этом input — из-за этого номер приходил уже
+            // введённым (и подсказка сразу красная «не хватает цифр»).
+            // Такой ввод игнорируем: number считается введённым только
+            // когда его набрали руками или вставили.
+            if (this.matches(':autofill') || (e && e.inputType === 'insertReplacementText')) {
+                this.value = '';
+                window._addDigits = '';
+                addPaint();
+                return;
+            }
+            const raw = this.value;
+            const c0 = window._addCountry;
+            const rawDigits = raw.replace(/\D/g, '');
+            // Набрали ПОЛНЫЙ номер с кодом страны («+7 999…», «8 912…»,
+            // «+375…») — отделяем код сами, ровно как при вставке.
+            // Иначе «+7 999 123 45 67» превращался в +77999123456.
+            if (rawDigits && (/^\s*\+/.test(raw) || rawDigits.length > c0.maxLen)) {
+                const p = addParsePhone(raw);
+                if (p && p.digits) {
+                    const pc = p.country;
+                    if (pc !== c0) addSetCountry(pc, true);
+                    let d = p.digits;
+                    if (pc.dial === '+7' && d.length === pc.maxLen + 1 && d[0] === '8') d = d.slice(1);
+                    if (d.length > pc.maxLen) d = d.slice(0, pc.maxLen);
+                    window._addDigits = d;
+                    this.value = addFormatDigits(d, pc);
+                    addPaint();
+                    return;
+                }
+            }
+            let d = rawDigits;
             const c = window._addCountry;
             if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
             window._addDigits = d;
@@ -336,6 +404,7 @@ function openAddAccountModal() {
             if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
             window._addDigits = d;
             phoneInput.value = addFormatDigits(d, c);
+            touched = true;
             addPaint();
             ddOpen(false);
             if (!silent) showToast(`Код ${c.dial} отделён, номер вставлен`);
@@ -549,15 +618,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
     function addNewAccount() {
-    const country = window._addCountry || COUNTRIES[0];
-    const digits = window._addDigits || '';
-    const phone = country.dial + digits;
     const authType = window._addAuthType || 'password';
 
-    if (!phone || phone === country.dial) {
-        alert('Введите номер телефона');
-        return;
-    }
+    const ok = addCheckPhone(null);
+    if (!ok) return;
+    const phone = ok.phone;
 
     const payload = { phone: phone, auth_type: authType };
 
@@ -625,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function addCountryOutside(e) {
     if (!e.target.closest('.aa-cc-wrap')) {
         const dd = document.getElementById('addCountryDD');
-        dd?.classList.remove('open');
+        dd?.classList.remove('open', 'open-up');
         document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
     }
 }
@@ -633,9 +698,28 @@ function addCountryOutside(e) {
 function addCountryEsc(e) {
     if (e.key === 'Escape') {
         const dd = document.getElementById('addCountryDD');
-        dd?.classList.remove('open');
+        dd?.classList.remove('open', 'open-up');
         document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
     }
+}
+
+/* Проверка номера перед отправкой. Раньше проверялось только «не пусто»,
+   поэтому можно было отправить 3 цифры и получить ошибку от сервера. */
+function addCheckPhone(statusEl) {
+    const c = window._addCountry || COUNTRIES[0];
+    const d = window._addDigits || '';
+    const fail = msg => {
+        if (statusEl) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = msg;
+        }
+        showToast(msg);
+        return null;
+    };
+    if (!d) return fail('Сначала введите номер телефона');
+    if (d.length < c.minLen) return fail(`Не хватает цифр: нужно ${c.minLen}, введено ${d.length}`);
+    if (d.length > c.maxLen) return fail(`Лишние цифры: максимум ${c.maxLen}`);
+    return { country: c, digits: d, phone: c.dial + d };
 }
 
 // Убираем слушатели при закрытии модалки
@@ -659,6 +743,9 @@ function setAddMode(mode) {
     const code = document.getElementById('addPaneCode');
     const btnPwd = document.getElementById('addModePwd');
     const btnCode = document.getElementById('addModeCode');
+    // На телефоне не фокусируем поля сами: клавиатура вылезает и
+    // закрывает половину формы (и перекидывает список стран).
+    const touch = (typeof isMobile === 'function') ? isMobile() : window.innerWidth <= 768;
 
     if (!pwd || !code) return;
     if (mode === 'code') {
@@ -666,29 +753,24 @@ function setAddMode(mode) {
         code.style.display = '';
         btnPwd.classList.remove('on');
         btnCode.classList.add('on');
-        setTimeout(() => document.getElementById('addCode')?.focus(), 50);
+        if (!touch) setTimeout(() => document.getElementById('addCode')?.focus(), 50);
     } else {
         code.style.display = 'none';
         pwd.style.display = '';
         btnCode.classList.remove('on');
         btnPwd.classList.add('on');
-        setTimeout(() => document.getElementById('addPassword')?.focus(), 50);
+        if (!touch) setTimeout(() => document.getElementById('addPassword')?.focus(), 50);
     }
 }
 
 // ===== Отправка кода для добавления аккаунта =====
 function sendAddCode() {
-    const country = window._addCountry || COUNTRIES[0];
-    const digits = window._addDigits || '';
-    const phone = country.dial + digits;
     const status = document.getElementById('addCodeStatus');
     const btn = document.getElementById('addSendCodeBtn');
 
-    if (!phone || phone === country.dial) {
-        status.style.color = '#ef4444';
-        status.textContent = 'Сначала введите номер телефона';
-        return;
-    }
+    const ok = addCheckPhone(status);
+    if (!ok) return;
+    const phone = ok.phone;
 
     btn.disabled = true;
     btn.textContent = 'Отправка...';
