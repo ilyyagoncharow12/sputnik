@@ -101,10 +101,6 @@ function addParsePhone(raw) {
     return { country: cur, digits: digits };
 }
 
-function addFullPhone() {
-    const c = window._addCountry || COUNTRIES[0];
-    return c.dial + (window._addDigits || '');
-}
 
 /* Перерисовывает превью полного номера и счётчик цифр. */
 function addPaint() {
@@ -136,66 +132,29 @@ function addPaint() {
     hint.style.color = '#34c759';
 }
 
-function addSetCountry(c, keepDigits) {
-    window._addCountry = c;
-    const f = document.getElementById('addSelFlag');
-    const k = document.getElementById('addSelCode');
-    if (f) f.textContent = c.flag;
-    if (k) k.textContent = c.dial;
-    if (!keepDigits) {
-        const inp = document.getElementById('addPhone');
-        if (inp) inp.value = '';
-        window._addDigits = '';
-    }
-    addPaint();
-}
 
-// Разметка списка стран
-function addCountriesHtml() {
-    return COUNTRIES.map(c => `
-        <div class="add-country-item" data-code="${c.code}" data-dial="${c.dial}" data-min="${c.minLen}" data-max="${c.maxLen}">
-            <span class="add-cflag">${c.flag}</span>
-            <span class="add-cname">${c.name}</span>
-            <span class="add-ccode">${c.dial}</span>
-        </div>
-    `).join('');
-}
 
 // Общая часть: выбор страны + поле номера
-function addPhoneBlock(mobile) {
-    const def = COUNTRIES[0];
+function addPhoneBlock() {
+    const def = window._addCountry || COUNTRIES[0];
+    const opts = COUNTRIES.map((c, i) =>
+        `<option value="${i}" ${c === def ? 'selected' : ''}>${c.flag} ${c.name} (${c.dial})</option>`).join('');
     return `
         <div class="profile-field">
-            <label>${mobile ? 'Страна' : 'Код страны'}</label>
-            <div class="aa-cc-wrap">
-                <button type="button" id="addCountryBtn" class="aa-cc-btn" aria-haspopup="listbox" aria-expanded="false">
-                    <span id="addSelFlag">${def.flag}</span>
-                    <span id="addSelCode">${def.dial}</span>
-                    <i class="fas fa-chevron-down aa-cc-caret"></i>
-                </button>
-                <div id="addCountryDD" class="aa-cc-dd" role="listbox">
-                    <div class="aa-cc-search">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="addCountrySearch" placeholder="Страна или код" oninput="filterAddCountries(this.value)">
-                    </div>
-                    <div id="addCountryList" class="aa-cc-list">${addCountriesHtml()}</div>
-                </div>
-            </div>
+            <label>Страна</label>
+            <select id="addCountrySel" class="modal-input" autocomplete="off">
+                ${opts}
+            </select>
         </div>
         <div class="profile-field">
-            <label>${mobile ? 'Номер телефона' : 'Номер телефона'}</label>
-            <input type="text" id="addPhone" class="modal-input aa-phone"
-                   placeholder="${def.minLen <= 9 ? '00 000 00 00' : '000 000 00 00'}"
+            <label>Номер телефона</label>
+            <input type="text" id="addPhone" class="modal-input" placeholder="000 000 00 00"
                    inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false">
             <div class="aa-full-row">
                 <span class="aa-full-label">Получится:</span>
                 <span class="aa-full-num" id="addPhoneFull">${def.dial}</span>
             </div>
             <div class="aa-hint" id="addPhoneHint"></div>
-            <button type="button" class="aa-autofill" id="addAutofillBtn">
-                <i class="fas fa-wand-magic-sparkles"></i>
-                <span>Вставить номер и отделить код страны</span>
-            </button>
         </div>`;
 }
 
@@ -224,151 +183,63 @@ function addAuthBlock() {
         </div>`;
 }
 
-// ===== Открыть модалку добавления аккаунта =====
-// Два разных варианта: aa--pc (две колонки) и aa--mobile (нижний лист).
+// ===== Модалка «Добавить аккаунт» =====
+// Стандартная showModal (та же карточка, что у всех окон приложения):
+// одна колонка — страна, номер, вход. Свой выпадающий список стран и
+// отдельные раскладки для ПК/телефона убраны: из-за них окно вылезало
+// за экран, а карточка оставалась без фона.
 function openAddAccountModal() {
     closeBurgerMenu();
 
-    const mobile = (typeof isMobile === 'function') ? isMobile() : window.innerWidth <= 768;
-
-    let html;
-    if (mobile) {
-        html = `
-        <div class="aa aa--mobile">
-            <div class="aa-mhead">
-                <button class="aa-mclose" onclick="closeModal('tempModal')" aria-label="Закрыть">
-                    <i class="fas fa-xmark"></i>
-                </button>
-                <div class="aa-mhead-txt">
-                    <div class="aa-mhead-title">Добавить аккаунт</div>
-                    <div class="aa-mhead-sub">Второй номер в Спутнике</div>
-                </div>
-            </div>
-            <div class="aa-mbody">
-                ${addPhoneBlock(true)}
-                ${addAuthBlock()}
-            </div>
-            <div class="aa-mfoot">
-                <button class="aa-btn aa-btn-ghost" onclick="closeModal('tempModal')">Отмена</button>
-                <button class="aa-btn aa-btn-primary" onclick="addNewAccount()">Войти</button>
-            </div>
-        </div>`;
-    } else {
-        html = `
-        <div class="aa aa--pc">
-            <div class="aa-phead">
-                <div class="aa-phead-ico"><i class="fas fa-user-plus"></i></div>
-                <div class="aa-phead-txt">
-                    <div class="aa-phead-title">Добавить аккаунт</div>
-                    <div class="aa-phead-sub">Войдите в Спутник под другим номером — переключайтесь без входа заново</div>
-                </div>
-            </div>
-            <div class="aa-pgrid">
-                <section class="aa-pcol">
-                    <div class="aa-col-title"><span class="aa-dot"></span>Номер телефона</div>
-                    ${addPhoneBlock(false)}
-                </section>
-                <section class="aa-pcol">
-                    <div class="aa-col-title"><span class="aa-dot aa-dot-2"></span>Вход в аккаунт</div>
-                    ${addAuthBlock()}
-                </section>
-            </div>
-            <div class="aa-pfoot">
-                <button class="aa-btn aa-btn-ghost" onclick="closeModal('tempModal')">Отмена</button>
-                <button class="aa-btn aa-btn-primary" onclick="addNewAccount()">Войти</button>
-            </div>
-        </div>`;
-    }
-
-    const body = document.getElementById('tempModalBody');
-    if (body) body.innerHTML = html;
-    const modal = document.getElementById('tempModal');
-    // Свой контейнер + ширина — обычный max-width 420 тут не подходит
-    if (modal) modal.classList.add('addacct-wide');
-    openModal('tempModal');
-
-    // Состояние
     window._addCountry = COUNTRIES[0];
     window._addDigits = '';
     window._addAuthType = 'password';
 
-    setTimeout(() => {
-        const phoneInput = document.getElementById('addPhone');
-        if (!phoneInput) return;
+    showModal('Добавить аккаунт', `
+        <div class="addacct">
+            <div class="addacct-hint">Второй номер в Спутнике — переключайтесь без входа заново</div>
+            ${addPhoneBlock()}
+            ${addAuthBlock()}
+            <div class="addacct-actions">
+                <button type="button" class="aa-btn aa-btn-primary" onclick="addNewAccount()">Войти</button>
+            </div>
+        </div>`);
 
-        const dd = document.getElementById('addCountryDD');
-        const ddOpen = on => {
-            if (!dd) return;
-            dd.classList.toggle('open', on);
-            document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', on ? 'true' : 'false');
-            if (!on) { dd.classList.remove('open-up'); dd.style.removeProperty('--dd-h'); return; }
-            const s = document.getElementById('addCountrySearch');
-            if (s) { s.value = ''; if (!mobile) s.focus(); }
-            filterAddCountries('');
-            // Список из 45 стран не влезает в поле под кнопкой: считаем
-            // реальное свободное место (список позиционирован, поэтому
-            // не выдавливает форму) и режем по высоте, а при нехватке
-            // снизу раскрываем вверх.
-            const wr = dd.parentElement.getBoundingClientRect();
-            const below = window.innerHeight - (wr.bottom + 8);
-            const above = wr.top - 8;
-            const up = below < 190 && above > below;
-            dd.classList.toggle('open-up', up);
-            const avail = Math.max(150, Math.min(window.innerHeight * 0.46, (up ? above : below) - 8));
-            dd.style.setProperty('--dd-h', Math.round(avail) + 'px');
-        };
-
-        // Поле не должно приходить заполненным: браузер подставляет в
-        // type=tel сохранённый номер, и на пустой форме сразу горело
-        // красное «не хватает цифр». Чистим и при открытии, и на фокусе
-        // (автозаполнение может прийти уже после монтирования).
-        let touched = false;
-        phoneInput.addEventListener('input', () => { touched = true; });
-        phoneInput.addEventListener('focus', () => {
-            if (touched) { phoneInput.select?.(); return; }
-            phoneInput.value = '';
-            window._addDigits = '';
+    const sel = document.getElementById('addCountrySel');
+    if (sel) {
+        sel.addEventListener('change', () => {
+            window._addCountry = COUNTRIES[Number(sel.value)] || COUNTRIES[0];
             addPaint();
         });
-        phoneInput.value = '';
-        window._addDigits = '';
-        // Пароль/код от прошлого открытия тоже не должны оставаться.
-        // Браузер подставляет сохранённый пароль ПОСЛЕ монтирования,
-        // поэтому чистим и при фокусе (если пользователь не вводил).
-        const pw = document.getElementById('addPassword');
-        const cd = document.getElementById('addCode');
-        if (pw) {
-            pw.value = '';
-            pw.addEventListener('focus', () => {
-                if (pw.value) { pw.value = ''; pw.select?.(); }
-            });
-        }
-        if (cd) cd.value = '';
+    }
 
-        // Ввод номера вручную
-        phoneInput.oninput = function (e) {
-            // Браузер любит подставлять в поле сохранённый номер телефона
-            // и шлёт при этом input — из-за этого номер приходил уже
-            // введённым (и подсказка сразу красная «не хватает цифр»).
-            // Такой ввод игнорируем: number считается введённым только
-            // когда его набрали руками или вставили.
-            if (this.matches(':autofill') || (e && e.inputType === 'insertReplacementText')) {
+    const phoneInput = document.getElementById('addPhone');
+    if (phoneInput) {
+        // Браузер подставляет сохранённый номер — чистим, иначе пустая
+        // форма сразу показывает «не хватает цифр».
+        phoneInput.value = '';
+        phoneInput.addEventListener('focus', function () { this.select?.(); });
+        phoneInput.addEventListener('input', function (e) {
+            if (this.matches(':autofill') || e.inputType === 'insertReplacementText') {
                 this.value = '';
                 window._addDigits = '';
                 addPaint();
                 return;
             }
             const raw = this.value;
-            const c0 = window._addCountry;
+            const c = window._addCountry || COUNTRIES[0];
             const rawDigits = raw.replace(/\D/g, '');
-            // Набрали ПОЛНЫЙ номер с кодом страны («+7 999…», «8 912…»,
-            // «+375…») — отделяем код сами, ровно как при вставке.
-            // Иначе «+7 999 123 45 67» превращался в +77999123456.
-            if (rawDigits && (/^\s*\+/.test(raw) || rawDigits.length > c0.maxLen)) {
+
+            // Вставлен полный номер с кодом страны — отделяем код сами.
+            if (rawDigits && (/^\s*\+/.test(raw) || rawDigits.length > c.maxLen)) {
                 const p = addParsePhone(raw);
                 if (p && p.digits) {
                     const pc = p.country;
-                    if (pc !== c0) addSetCountry(pc, true);
+                    if (pc !== c) {
+                        window._addCountry = pc;
+                        const s2 = document.getElementById('addCountrySel');
+                        if (s2) s2.value = String(COUNTRIES.indexOf(pc));
+                    }
                     let d = p.digits;
                     if (pc.dial === '+7' && d.length === pc.maxLen + 1 && d[0] === '8') d = d.slice(1);
                     if (d.length > pc.maxLen) d = d.slice(0, pc.maxLen);
@@ -378,105 +249,26 @@ function openAddAccountModal() {
                     return;
                 }
             }
+
             let d = rawDigits;
-            const c = window._addCountry;
             if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
             window._addDigits = d;
             this.value = addFormatDigits(d, c);
             addPaint();
-        };
-
-        // Вставка: отделяем код страны сами
-        const applyPasted = (raw, silent) => {
-            const parsed = addParsePhone(raw);
-            if (!parsed) { if (!silent) showToast('Не похоже на номер телефона'); return; }
-            if (parsed.digits === null) {
-                if (!silent) showToast('Не удалось определить код страны — выберите его вручную');
-                return;
-            }
-            const c = parsed.country;
-            window._addCountry = c;
-            document.getElementById('addSelFlag').textContent = c.flag;
-            document.getElementById('addSelCode').textContent = c.dial;
-            let d = parsed.digits;
-            // 8 xxx xx xx xx — российский формат без +7
-            if (c.dial === '+7' && d.length === c.maxLen + 1 && d[0] === '8') d = d.slice(1);
-            if (d.length > c.maxLen) d = d.slice(0, c.maxLen);
-            window._addDigits = d;
-            phoneInput.value = addFormatDigits(d, c);
-            touched = true;
-            addPaint();
-            ddOpen(false);
-            if (!silent) showToast(`Код ${c.dial} отделён, номер вставлен`);
-        };
-
-        phoneInput.addEventListener('paste', e => {
-            e.preventDefault();
-            const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-            applyPasted(text, false);
         });
-        phoneInput.addEventListener('focus', () => { if (!phoneInput.value) phoneInput.select?.(); });
+    }
 
-        // Кнопка «вставить номер»
-        document.getElementById('addAutofillBtn')?.addEventListener('click', async () => {
-            const typed = phoneInput.value.trim();
-            if (typed) { applyPasted(typed, false); return; }
-            try {
-                const txt = await navigator.clipboard.readText();
-                if (txt && txt.trim()) { applyPasted(txt.trim(), false); }
-                else showToast('Буфер обмена пуст — вставьте номер в поле');
-            } catch (e) {
-                showToast('Вставьте номер в поле — я отделю код страны');
-                phoneInput.focus();
-            }
-        });
+    const pw = document.getElementById('addPassword');
+    if (pw) {
+        pw.value = '';
+        pw.addEventListener('focus', function () { if (this.value) { this.value = ''; this.select?.(); } });
+    }
+    const cd = document.getElementById('addCode');
+    if (cd) cd.value = '';
 
-        // Выбор страны
-        document.querySelectorAll('.add-country-item').forEach(el => {
-            el.onclick = function() {
-                const c = COUNTRIES.find(x => x.code === this.dataset.code);
-                if (!c) return;
-                addSetCountry(c, false);
-                ddOpen(false);
-                phoneInput.focus();
-            };
-        });
-
-        // Открытие списка стран
-        document.getElementById('addCountryBtn')?.addEventListener('click', e => {
-            e.stopPropagation();
-            ddOpen(!dd?.classList.contains('open'));
-        });
-
-        // Клик снаружи закрывает список стран. Слушатели снимаются
-        // предыдущего открытия, иначе они копятся при каждом показе.
-        document.removeEventListener('click', addCountryOutside);
-        document.removeEventListener('keydown', addCountryEsc);
-        document.addEventListener('click', addCountryOutside);
-        document.addEventListener('keydown', addCountryEsc);
-
-        addPaint();
-        setAddMode('password');
-    }, 60);
+    setAddMode('password');
 }
 
-// Фильтрация стран в модалке добавления аккаунта
-function filterAddCountries(query) {
-    const q = (query || '').toLowerCase().trim();
-    document.querySelectorAll('.add-country-item').forEach(el => {
-        const name = (el.querySelector('.add-cname')?.textContent || '').toLowerCase();
-        const dial = el.dataset.dial || '';
-        const code = el.dataset.code || '';
-        const match = !q || name.includes(q) || dial.includes(q) || code.toLowerCase().includes(q);
-        el.style.display = match ? '' : 'none';
-    });
-}
-
-
-
-
-
-// Переключение на другой аккаунт
 function switchToAccount(userId) {
     // Если уже на этом аккаунте — просто закрываем меню
     if (userId == currentUser.id) {
@@ -578,36 +370,27 @@ document.addEventListener('DOMContentLoaded', function() {
         const messagesArea = document.getElementById('messagesArea');
         const messageInput = document.getElementById('messageInput');
 
-        function adjustForKeyboard() {
+        function adjustKb() {
             const vh = window.visualViewport.height;
-            const fullHeight = window.innerHeight;
-            const keyboardHeight = fullHeight - vh;
-
+            const keyboardHeight = window.innerHeight - vh;
             if (keyboardHeight > 100) {
-                // Клавиатура открыта
                 document.documentElement.style.setProperty('--keyboard-height', keyboardHeight + 'px');
                 document.body.style.height = vh + 'px';
                 document.documentElement.style.height = vh + 'px';
-
-                // Скролл к последнему сообщению
                 if (messagesArea) {
-                    setTimeout(() => {
-                        messagesArea.scrollTop = messagesArea.scrollHeight;
-                    }, 100);
+                    setTimeout(() => { messagesArea.scrollTop = messagesArea.scrollHeight; }, 100);
                 }
             } else {
-                // Клавиатура закрыта
                 document.documentElement.style.removeProperty('--keyboard-height');
                 document.body.style.height = '';
                 document.documentElement.style.height = '';
             }
         }
 
-        window.visualViewport.addEventListener('resize', adjustForKeyboard);
+        window.visualViewport.addEventListener('resize', adjustKb);
 
-        // При фокусе на input — скролл вниз
         if (messageInput) {
-            messageInput.addEventListener('focus', function() {
+            messageInput.addEventListener('focus', function () {
                 setTimeout(() => {
                     if (messagesArea) messagesArea.scrollTop = messagesArea.scrollHeight;
                 }, 300);
@@ -616,95 +399,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-
-    function addNewAccount() {
-    const authType = window._addAuthType || 'password';
-
-    const ok = addCheckPhone(null);
-    if (!ok) return;
-    const phone = ok.phone;
-
-    const payload = { phone: phone, auth_type: authType };
-
-    if (authType === 'code') {
-        const code = document.getElementById('addCode').value.trim();
-        if (code.length !== 5) {
-            alert('Введите 5-значный код');
-            return;
-        }
-        payload.code = code;
-    } else {
-        const password = document.getElementById('addPassword').value;
-        if (!password) {
-            alert('Введите пароль');
-            return;
-        }
-        payload.password = password;
-    }
-
-    fetch('/api/auth/add_account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.twofa_required) {
-            // У добавляемого аккаунта включён облачный пароль
-            const pw = prompt('Облачный пароль для ' + (data.phone || phone) +
-                (data.hint ? '\nПодсказка: ' + data.hint : ''));
-            if (!pw) return;
-            payload.cloud_password = pw;
-            return fetch('/api/auth/add_account', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(r2 => r2.json())
-            .then(d2 => {
-                if (d2.success) {
-                    closeModal('tempModal');
-                    alert('✅ Аккаунт добавлен!');
-                    location.reload();
-                } else {
-                    alert('❌ Ошибка: ' + (d2.error || 'Неверный облачный пароль'));
-                }
-            });
-        }
-        if (data.success) {
-            closeModal('tempModal');
-            alert('✅ Аккаунт добавлен!');
-            location.reload();
-        } else {
-            alert('❌ Ошибка: ' + (data.error || 'Неизвестная ошибка'));
-        }
-    })
-    .catch(error => {
-        console.error('💥 Ошибка запроса:', error);
-        alert('Ошибка соединения с сервером: ' + error.message);
-    });
-}
-
-/* Закрытие списка стран по клику мимо и по Escape.
-   Именованные функции, чтобы снимать предыдущие слушатели. */
-function addCountryOutside(e) {
-    if (!e.target.closest('.aa-cc-wrap')) {
-        const dd = document.getElementById('addCountryDD');
-        dd?.classList.remove('open', 'open-up');
-        document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
-    }
-}
-
-function addCountryEsc(e) {
-    if (e.key === 'Escape') {
-        const dd = document.getElementById('addCountryDD');
-        dd?.classList.remove('open', 'open-up');
-        document.getElementById('addCountryBtn')?.setAttribute('aria-expanded', 'false');
-    }
-}
-
-/* Проверка номера перед отправкой. Раньше проверялось только «не пусто»,
-   поэтому можно было отправить 3 цифры и получить ошибку от сервера. */
+// Проверка номера перед отправкой
 function addCheckPhone(statusEl) {
     const c = window._addCountry || COUNTRIES[0];
     const d = window._addDigits || '';
@@ -722,18 +417,72 @@ function addCheckPhone(statusEl) {
     return { country: c, digits: d, phone: c.dial + d };
 }
 
-// Убираем слушатели при закрытии модалки
-const _origCloseModal = typeof closeModal === 'function' ? closeModal : null;
-if (_origCloseModal && !window.__addacctClosePatched) {
-    window.__addacctClosePatched = true;
-    window.closeModal = function (id) {
-        if (id === 'tempModal') {
-            document.removeEventListener('click', addCountryOutside);
-            document.removeEventListener('keydown', addCountryEsc);
-            document.getElementById('tempModal')?.classList.remove('addacct-wide');
+// ===== Добавление аккаунта =====
+function addNewAccount() {
+    const authType = window._addAuthType || 'password';
+
+    const ok = addCheckPhone(null);
+    if (!ok) return;
+    const phone = ok.phone;
+
+    const payload = { phone: phone, auth_type: authType };
+
+    if (authType === 'code') {
+        const code = document.getElementById('addCode').value.trim();
+        if (code.length !== 5) {
+            showToast('Введите 5-значный код');
+            return;
         }
-        return _origCloseModal.apply(this, arguments);
-    };
+        payload.code = code;
+    } else {
+        const password = document.getElementById('addPassword').value;
+        if (!password) {
+            showToast('Введите пароль');
+            return;
+        }
+        payload.password = password;
+    }
+
+    fetch('/api/auth/add_account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.twofa_required) {
+            const pw = prompt('Облачный пароль для ' + (data.phone || phone) +
+                (data.hint ? '\nПодсказка: ' + data.hint : ''));
+            if (!pw) return;
+            payload.cloud_password = pw;
+            return fetch('/api/auth/add_account', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(r2 => r2.json())
+            .then(d2 => {
+                if (d2.success) {
+                    closeModal('tempModal');
+                    showToast('✅ Аккаунт добавлен');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast('❌ ' + (d2.error || 'Неверный облачный пароль'));
+                }
+            });
+        }
+        if (data.success) {
+            closeModal('tempModal');
+            showToast('✅ Аккаунт добавлен');
+            setTimeout(() => location.reload(), 800);
+        } else {
+            showToast('❌ ' + (data.error || 'Неизвестная ошибка'));
+        }
+    })
+    .catch(error => {
+        console.error('💥 Ошибка запроса:', error);
+        showToast('Ошибка соединения');
+    });
 }
 
 // ===== Переключение «пароль / код» в добавлении аккаунта =====

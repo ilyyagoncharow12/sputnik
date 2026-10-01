@@ -1340,8 +1340,7 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
 .pbc-note i { color: #ffc43d; margin-top: 2px; }
 .pbc-note b { color: var(--text-primary); }
 
-/* Базовые размеры модалки вынесены из inline-стилей, иначе они
-   перебивают правило .addacct-wide (inline всегда выигрывает). */
+/* Базовые размеры модалки (вне свои стили, чтобы inline не перебивали) */
 #tempModalBody {
     width: 90%;
     max-width: 420px;
@@ -1351,387 +1350,200 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
     animation: modalSlideIn 0.3s ease;
 }
 
-/* Модалка «Добавить аккаунт» шире обычной — две колонки на ПК */
-#tempModal.addacct-wide #tempModalBody {
-    max-width: 640px;
-    transition: max-width .2s ease, max-height .2s ease;
-}
-
-@media (max-width: 768px) {
-    /* Лист на телефоне: во всю ширину экрана, без отрицательных
-       отступов (из-за них содержимое было шире контейнера на 25px
-       и уезжало под скруглённый край). */
-    #tempModal.addacct-wide { padding: 0; align-items: flex-end; }
-    #tempModal.addacct-wide #tempModalBody {
-        max-width: 100%;
-        width: 100%;
-        max-height: 92vh;
-        border-radius: 22px 22px 0 0;
-    }
-}
-
 /* =====================================================================
-   8b. МОДАЛКА «ДОБАВИТЬ АККАУНТ» — два варианта: ПК и телефон
+   8b. МОДАЛКА «ДОБАВИТЬ АККАУНТ» — простая форма (ПК и телефон)
    ===================================================================== */
 
-.aa { color: #fff; }
+.addacct { color: #fff; }
 
-.aa .profile-field { margin-bottom: 16px; }
-.aa .profile-field label { display: block; font-size: 12px; color: #8a8a92; margin-bottom: 7px; font-weight: 600; }
+/* Окно добавления аккаунта на телефоне чуть выше обычного — иначе
+   форма не помещается и приходится прокручивать до кнопки. */
+#tempModal:has(.addacct) #tempModalBody { max-height: 92vh; }
 
-/* --- Код страны --- */
-.aa-cc-wrap { position: relative; }
+.addacct-hint {
+    font-size: 13px;
+    line-height: 1.45;
+    color: #8a8a92;
+    margin-bottom: 18px;
+}
 
-.aa-cc-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    height: 48px;
-    padding: 0 14px;
-    background: #232323;
-    border: 1.5px solid #2f2f33;
-    border-radius: 12px;
-    color: #fff;
-    font-size: 16px;
-    font-family: inherit;
+.addacct .profile-field { margin-bottom: 16px; }
+.addacct .profile-field label {
+    display: block;
+    font-size: 12px;
+    color: #8a8a92;
+    margin-bottom: 7px;
     font-weight: 600;
-    cursor: pointer;
-    transition: border-color .2s, background .2s;
 }
 
-.aa-cc-btn:hover { border-color: #3a3a42; }
-.aa-cc-btn:focus-visible { outline: 2px solid #2ea6ff; outline-offset: 2px; }
-#addSelCode { font-variant-numeric: tabular-nums; }
-.aa-cc-caret { margin-left: auto; font-size: 12px; color: #6a6a72; transition: transform .2s; }
-.aa-cc-wrap:has(.aa-cc-dd.open) .aa-cc-caret { transform: rotate(180deg); }
-
-.aa-cc-dd {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    right: 0;
-    background: #1c1c1e;
-    border: 1px solid #2c2c2e;
-    border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 16px 34px rgba(0, 0, 0, .55);
-}
-
-.aa-cc-dd.open { display: block; }
-
-/* Если снизу мало места (список из 45 стран не влезает), раскрываем
-   вверх — иначе он просто обрезался краем экрана. */
-.aa-cc-dd.open-up {
-    top: auto;
-    bottom: calc(100% + 8px);
-    box-shadow: 0 -12px 28px rgba(0, 0, 0, .55);
-}
-
-.aa-cc-dd.open-up ~ * { z-index: 2; }
-
-.aa-cc-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-bottom: 1px solid #2c2c2e;
-}
-
-.aa-cc-search i { color: #6a6a72; font-size: 13px; }
-
-.aa-cc-search input {
-    flex: 1;
-    min-width: 0;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: #fff;
-    font-size: 15px;
-    font-family: inherit;
-}
-
-.aa-cc-list { max-height: min(46vh, var(--dd-h, 300px)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-
-@media (max-width: 768px) {
-    .add-country-item { padding: 13px 14px; }
-}
-
-.add-country-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background .15s;
-}
-
-.add-country-item:hover { background: #232323; }
-.add-cflag { font-size: 20px; }
-.add-cname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.add-ccode { color: #8a8a92; font-variant-numeric: tabular-nums; }
-
-/* --- Поле номера --- */
-.aa-phone {
-    width: 100%;
-    height: 48px;
+/* --- Страна: нативный select, не рисуем свой выпадающий список --- */
+.addacct select#addCountrySel {
+    appearance: none;
+    -webkit-appearance: none;
     background: #232323;
-    border: 1.5px solid #2f2f33;
-    border-radius: 12px;
-    padding: 0 14px;
-    color: #fff;
-    font-size: 16px;
-    font-family: inherit;
-    letter-spacing: .4px;
-    outline: none;
-    transition: border-color .2s;
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%238a8a92' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 11px;
+    padding: 0 38px 0 14px;
+    max-height: 220px;
 }
 
-.aa-phone:focus { border-color: #2ea6ff; }
-.aa-phone::placeholder { color: #5a5a62; }
+.addacct select#addCountrySel option {
+    background: #232323;
+    color: #fff;
+}
 
+.addacct select#addCountrySel:focus {
+    border-color: #0a84ff;
+}
+
+/* --- Полный номер --- */
 .aa-full-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-top: 10px;
-    padding: 10px 12px;
-    background: #1c1c1e;
-    border: 1px dashed #2c2c2e;
-    border-radius: 10px;
+    margin-top: 9px;
+    font-size: 12.5px;
 }
 
-.aa-full-label { font-size: 11px; color: #6a6a72; flex-shrink: 0; }
-.aa-full-num { font-size: 15px; font-weight: 700; color: #34c759; font-variant-numeric: tabular-nums; word-break: break-all; }
+.aa-full-label { color: #8a8a92; }
 
-.aa-hint { font-size: 12px; color: #8a8a92; margin-top: 7px; line-height: 1.4; }
-
-.aa-autofill {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 44px;
-    margin-top: 11px;
-    padding: 10px 14px;
-    background: rgba(46, 166, 255, .1);
-    border: 1px solid rgba(46, 166, 255, .3);
-    border-radius: 12px;
-    color: #2ea6ff;
-    font-size: 13px;
+.aa-full-num {
+    color: #fff;
     font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background .18s;
+    letter-spacing: .2px;
+    word-break: break-all;
 }
 
-.aa-autofill:hover { background: rgba(46, 166, 255, .18); }
-.aa-autofill:active { transform: scale(.98); }
+.aa-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+}
 
-/* --- Переключатель пароль/код --- */
+/* --- Переключатель пароль / код --- */
 .aa-seg {
     display: flex;
-    gap: 4px;
-    background: #232323;
+    gap: 6px;
+    background: #1c1c1e;
+    border-radius: 11px;
     padding: 4px;
-    border-radius: 12px;
 }
 
 .aa-seg-btn {
     flex: 1;
-    min-height: 44px;
     padding: 9px 8px;
-    background: none;
     border: none;
-    border-radius: 9px;
+    border-radius: 8px;
+    background: transparent;
     color: #8a8a92;
     font-size: 13px;
     font-weight: 600;
-    font-family: inherit;
     cursor: pointer;
-    transition: background .2s, color .2s;
+    transition: background .15s, color .15s;
 }
 
-.aa-seg-btn.on { background: #3a3a42; color: #fff; }
-
-.aa .modal-input#addPassword {
-    width: 100%;
-    height: 48px;
-    background: #232323;
-    border: 1.5px solid #2f2f33;
-    border-radius: 12px;
-    padding: 0 14px;
+.aa-seg-btn.on {
+    background: #2f2f33;
     color: #fff;
-    font-size: 16px;
-    font-family: inherit;
-    outline: none;
 }
 
-.aa .modal-input#addPassword:focus { border-color: #2ea6ff; }
-
-.aa-code-row { display: flex; gap: 8px; align-items: center; }
+.aa-code-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
 
 .aa-code {
     flex: 1;
     min-width: 0;
-    height: 48px;
-    background: #232323;
-    border: 1.5px solid #2f2f33;
-    border-radius: 12px;
-    padding: 0 14px;
-    color: #fff;
-    font-size: 20px;
-    font-weight: 700;
     text-align: center;
-    letter-spacing: 8px;
-    font-family: inherit;
-    outline: none;
+    letter-spacing: 3px;
+    font-size: 17px;
 }
-
-.aa-code:focus { border-color: #2ea6ff; }
 
 .aa-code-send {
-    flex-shrink: 0;
-    height: 48px;
-    padding: 0 16px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border: none;
+    flex: 0 0 auto;
+    padding: 0 14px;
+    border: 1.5px solid #2f2f33;
     border-radius: 12px;
-    color: #fff;
+    background: #232323;
+    color: #0a84ff;
     font-size: 13px;
-    font-weight: 700;
-    font-family: inherit;
+    font-weight: 600;
     cursor: pointer;
+    white-space: nowrap;
 }
 
-.aa-code-send:disabled { opacity: .6; cursor: default; }
-.aa-code-status { font-size: 12px; color: #8a8a92; margin-top: 8px; line-height: 1.4; }
+.aa-code-send:disabled { opacity: .55; cursor: default; }
+
+.aa-code-status {
+    margin-top: 7px;
+    font-size: 12px;
+    line-height: 1.4;
+}
 
 /* --- Кнопки --- */
+.addacct-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
 .aa-btn {
-    min-height: 46px;
-    padding: 12px 26px;
+    flex: 1;
+    padding: 13px 14px;
     border-radius: 12px;
     font-size: 15px;
     font-weight: 600;
-    font-family: inherit;
     cursor: pointer;
     border: none;
-    transition: transform .12s, background .18s;
+    transition: filter .15s, background .15s;
 }
 
-.aa-btn:active { transform: scale(.97); }
-.aa-btn-ghost { background: #232323; color: #8a8a92; }
-.aa-btn-ghost:hover { background: #2a2a2e; color: #fff; }
-.aa-btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+.aa-btn:active { filter: brightness(.9); }
 
-/* --- Вариант для ПК: две колонки --- */
-.aa--pc { padding: 4px 0 0; }
-
-.aa-phead { display: flex; align-items: center; gap: 13px; margin-bottom: 20px; }
-
-.aa-phead-ico {
-    width: 46px;
-    height: 46px;
-    min-width: 46px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 19px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, .25), rgba(118, 75, 162, .25));
-    color: #8e9bff;
-}
-
-.aa-phead-title { font-size: 19px; font-weight: 700; }
-.aa-phead-sub { font-size: 12px; color: #8a8a92; margin-top: 3px; line-height: 1.4; }
-
-.aa-pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-.aa-pcol { min-width: 0; }
-.aa-pcol + .aa-pcol { border-left: 1px solid #2c2c2e; padding-left: 22px; }
-
-.aa-col-title {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    font-weight: 700;
-    color: #6a6a72;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    margin-bottom: 14px;
-}
-
-.aa-dot { width: 6px; height: 6px; border-radius: 50%; background: #2ea6ff; }
-.aa-dot-2 { background: #af7aff; }
-
-.aa-pfoot {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 6px;
-    padding-top: 16px;
-    border-top: 1px solid #2c2c2e;
-}
-
-/* --- Вариант для телефона: вертикальный лист --- */
-/* margin:-20px убран — контейнер модалки теперь сам во всю ширину,
-   иначе содержимое было шире своей прокручиваемой области. */
-.aa--mobile { display: flex; flex-direction: column; margin: 0; }
-
-.aa-mhead {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid #2c2c2e;
-    border-radius: 22px 22px 0 0;
-    flex-shrink: 0;
-}
-
-.aa-mclose {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
+.aa-btn-ghost {
     background: #232323;
-    border: none;
-    border-radius: 50%;
-    color: #8a8a92;
-    font-size: 17px;
-    cursor: pointer;
+    color: #fff;
 }
 
-.aa-mhead-txt { min-width: 0; }
-.aa-mhead-title { font-size: 17px; font-weight: 700; }
-.aa-mhead-sub { font-size: 12px; color: #8a8a92; margin-top: 1px; }
-
-.aa-mbody {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 18px 16px;
-    -webkit-overflow-scrolling: touch;
+.aa-btn-primary {
+    background: #0a84ff;
+    color: #fff;
 }
 
-.aa-mfoot {
-    display: flex;
-    gap: 10px;
-    padding: 12px 16px calc(12px + var(--safe-b));
-    border-top: 1px solid #2c2c2e;
-    background: #0f0f0f;
-    border-radius: 0 0 22px 22px;
-    flex-shrink: 0;
-}
-
-.aa-mfoot .aa-btn { flex: 1; min-height: 48px; }
-.aa-mfoot .aa-btn-ghost { flex: 0 0 38%; }
-
+/* На телефоне поля идут компактнее, чтобы вся форма помещалась
+   без прокрутки на маленьком экране. */
 @media (max-width: 768px) {
-    .aa-pgrid { grid-template-columns: 1fr; gap: 4px; }
-    .aa-pcol + .aa-pcol { border-left: none; padding-left: 0; border-top: 1px solid #2c2c2e; padding-top: 18px; margin-top: 14px; }
+    .addacct-hint { margin-bottom: 14px; }
+    .addacct .profile-field { margin-bottom: 13px; }
+    .addacct-actions { margin-top: 16px; }
+    .aa-code-send { padding: 0 10px; font-size: 12.5px; }
+    .aa-code { letter-spacing: 1px; font-size: 16px; }
+}
+
+@media (max-width: 420px) {
+    .addacct-hint { display: none; }
+    .aa-code-status { display: none; }
+    .addacct .profile-field { margin-bottom: 11px; }
+    .addacct .modal-input,
+    .addacct select#addCountrySel { padding: 9px 14px; font-size: 15px; }
+    .addacct select#addCountrySel { background-position: right 12px center; }
+    .addacct-actions { margin-top: 12px; }
+    .aa-btn { padding: 12px 14px; }
+    .aa-seg-btn { padding: 8px 6px; }
+    .aa-full-row { margin-top: 6px; }
+    .aa-hint { margin-top: 4px; }
+}
+
+@media (max-width: 360px) {
+    .addacct .profile-field { margin-bottom: 9px; }
+    .addacct .modal-input,
+    .addacct select#addCountrySel { padding: 8px 12px; }
+    .aa-seg-btn { padding: 7px 4px; font-size: 12.5px; }
+    .addacct-actions { margin-top: 10px; }
 }
 
 /* =====================================================================
@@ -2077,4 +1889,28 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
     .emoji-panel, .cb-sheet, .lock-screen, .album-viewer, .vm-overlay { animation: none; }
 
     .emoji-cell:active, .lock-key:active, .send-btn:active { transform: none; }
+}
+
+
+/* ===== ГАЛОЧКИ СООБЩЕНИЙ (v0.60.0) =====
+   ✓  — отправлено (серая)
+   ✓✓ — доставлено (серые)
+   ✓✓ — прочитано (синие, как в Telegram) */
+.msg-tick {
+    font-size: 10px;
+    margin-left: 4px;
+    line-height: 1;
+    flex: 0 0 auto;
+    transition: color .18s ease;
+}
+
+.msg-tick--sent { color: var(--text-secondary, rgba(255, 255, 255, .45)); }
+.msg-tick--delivered { color: var(--text-secondary, rgba(255, 255, 255, .6)); }
+.msg-tick--read { color: #0a84ff; }
+
+/* В светлой теме синий галочки не выездывалы на фоне */
+.message.incoming .msg-tick { display: none; }
+
+@media (max-width: 768px) {
+    .msg-tick { font-size: 9px; margin-left: 3px; }
 }

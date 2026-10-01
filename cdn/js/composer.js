@@ -668,10 +668,14 @@ function composerInstallSend() {
 
         // Оптимистичный показ (только текст, без медиа и без отложенной отправки)
         if (content && !files.length && !scheduled) {
-            displayMessage({
+            const tempMsg = {
                 id: null, is_temp: true, sender_id: currentUser.id,
-                content: content, created_at: new Date().toISOString(), is_read: false
-            });
+                content: content, created_at: new Date().toISOString(),
+                is_read: false, delivered_at: null,
+                // Галочки показываем только в личном чате — как в Telegram
+                chat_id: currentChatType === 'personal' ? currentChat.chat_id : null
+            };
+            displayMessage(tempMsg);
         }
 
         input.value = '';

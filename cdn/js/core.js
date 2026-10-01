@@ -320,4 +320,39 @@ document.getElementById('burgerOverlay').onclick = function() {
         }, 2000);
     }
 
+    // ===== ГАЛОЧКИ СООБЩЕНИЙ (✓ отправлено / ✓✓ доставлено / ✓✓ прочитано) =====
+    // Состояния: sent (одна серая), delivered (две серые), read (две синие).
+    // В группах и каналах галочек нет — как в Telegram.
+    function messageTickState(m) {
+        if (!m || m.chat_id == null) return null;      // не личный чат
+        if (m.is_read) return 'read';
+        if (m.delivered_at) return 'delivered';
+        return 'sent';
+    }
+
+    function messageTicksHTML(m) {
+        const state = messageTickState(m);
+        if (!state) return '';
+        if (state === 'read') {
+            return '<i class="fas fa-check-double msg-tick msg-tick--read"></i>';
+        }
+        if (state === 'delivered') {
+            return '<i class="fas fa-check-double msg-tick msg-tick--delivered"></i>';
+        }
+        return '<i class="fas fa-check msg-tick msg-tick--sent"></i>';
+    }
+
+    // Обновляет галочку уже отрисованного сообщения (socket-события).
+    function setMessageTick(messageId, state) {
+        if (!messageId) return;
+        const tick = document.querySelector(
+            `.message[data-message-id="${messageId}"] .message-meta .msg-tick`
+        );
+        if (!tick) return;
+        tick.className = 'fas msg-tick '
+            + (state === 'read' ? 'fa-check-double msg-tick--read'
+                : state === 'delivered' ? 'fa-check-double msg-tick--delivered'
+                    : 'fa-check msg-tick--sent');
+    }
+
 

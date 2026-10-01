@@ -6,3 +6,5 @@ Flask-SocketIO==5.3.4
 psycopg2-binary==2.9.12
 Pillow==10.1.0
 bcrypt==5.0.0
+# Web Push: отправка push-уведомлений (тянет py-vapid, http-ece, requests, cryptography)
+pywebpush==2.5.0

@@ -115,17 +115,17 @@ function commGroupTab(groupId, tab) {
         (role === 'admin' && d.permissions && !!d.permissions.can_add_members);
 
     let tabs = `<div class="comm-tabs">
-        <button class="comm-tab ${tab==='info'?'active':''}" onclick="commGroupTab(${groupId},'info')">Информация</button>
-        <button class="comm-tab ${tab==='members'?'active':''}" onclick="commGroupTab(${groupId},'members')">Участники</button>`;
+        <button class="comm-tab ${tab==='info'?'active':''}" onclick="commGroupTab('${groupId}','info')">Информация</button>
+        <button class="comm-tab ${tab==='members'?'active':''}" onclick="commGroupTab('${groupId}','members')">Участники</button>`;
     if (canApprove) {
         const reqCount = (d.join_requests || []).length;
-        tabs += `<button class="comm-tab ${tab==='requests'?'active':''}" onclick="commGroupTab(${groupId},'requests')">Заявки${reqCount ? ` <span class="comm-badge owner">${reqCount}</span>` : ''}</button>`;
+        tabs += `<button class="comm-tab ${tab==='requests'?'active':''}" onclick="commGroupTab('${groupId}','requests')">Заявки${reqCount ? ` <span class="comm-badge owner">${reqCount}</span>` : ''}</button>`;
     }
     if (canManage) {
-        tabs += `<button class="comm-tab ${tab==='banned'?'active':''}" onclick="commGroupTab(${groupId},'banned')">Заблокированные</button>`;
+        tabs += `<button class="comm-tab ${tab==='banned'?'active':''}" onclick="commGroupTab('${groupId}','banned')">Заблокированные</button>`;
     }
     if (role === 'owner') {
-        tabs += `<button class="comm-tab ${tab==='perms'?'active':''}" onclick="commGroupTab(${groupId},'perms')">Права</button>`;
+        tabs += `<button class="comm-tab ${tab==='perms'?'active':''}" onclick="commGroupTab('${groupId}','perms')">Права</button>`;
     }
     tabs += `</div>`;
 
@@ -342,8 +342,8 @@ function commLoadGroupPerms(groupId) {
 
 function commGroupPermsShow(groupId, rows) {
     const tabs = `<div class="comm-tabs">
-        <button class="comm-tab" onclick="commGroupTab(${groupId},'info')">Информация</button>
-        <button class="comm-tab" onclick="commGroupTab(${groupId},'members')">Участники</button>
+        <button class="comm-tab" onclick="commGroupTab('${groupId}','info')">Информация</button>
+        <button class="comm-tab" onclick="commGroupTab('${groupId}','members')">Участники</button>
         <button class="comm-tab active">Права</button>
     </div>`;
     showModal('Группа · Права', tabs + commRenderPerms(groupId, rows));
@@ -645,9 +645,9 @@ function commChannelTab(channelId, tab) {
     const c = d.channel;
     const isOwner = d.is_owner;
     let tabs = `<div class="comm-tabs">
-        <button class="comm-tab ${tab==='info'?'active':''}" onclick="commChannelTab(${channelId},'info')">Информация</button>
-        <button class="comm-tab ${tab==='subs'?'active':''}" onclick="commChannelTab(${channelId},'subs')">Подписчики</button>
-        ${isOwner ? `<button class="comm-tab ${tab==='admins'?'active':''}" onclick="commChannelTab(${channelId},'admins')">Админы</button>` : ''}
+        <button class="comm-tab ${tab==='info'?'active':''}" onclick="commChannelTab('${channelId}','info')">Информация</button>
+        <button class="comm-tab ${tab==='subs'?'active':''}" onclick="commChannelTab('${channelId}','subs')">Подписчики</button>
+        ${isOwner ? `<button class="comm-tab ${tab==='admins'?'active':''}" onclick="commChannelTab('${channelId}','admins')">Админы</button>` : ''}
     </div>`;
 
     let body;

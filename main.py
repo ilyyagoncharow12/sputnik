@@ -37,6 +37,7 @@ from database import (
     create_user_initial, complete_registration, check_phone_exists, check_username_available,
     get_user_by_id, get_user_by_unique_id, get_user_by_username, get_user_by_phone,
     verify_user, update_last_seen, update_user_settings, delete_user_account,
+    is_protected_user, count_push_subscriptions,
     get_or_create_chat, get_user_chats, send_message, get_messages,
     edit_message, delete_message, forward_message,
     get_message_by_id, pin_message, unpin_message, unpin_message_by_message_id, get_pinned_message,
@@ -92,11 +93,19 @@ from database import (
     toggle_sticker_favorite, delete_sticker,
     next_album_id, set_message_album, get_album_messages, reorder_album,
     export_user_data, add_contact_with_name, find_users_by_phones,
+    mark_messages_delivered, get_undelivered_message_ids,
+    get_message_edits, get_message_edits_count,
+    # v0.60.3 — корзина удалённых
+    get_deleted_messages, restore_message, clear_chat_trash, purge_old_trash,
 )
 
 from werkzeug.security import check_password_hash  # не используется напрямую
 import functools
 import bcrypt
+
+# Web Push (Push API + Service Worker). Модуль сам выключается, если
+# не установлена библиотека pywebpush или нет VAPID-ключей.
+import push
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = env('SECRET_KEY', '89e=)_)_)I(E*(UIM<#*URM38um489ur74ncyrc7y54n54vm,yu6v,c0uy58u897JMM87Y78Y89ym87yn7)Y*Y_Y870y&T#67t63tye78m340yvf8v4tymuv8bymuv6754y68902m5,4cuio32pdx,jlk23')
@@ -666,8 +675,17 @@ def api_edit_message():
     if not msg:
         return jsonify({'error': 'Сообщение не найдено'}), 404
 
+    if msg.get('is_deleted'):
+        return jsonify({'error': 'Сообщение удалено'}), 400
+
+    # Права в личном чате: править своё сообщение в чате, где ты участник
+    if msg.get('chat_id'):
+        if get_chat_other_user(msg['chat_id'], session['user_id']) is None:
+            return jsonify({'error': 'Нет доступа'}), 403
+        if msg['sender_id'] != session['user_id']:
+            return jsonify({'error': 'Можно редактировать только свои сообщения'}), 403
     # Права в группе/канале
-    if msg.get('group_id'):
+    elif msg.get('group_id'):
         if msg['sender_id'] != session['user_id'] and not can_group_perform(msg['group_id'], session['user_id'], 'can_change_info'):
             return jsonify({'error': 'У вас нет права редактировать это сообщение'}), 403
     elif msg.get('channel_id'):
@@ -679,14 +697,60 @@ def api_edit_message():
             if not r or not r['can_post']:
                 return jsonify({'error': 'У вас нет права редактировать это сообщение'}), 403
 
-    edit_message(message_id, new_content)
+    edit_message(message_id, new_content, editor_id=session['user_id'])
 
-    socketio.emit('message_edited', {
-        'message_id': message_id,
-        'new_content': new_content
-    })
+    # Событие — только в комнату чата, а не всем подряд
+    if msg.get('chat_id'):
+        socketio.emit('message_edited', {
+            'message_id': message_id,
+            'new_content': new_content
+        }, room=f"chat_{msg['chat_id']}")
+    elif msg.get('group_id'):
+        socketio.emit('message_edited', {
+            'message_id': message_id,
+            'new_content': new_content
+        }, room=f"group_{msg['group_id']}")
+    elif msg.get('channel_id'):
+        socketio.emit('message_edited', {
+            'message_id': message_id,
+            'new_content': new_content
+        }, room=f"channel_{msg['channel_id']}")
 
     return jsonify({'success': True})
+
+
+@app.route('/api/message_edits/<int:message_id>')
+def api_get_message_edits(message_id):
+    """История правок сообщения (нужна всем участникам чата)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    msg = get_message_by_id(message_id)
+    if not msg:
+        return jsonify({'error': 'Сообщение не найдено'}), 404
+
+    uid = session['user_id']
+    # В личном чате историю смотрит любой из двоих, в группе/канале — участник.
+    if msg.get('chat_id'):
+        # get_chat_other_user вернёт собеседника только если мы в этом чате
+        if get_chat_other_user(msg['chat_id'], uid) is None:
+            return jsonify({'error': 'Нет доступа'}), 403
+    elif msg.get('group_id'):
+        if uid != msg.get('sender_id') and not is_group_member(msg['group_id'], uid) \
+                and not can_group_perform(msg['group_id'], uid, 'can_change_info'):
+            return jsonify({'error': 'Нет доступа'}), 403
+    elif msg.get('channel_id'):
+        if uid != msg.get('sender_id'):
+            r = get_channel_rights(msg['channel_id'], uid) or {}
+            if not (r.get('is_owner') or r.get('can_edit') or r.get('can_post')
+                    or is_channel_subscriber(msg['channel_id'], uid)):
+                return jsonify({'error': 'Нет доступа'}), 403
+
+    return jsonify({
+        'message_id': message_id,
+        'edited_at': msg.get('edited_at'),
+        'edits': get_message_edits(message_id),
+    })
 
 
 @app.route('/api/delete_message', methods=['POST'])
@@ -717,8 +781,104 @@ def api_delete_message():
     # Если закреплённое сообщение удалено — открепляем
     unpin_message_by_message_id(message_id)
 
-    socketio.emit('message_deleted', {'message_id': message_id})
+    if delete_for_all:
+        # Удалено у всех — сообщение исчезает из чата у всех участников
+        socketio.emit('message_deleted', {'message_id': message_id})
+    else:
+        # «Удалить у меня» — скрываем только у того, кто удалил;
+        # у собеседника сообщение остаётся (как в Telegram)
+        socketio.emit('message_deleted', {'message_id': message_id},
+                      room=f"user_{session['user_id']}")
 
+    return jsonify({'success': True})
+
+
+def _chat_ref_from_request():
+    """Разбирает chat_id/chat_type из тела или query в (chat_id, group_id, channel_id)."""
+    data = request.get_json(silent=True) or {}
+    args = request.args
+    chat_id = data.get('chat_id', args.get('chat_id'))
+    chat_type = (data.get('chat_type', args.get('chat_type')) or 'personal').strip()
+    if chat_id in (None, '', 'null', 'undefined'):
+        return None, None, None
+    try:
+        chat_id = int(chat_id)
+    except (TypeError, ValueError):
+        return None, None, None
+    if chat_type == 'group':
+        return None, chat_id, None
+    if chat_type == 'channel':
+        return None, None, chat_id
+    return chat_id, None, None
+
+
+@app.route('/api/trash')
+def api_trash():
+    """Корзина чата: сообщения, которые удалены и могут быть восстановлены."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat_id, group_id, channel_id = _chat_ref_from_request()
+    if chat_id is None and group_id is None and channel_id is None:
+        return jsonify({'error': 'chat_id не указан'}), 400
+
+    limit = min(int(request.args.get('limit', 50) or 50), 200)
+    items = get_deleted_messages(session['user_id'], chat_id, group_id, channel_id, limit)
+    for it in items:
+        # SQLite отдаёт 0/1, клиенту нужны настоящие булевы
+        it['deleted_for_all'] = bool(it.get('deleted_for_all'))
+        it['can_restore'] = True
+    return jsonify({'items': items, 'count': len(items)})
+
+
+@app.route('/api/restore_message', methods=['POST'])
+def api_restore_message():
+    """Восстановление сообщения из корзины."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    message_id = data.get('message_id')
+    if not message_id:
+        return jsonify({'error': 'message_id не указан'}), 400
+    try:
+        message_id = int(message_id)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Неверный message_id'}), 400
+
+    for_all = bool(data.get('delete_for_all', True))
+    ok = restore_message(message_id, session['user_id'], for_all)
+    if not ok:
+        return jsonify({'error': 'Нельзя восстановить это сообщение'}), 403
+
+    if for_all:
+        socketio.emit('message_restored', {'message_id': message_id})
+    else:
+        socketio.emit('message_restored', {'message_id': message_id},
+                      room=f"user_{session['user_id']}")
+    return jsonify({'success': True})
+
+
+@app.route('/api/trash/clear', methods=['POST'])
+def api_trash_clear():
+    """Очистить корзину чата окончательно (без возможности восстановления)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    chat_id, group_id, channel_id = _chat_ref_from_request()
+    if chat_id is None and group_id is None and channel_id is None:
+        return jsonify({'error': 'chat_id не указан'}), 400
+
+    # Права: в личных чатах очистить корзину может любой участник,
+    # в группах/каналах — только тот, кто может удалять сообщения.
+    if group_id:
+        if not can_group_perform(group_id, session['user_id'], 'can_delete_messages'):
+            return jsonify({'error': 'У вас нет права удалять сообщения'}), 403
+    elif channel_id:
+        r = get_channel_rights(channel_id, session['user_id'])
+        if not (r and (r['is_owner'] or r['can_delete'])):
+            return jsonify({'error': 'У вас нет права удалять сообщения'}), 403
+
+    clear_chat_trash(chat_id, group_id, channel_id)
+    socketio.emit('trash_cleared', {'chat_id': chat_id, 'group_id': group_id,
+                                   'channel_id': channel_id})
     return jsonify({'success': True})
 
 
@@ -835,6 +995,7 @@ def api_create_poll():
         message['poll'] = get_poll_by_id(poll_id, session['user_id'])
         socketio.emit('new_message', {'chat_id': chat_id, 'group_id': group_id, 'channel_id': channel_id,
                                       'message': message}, room=room)
+        push_new_message(message, chat_id=chat_id, group_id=group_id, channel_id=channel_id)
 
     return jsonify({'success': True, 'poll': message.get('poll') if message else None,
                     'message': message})
@@ -1092,7 +1253,19 @@ def api_get_chat(user_id):
             newly_read_ids = [r['id'] for r in cur.fetchall()]
             conn.close()
 
+        # Галочка «доставлено» (одна, серая): чат открыт — сообщения дошли.
+        delivered_ids = []
+        if user_id != current_user_id:
+            delivered_ids = mark_messages_delivered(chat_id, current_user_id, sender_id=user_id)
+
         messages = get_messages(chat_id=chat_id, user_id=current_user_id)
+
+        # Сообщаем отправителю: доставлено (у него загорается вторая галочка)
+        if delivered_ids:
+            socketio.emit('messages_delivered', {
+                'chat_id': chat_id,
+                'message_ids': delivered_ids
+            }, room=f"user_{user_id}")
 
         # Уведомляем собеседника, что его сообщения прочитаны
         if newly_read_ids:
@@ -1363,6 +1536,9 @@ def api_send_message():
                     # Не доставляем сообщение, если получатель заблокировал отправителя
                     if msg.get('delivered', True):
                         socketio.emit('new_message', {'room': room, 'message': msg}, room=room)
+                        # Web Push тем, кто сейчас офлайн (вкладка закрыта)
+                        push_new_message(msg, chat_id=chat_id, group_id=group_id,
+                                         channel_id=channel_id)
             except Exception as emit_e:
                 print(f"Emit error (non-fatal): {emit_e}")
 
@@ -1473,6 +1649,8 @@ def api_pin_message():
     if scope == 'personal':
         if msg['chat_id'] != scope_id:
             return jsonify({'error': 'Сообщение не принадлежит этому чату'}), 400
+        if get_chat_other_user(scope_id, session['user_id']) is None:
+            return jsonify({'error': 'Нет доступа'}), 403
     elif scope == 'group':
         if msg['group_id'] != scope_id:
             return jsonify({'error': 'Сообщение не принадлежит этой группе'}), 400
@@ -1519,6 +1697,8 @@ def api_unpin_message():
         r = get_channel_rights(scope_id, session['user_id'])
         if not r or not r['can_post']:
             return jsonify({'error': 'У вас нет права откреплять сообщения'}), 403
+    if scope == 'personal' and get_chat_other_user(scope_id, session['user_id']) is None:
+        return jsonify({'error': 'Нет доступа'}), 403
 
     unpin_message(scope, scope_id)
 
@@ -1861,6 +2041,95 @@ def api_group_unmute(group_id):
 
 
 # ---------- ЗАЯВКИ НА ВСТУПЛЕНИЕ ----------
+
+@app.route('/api/group/<int:group_id>/public', methods=['GET'])
+def api_group_public(group_id):
+    """Публичная витрина группы для того, кто ещё не участник.
+
+    Раньше не-участник получал 403 на /api/get_group и вообще не мог
+    посмотреть группу и подать заявку — вход был только по инвайт-ссылке.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    group = get_group_by_id(group_id)
+    if not group:
+        return jsonify({'error': 'Группа не найдена'}), 404
+
+    uid = session['user_id']
+    role = is_group_member(group_id, uid)
+    members = get_group_members(group_id)
+    member_count = len(members) if members else 0
+
+    request_status = None
+    if not role:
+        request_status = get_group_join_request_status(group_id, uid)
+        # приватная группа: показываем только обложку, содержимое закрыто
+        if not group.get('is_public'):
+            return jsonify({
+                'group': {
+                    'id': group['id'], 'name': group['name'],
+                    'description': None, 'avatar': group.get('avatar'),
+                    'username': group.get('username'), 'is_public': False,
+                },
+                'member_count': member_count,
+                'is_member': False,
+                'request_status': request_status,
+                'can_view': False,
+                'banned': is_group_banned(group_id, uid),
+            })
+
+    return jsonify({
+        'group': dict(group),
+        'members': [dict(m) for m in (members or [])][:100] if role else [],
+        'member_count': member_count,
+        'is_member': bool(role),
+        'user_role': role,
+        'request_status': request_status,
+        'can_view': True,
+        'banned': is_group_banned(group_id, uid),
+    })
+
+
+@app.route('/api/group/<int:group_id>/join', methods=['POST'])
+def api_group_join(group_id):
+    """Вступить в группу или подать заявку на вступление.
+
+    Публичная группа — сразу участник. Приватная — заявка владельцу/админам.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    group = get_group_by_id(group_id)
+    if not group:
+        return jsonify({'error': 'Группа не найдена'}), 404
+
+    uid = session['user_id']
+    if is_group_member(group_id, uid):
+        return jsonify({'success': False, 'error': 'Вы уже участник'}), 400
+    if is_group_banned(group_id, uid):
+        return jsonify({'success': False, 'error': 'Вам запрещён вход в эту группу'}), 403
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()[:300] or None
+
+    if group.get('is_public'):
+        add_group_member(group_id, uid, 'member')
+        socketio.emit('group_member_joined', {'group_id': group_id, 'user_id': uid},
+                      room=f"group_{group_id}")
+        return jsonify({'success': True, 'status': 'joined', 'group_id': group_id})
+
+    prev = get_group_join_request_status(group_id, uid)
+    if prev == 'pending':
+        return jsonify({'success': False, 'error': 'Заявка уже отправлена'}), 409
+    add_group_join_request(group_id, uid, message)
+    # уведомляем владельца и админов (в get_group_members колонка пользователя — id)
+    for m in get_group_members(group_id) or []:
+        if m['role'] in ('owner', 'admin'):
+            socketio.emit('group_join_request', {'group_id': group_id, 'user_id': uid},
+                          room=f"user_{m['id']}")
+    return jsonify({'success': True, 'status': 'pending', 'group_id': group_id})
+
 
 @app.route('/api/group/join_requests/<int:group_id>', methods=['GET'])
 def api_group_join_requests(group_id):
@@ -2824,8 +3093,13 @@ def api_delete_account():
     confirmation = data.get('confirmation', '')
     user = get_user_by_id(session['user_id'])
 
+    if is_protected_user(session['user_id']):
+        return jsonify({'error': 'Этот аккаунт удалить нельзя'}), 403
+
     if confirmation == user['phone'] or confirmation == user['username']:
-        delete_user_account(session['user_id'])
+        ok, err = delete_user_account(session['user_id'])
+        if not ok:
+            return jsonify({'error': err or 'Удалить не удалось'}), 403
         session.clear()
         return jsonify({'success': True})
 
@@ -3360,6 +3634,78 @@ def static_avatar(filename):
     return send_file(_safe_file(os.path.join('static', 'avatar-swg'), filename))
 
 
+# ---------------------- SERVICE WORKER (Web Push) ----------------------
+# Отдаём SW строго из корня (/sw.js), иначе его scope будет /static/
+# и push-события не доедут. Заголовок Service-Worker-Allowed: / разрешает
+# управлять всем сайтом.
+@app.route('/sw.js')
+def service_worker():
+    resp = send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static'), 'sw.js')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+# ---------------------- WEB PUSH API ----------------------
+@app.route('/api/push/state')
+def api_push_state():
+    """Диагностика push для клиента (ключ, готовность, моя подписка)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    st = push.status()
+    st['subscribed'] = count_push_subscriptions(session['user_id']) > 0
+    st['subscriptions'] = count_push_subscriptions(session['user_id'])
+    return jsonify(st)
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+def api_push_subscribe():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not push.is_push_available():
+        return jsonify({'error': 'Сервер не настроен на push'}), 503
+    data = request.get_json(silent=True) or {}
+    ok, err = push.subscribe_user(
+        session['user_id'], data.get('subscription'),
+        user_agent=(request.headers.get('User-Agent') or '')[:300])
+    if not ok:
+        return jsonify({'error': err}), 400
+    return jsonify({'success': True})
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+def api_push_unsubscribe():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    push.unsubscribe_user(endpoint=data.get('endpoint'),
+                          user_id=None if data.get('endpoint') else session['user_id'])
+    return jsonify({'success': True})
+
+
+@app.route('/api/push/test', methods=['POST'])
+def api_push_test():
+    """Тестовое уведомление самому себе: проверить, что канал работает."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not push.is_push_available():
+        return jsonify({'error': 'Сервер не настроен на push'}), 503
+    if count_push_subscriptions(session['user_id']) == 0:
+        return jsonify({'error': 'Нет активных подписок — включите уведомления'}), 400
+    user = get_user_by_id(session['user_id'])
+    n, _ = push.push_to_user(session['user_id'], {
+        'kind': 'test',
+        'title': 'Спутник',
+        'body': 'Push-уведомления работают %s' % (
+            user['display_name'] or user['username']),
+        'scope': '', 'scopeId': 0,
+        'icon': '/static/favicon/web-app-manifest-192x192.png',
+    }, ttl=60, urgent=True)
+    return jsonify({'success': n > 0, 'sent': n})
+
+
 # ---------------------- CDN (вынесенные файлы UI: cdn/css, cdn/js) ----------------------
 CDN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cdn')
 
@@ -3391,7 +3737,39 @@ def subscribe_channel_by_link(invite_link):
     return jsonify({'success': True, 'channel_id': channel['id']})
 
 
-@app.route('/api/subscribe/channel/id/<int:channel_id>')
+@app.route('/api/channel/<int:channel_id>/public', methods=['GET'])
+def api_channel_public(channel_id):
+    """Витрина канала для того, кто ещё не подписан."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    channel = get_channel_by_id(channel_id)
+    if not channel:
+        return jsonify({'error': 'Канал не найден'}), 404
+
+    uid = session['user_id']
+    subscribed = bool(is_channel_subscriber(channel_id, uid))
+    try:
+        subs = get_channel_subscribers(channel_id)
+        sub_count = len(subs) if subs else 0
+    except Exception:
+        sub_count = 0
+
+    channel = dict(channel)
+    # Описание и аватар приватного канала не показываем посторонним,
+    # иначе его содержимое утекает всем, кто знает id.
+    if not channel.get('is_public') and not subscribed:
+        channel['description'] = None
+        channel['avatar'] = None
+
+    return jsonify({
+        'channel': channel,
+        'subscriber_count': sub_count,
+        'is_subscribed': subscribed,
+    })
+
+
+@app.route('/api/subscribe/channel/id/<int:channel_id>', methods=['GET', 'POST'])
 def subscribe_channel_by_id(channel_id):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -3399,6 +3777,12 @@ def subscribe_channel_by_id(channel_id):
     channel = get_channel_by_id(channel_id)
     if not channel:
         return jsonify({'success': False, 'error': 'Канал не найден'}), 404
+
+    # Приватный канал принимает только тех, кто пришёл по приглашению —
+    # иначе любой мог подписаться на закрытый канал, зная его id.
+    if not channel.get('is_public'):
+        return jsonify({'success': False,
+                        'error': 'Это приватный канал — нужна ссылка-приглашение'}), 403
 
     subscribe_to_channel(channel_id, session['user_id'])
     return jsonify({'success': True, 'channel_id': channel_id})
@@ -4018,6 +4402,118 @@ online_user_sids = {}
 # Текущие активные звонки: user_id -> call_id (для «абонент занят»)
 active_calls = {}
 
+# ---------------------- WEB PUSH: РАССЫЛКА ----------------------
+# Подписи к вложениям для превью в уведомлении.
+_PUSH_FILE_LABELS = {
+    'photo': '📷 Фото',
+    'video': '🎬 Видео',
+    'video_circle': '⭕ Видеосообщение',
+    'audio': '🎤 Голосовое сообщение',
+    'voice': '🎤 Голосовое сообщение',
+    'sticker': '✨ Стикер',
+    'document': '📎 Файл',
+    'file': '📎 Файл',
+    'poll': '📊 Опрос',
+}
+
+
+def _push_preview(msg):
+    """Человеческий текст превью для push (текст, иначе тип вложения)."""
+    content = (msg.get('content') or '').strip()
+    if content:
+        # Метки вида «🖤» в конце — оставляем, это часть сообщения.
+        return content[:180]
+    ft = (msg.get('file_type') or '').lower()
+    if msg.get('poll_id'):
+        return _PUSH_FILE_LABELS['poll']
+    return _PUSH_FILE_LABELS.get(ft, 'Новое сообщение')
+
+
+def _push_icon(avatar):
+    """Аватар превращаем в абсолютный URL (иначе SW не загрузит иконку)."""
+    if not avatar:
+        return '/static/favicon/web-app-manifest-192x192.png'
+    if str(avatar).startswith('http'):
+        return avatar
+    return '/' + str(avatar).lstrip('/')
+
+
+def _push_title_for_user(user_id, scope, scope_id, sender):
+    """Заголовок уведомления: как в Telegram — кто написал или что за чат."""
+    if scope == 'personal':
+        return sender.get('display_name') or sender.get('username') or 'Спутник'
+    if scope == 'group':
+        return sender.get('display_name') or sender.get('username') or 'Группа'
+    return sender.get('name') or sender.get('title') or sender.get('username') or 'Канал'
+
+
+def push_new_message(msg, chat_id=None, group_id=None, channel_id=None):
+    """Отправляет Web Push всем, кто должен увидеть сообщение.
+
+    Правила:
+      * личный чат — второму участнику;
+      * группа — участникам (кроме автора и кого выключил уведомления);
+      * канал — подписчикам;
+      * тем, кто сейчас онлайн (сокет подключён), push НЕ шлём — у них
+        приложение и так отрисовало сообщение, будет дубль.
+    Никогда не роняет отправку сообщения: всё в try/except.
+    """
+    if not push.is_push_available():
+        return 0
+    try:
+        sender_id = msg.get('sender_id')
+        sender = {
+            'display_name': msg.get('display_name'),
+            'username': msg.get('sender_username') or msg.get('username'),
+            'avatar': msg.get('sender_avatar') or msg.get('avatar'),
+        }
+        icon = _push_icon(sender.get('avatar'))
+        preview = _push_preview(msg)
+
+        if chat_id:
+            scope, scope_id = 'personal', chat_id
+            other = get_chat_other_user(chat_id, sender_id)
+            targets = [other] if other else []
+            chat = None
+        elif group_id:
+            scope, scope_id = 'group', group_id
+            chat = get_group_by_id(group_id)
+            targets = [m['id'] for m in get_group_members(group_id)]
+        else:
+            scope, scope_id = 'channel', channel_id
+            chat = get_channel_by_id(channel_id)
+            targets = [s['id'] for s in get_channel_subscribers(channel_id)]
+
+        if chat:
+            title = str(chat.get('name') or chat.get('title') or 'Спутник')
+            if scope in ('group', 'channel'):
+                # В ТГ заголовок — название чата, а автор уходит в текст.
+                body = ('%s: %s' % (sender.get('display_name') or sender.get('username') or '',
+                                    preview)).strip(': ')
+                icon = _push_icon(chat.get('avatar')) or icon
+            else:
+                body = preview
+        else:
+            title = _push_title_for_user(sender_id, scope, scope_id, sender)
+            body = preview
+
+        payload = {
+            'kind': 'msg',
+            'title': (title or 'Спутник')[:80],
+            'body': (body or '')[:300],
+            'scope': scope,
+            'scopeId': scope_id,
+            'icon': icon,
+            'badge': '/static/favicon/web-app-manifest-192x192.png',
+            'messageId': msg.get('id'),
+        }
+        offline = [t for t in targets if t and t != sender_id and not is_user_online(t)]
+        return push.push_to_users(offline, payload)
+    except Exception as e:
+        print('[push] push_new_message: %s' % e)
+        return 0
+
+
 
 def is_user_online(user_id):
     return bool(online_user_sids.get(user_id))
@@ -4065,8 +4561,32 @@ def handle_disconnect():
 @socketio.on('join_chat')
 def handle_join_chat(data):
     if 'user_id' in session:
-        room = f"chat_{data.get('chat_id')}"
+        chat_id = data.get('chat_id')
+        if not chat_id:
+            return
+        room = f"chat_{chat_id}"
         join_room(room)
+        # Чат открыт на этом устройстве — сообщения в нём считаем доставленными
+        # и сразу сообщаем отправителям, чтобы у них загорелась вторая галочка.
+        uid = session['user_id']
+        try:
+            pending = get_undelivered_message_ids(chat_id, uid)
+            if pending:
+                newly = mark_messages_delivered(chat_id, uid, message_ids=pending)
+                if newly:
+                    conn = get_db()
+                    cur = dict_cursor(conn)
+                    marks = ','.join(['%s'] * len(newly))
+                    cur.execute('SELECT DISTINCT sender_id FROM messages WHERE id IN (%s)' % marks,
+                                newly)
+                    senders = [r['sender_id'] for r in cur.fetchall()]
+                    conn.close()
+                    for sid in senders:
+                        socketio.emit('messages_delivered',
+                                      {'chat_id': chat_id, 'message_ids': newly},
+                                      room=f"user_{sid}")
+        except Exception as e:
+            print('[delivered] join_chat: %s' % e)
 
 
 @socketio.on('join_group')
@@ -4589,6 +5109,9 @@ def _deliver_scheduled(row):
     try:
         if msg.get('delivered', True):
             socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+            push_new_message(dict(msg), chat_id=row.get('chat_id'),
+                             group_id=row.get('group_id'),
+                             channel_id=row.get('channel_id'))
         socketio.emit('scheduled_sent', {'scheduled_id': row['id'], 'message': dict(msg)},
                       to=str(row['sender_id']))
     except Exception as e:
@@ -4668,6 +5191,7 @@ def api_send_video_message():
     room = _room_of(chat_id, group_id, channel_id)
     if msg.get('delivered', True):
         socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+        push_new_message(dict(msg), chat_id=chat_id, group_id=group_id, channel_id=channel_id)
     return jsonify({'success': True, 'message': dict(msg)})
 
 
@@ -4857,6 +5381,7 @@ def api_send_sticker():
     room = _room_of(chat_id, group_id, channel_id)
     if msg.get('delivered', True):
         socketio.emit('new_message', {'room': room, 'message': dict(msg)}, room=room)
+        push_new_message(dict(msg), chat_id=chat_id, group_id=group_id, channel_id=channel_id)
     return jsonify({'success': True, 'message': dict(msg)})
 
 

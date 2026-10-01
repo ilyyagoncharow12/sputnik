@@ -323,6 +323,12 @@ document.addEventListener('keydown', (e) => {
                     else if (data.message.sender_username) title = '@' + data.message.sender_username;
                     else if (!data.message.chat_id) title = data.message.group_name || data.message.channel_name || 'Группа';
                     const text = data.message.file_type ? '📎 [файл]' : (data.message.content || '').substring(0, 80);
+                    // Активная вкладка: тихий звук (системное уведомление покажет
+                    // notifyMessage только когда вкладка скрыта).
+                    if (!document.hidden && typeof playPushSound === 'function'
+                        && typeof PushPrefs !== 'undefined' && PushPrefs.get().sound) {
+                        playPushSound();
+                    }
                     notifyMessage(title, text, data.message.avatar_url || data.message.avatar || null, scope, scopeId);
                 }
             }
@@ -334,7 +340,22 @@ document.addEventListener('keydown', (e) => {
             const msgDiv = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
             if (msgDiv) {
                 const textDiv = msgDiv.querySelector('.message-text');
-                if (textDiv) textDiv.textContent = data.new_content;
+                if (textDiv) {
+                    if (typeof renderFormattedText === 'function') {
+                        textDiv.innerHTML = renderFormattedText(data.new_content);
+                    } else {
+                        textDiv.textContent = data.new_content;
+                    }
+                }
+                // Пометка «изм.» + появление пункта «История» в меню
+                msgDiv.dataset.edited = '1';
+                const meta = msgDiv.querySelector('.message-meta');
+                if (meta && !meta.querySelector('.msg-edited-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'msg-edited-badge';
+                    badge.textContent = 'изм.';
+                    meta.insertBefore(badge, meta.firstChild);
+                }
             }
         });
 
@@ -407,14 +428,33 @@ document.addEventListener('keydown', (e) => {
             }
         });
 
+        // Вторая галочка: сообщение доставлено (собеседник открыл чат)
+        socket.on('messages_delivered', (data) => {
+            if (!data || !data.message_ids) return;
+            data.message_ids.forEach(id => {
+                if (typeof setMessageTick !== 'function') return;
+                // Если сообщение уже помечено прочитанным — не откатываем назад
+                const tick = document.querySelector(
+                    `.message[data-message-id="${id}"] .message-meta .msg-tick`);
+                if (tick && tick.classList.contains('msg-tick--read')) return;
+                setMessageTick(id, 'delivered');
+                if (typeof refreshAlbumTick === 'function') refreshAlbumTick(id, 'delivered');
+            });
+        });
+
         socket.on('messages_read', (data) => {
             if (!data.message_ids) return;
             data.message_ids.forEach(id => {
-                const meta = document.querySelector(`.message[data-message-id="${id}"] .message-meta i`);
-                if (meta) {
-                    meta.className = 'fas fa-check-double';
-                    meta.style.color = '#53d769';
+                if (typeof setMessageTick === 'function') {
+                    setMessageTick(id, 'read');
+                } else {
+                    const meta = document.querySelector(`.message[data-message-id="${id}"] .message-meta i`);
+                    if (meta) {
+                        meta.className = 'fas fa-check-double';
+                        meta.style.color = '#53d769';
+                    }
                 }
+                if (typeof refreshAlbumTick === 'function') refreshAlbumTick(id, 'read');
             });
             if (data.chat_id && currentChat && currentChatType === 'personal' && currentChat.chat_id == data.chat_id) {
                 refreshMessages();

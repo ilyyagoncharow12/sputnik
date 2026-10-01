@@ -31,6 +31,11 @@
 <link rel="stylesheet" href="/cdn/css/modal-universal.css">
 <link rel="stylesheet" href="/cdn/css/mobile.css">
 <link rel="stylesheet" href="/cdn/css/community.css">
+<link rel="stylesheet" href="/cdn/css/push.css">
+<link rel="stylesheet" href="/cdn/css/msg-edits.css">
+<link rel="stylesheet" href="/cdn/css/trash.css">
+<link rel="stylesheet" href="/cdn/css/create-wizard.css">
+<link rel="stylesheet" href="/cdn/css/discover.css">
 <link rel="stylesheet" href="/cdn/css/composer.css">
 </head>
 <body class="{{ body_class }}">
@@ -437,6 +442,10 @@
 
         <div class="burger-divider"></div>
         <div class="burger-group-label">Создать</div>
+        <div class="burger-item" onclick="openDiscover()">
+            <div class="burger-item-icon"><i class="fas fa-compass"></i></div>
+            <span>Поиск групп и каналов</span>
+        </div>
         <div class="burger-item" onclick="createGroup()">
             <div class="burger-item-icon"><i class="fas fa-users"></i></div>
             <span>Создать группу</span>
@@ -593,9 +602,13 @@
 <script src="/cdn/js/context-menu.js"></script>
 <script src="/cdn/js/gestures.js"></script>
 <script src="/cdn/js/message-features.js"></script>
+<script src="/cdn/js/trash.js"></script>
+<script src="/cdn/js/create-wizard.js"></script>
+<script src="/cdn/js/discover.js"></script>
 <script src="/cdn/js/stories.js"></script>
 <script src="/cdn/js/profiles.js"></script>
 <script src="/cdn/js/settings.js"></script>
+<script src="/cdn/js/push.js"></script>
 <script src="/cdn/js/community.js"></script>
 <script src="/cdn/js/music-extra.js"></script>
 <script src="/cdn/js/accounts.js"></script>

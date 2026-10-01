@@ -1544,20 +1544,8 @@ function removeContactById(userId) {
     }
 
     function createGroup() {
-        closeBurgerMenu();
-        let h = `
-            <div class="user-profile-body">
-                <div class="profile-field"><label>Название группы</label><input type="text" id="groupName" class="modal-input" placeholder="Введите название"></div>
-                <div class="profile-field"><label>Описание</label><textarea id="groupDescription" class="modal-input" rows="3" placeholder="Описание группы"></textarea></div>
-                <div class="profile-field"><label>Юзернейм (необязательно) <span style="color:#8a92a6;font-weight:400">@...</span></label><input type="text" id="groupUsername" class="modal-input" placeholder="@mygroup" maxlength="32" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_@]/g,'')"></div>
-                <div class="profile-field"><label><input type="checkbox" id="groupIsPublic" checked> Публичная группа</label></div>
-                <div class="user-profile-buttons">
-                    <button class="user-profile-btn user-profile-btn-secondary" onclick="closeModal('tempModal')">Отмена</button>
-                    <button class="user-profile-btn user-profile-btn-primary" onclick="saveGroup()">Создать</button>
-                </div>
-            </div>
-        `;
-        showModal('Создать группу', h);
+        // v0.60.4 — пошаговый мастер вместо одностраничной формы
+        openCreateWizard('group');
     }
 
     function saveGroup() {
@@ -1584,20 +1572,8 @@ function removeContactById(userId) {
     }
 
     function createChannel() {
-        closeBurgerMenu();
-        let h = `
-            <div class="user-profile-body">
-                <div class="profile-field"><label>Название канала</label><input type="text" id="channelName" class="modal-input" placeholder="Введите название"></div>
-                <div class="profile-field"><label>Описание</label><textarea id="channelDescription" class="modal-input" rows="3" placeholder="Описание канала"></textarea></div>
-                <div class="profile-field"><label>Юзернейм (необязательно) <span style="color:#8a92a6;font-weight:400">@...</span></label><input type="text" id="channelUsername" class="modal-input" placeholder="@mychannel" maxlength="32" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_@]/g,'')"></div>
-                <div class="profile-field"><label><input type="checkbox" id="channelIsPublic" checked> Публичный канал</label></div>
-                <div class="user-profile-buttons">
-                    <button class="user-profile-btn user-profile-btn-secondary" onclick="closeModal('tempModal')">Отмена</button>
-                    <button class="user-profile-btn user-profile-btn-primary" onclick="saveChannel()">Создать</button>
-                </div>
-            </div>
-        `;
-        showModal('Создать канал', h);
+        // v0.60.4 — пошаговый мастер вместо одностраничной формы
+        openCreateWizard('channel');
     }
 
     function saveChannel() {

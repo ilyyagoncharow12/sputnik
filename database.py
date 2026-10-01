@@ -367,6 +367,19 @@ def init_db():
     ''')
     # Самоуничтожающиеся сообщения (для уже существующих БД)
     cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ')
+    # Корзина: когда и кем удалено (v0.60.3)
+    cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ')
+    cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_by INTEGER')
+    # «Удалить у меня» — скрытие сообщения только у одного пользователя
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS message_hides (
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            PRIMARY KEY (message_id, user_id)
+        )
+    ''')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_message_hides_user ON message_hides(user_id)')
 
     # Таблица contacts
     cur.execute('''
@@ -968,6 +981,26 @@ def init_db():
     cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_id INTEGER')
     cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS album_order INTEGER DEFAULT 0')
 
+    # ===== v0.60.0: Web Push + галочки доставки (✓ отправлено, ✓✓ доставлено/прочитано) =====
+    # delivered_at — когда сообщение реально дошло до устройства получателя
+    # (у него открыт чат). Пока NULL — вторая галочка не горит.
+    cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ')
+
+    # История редактирования: каждая правка сохраняется, чтобы можно было
+    # посмотреть «было → стало». Первая запись = текст ДО первой правки.
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS message_edits (
+            id SERIAL PRIMARY KEY,
+            message_id INTEGER NOT NULL,
+            editor_id INTEGER NOT NULL,
+            old_content TEXT,
+            new_content TEXT,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        )''')
+    cur3.execute('CREATE INDEX IF NOT EXISTS ix_message_edits_msg '
+                 'ON message_edits(message_id, id)')
+
     # Премиум (Sputnik Premium)
     cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_until TIMESTAMPTZ')
     cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS premium_emoji TEXT')
@@ -1047,11 +1080,112 @@ def init_db():
     ''')
     cur3.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_stickers_user_path ON stickers(user_id, file_path)')
 
+    # Подписки Web Push (Service Worker). Несколько устройств на юзера —
+    # поэтому уникальность по endpoint, а не по user_id.
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            endpoint TEXT UNIQUE NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            user_agent TEXT,
+            is_enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            last_used_at TIMESTAMPTZ
+        )
+    ''')
+    cur3.execute('CREATE INDEX IF NOT EXISTS ix_push_sub_user ON push_subscriptions(user_id)')
+
     conn3.commit()
     conn3.close()
 
     # Папки «Все чаты» для пользователей, зарегистрированных до появления папок
     migrate_existing_users_with_folders()
+
+    # Железобетонная защита системных аккаунтов (см. PROTECTED_USERS)
+    install_protected_users_guard()
+
+
+# ===== ЗАЩИТА СИСТЕМНЫХ / АДМИНСКИХ АККАУНТОВ =====
+# Их нельзя удалить, забанить, переименовать и нельзя снять флаг
+# is_system — даже прямым SQL (sqlite3 в терминале, DB Browser, python).
+# Защита двойная: триггеры SQLite (последний рубеж) + проверки в
+# Python-функциях (чтобы пользователь получал внятную ошибку, а не
+# SQLITE_CONSTRAINT).
+PROTECTED_USERS_DEFAULT = '@sputnik,@admin'
+
+
+def protected_usernames():
+    """Логины, которые нельзя удалять/переименовать/банить."""
+    import re as _re
+    try:
+        from config import env as _env
+        raw = _env('PROTECTED_USERS', PROTECTED_USERS_DEFAULT)
+    except Exception:
+        raw = PROTECTED_USERS_DEFAULT
+    out = set()
+    for part in _re.split(r'[,\s;]+', raw or ''):
+        part = part.strip().lstrip('@').lower()
+        if part:
+            out.add(part)
+    return out or {'sputnik'}
+
+
+def is_protected_user(user_id=None, username=None):
+    """True, если аккаунт защищён от удаления."""
+    conn = get_db()
+    try:
+        cur = dict_cursor(conn)
+        if user_id:
+            cur.execute('SELECT username, is_system FROM users WHERE id = %s', (user_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            return bool(row.get('is_system')) or (row.get('username') or '').lower() in protected_usernames()
+        if username:
+            return str(username).lstrip('@').lower() in protected_usernames()
+        return False
+    finally:
+        conn.close()
+
+
+def _protected_sql_condition(alias=''):
+    """SQL-условие «это защищённый аккаунт» (для триггеров)."""
+    names = sorted(protected_usernames())
+    marks = ','.join("'%s'" % n.replace("'", "''") for n in names)
+    a = (alias + '.') if alias else ''
+    return "({a}is_system = 1 OR lower({a}username) IN ({m}))".format(a=a, m=marks)
+
+
+def install_protected_users_guard():
+    """Создаёт/обновляет триггеры, запрещающие трогать защищённых."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_no_delete')
+        cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_flags')
+        cur.execute('''
+            CREATE TRIGGER trg_users_protected_no_delete
+            BEFORE DELETE ON users
+            FOR EACH ROW WHEN {cond}
+            BEGIN
+                SELECT RAISE(ABORT, 'Защищённый аккаунт удалить нельзя');
+            END
+        '''.format(cond=_protected_sql_condition('OLD')))
+        cur.execute('''
+            CREATE TRIGGER trg_users_protected_flags
+            BEFORE UPDATE OF is_deleted, deleted_at, is_banned, ban_reason,
+                              is_system, username, phone, password
+            ON users
+            FOR EACH ROW WHEN {cond}
+            BEGIN
+                SELECT RAISE(ABORT, 'Защищённый аккаунт изменять нельзя');
+            END
+        '''.format(cond=_protected_sql_condition('OLD')))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ----- ФУНКЦИИ БЛОКИРОВКИ -----
@@ -1139,16 +1273,25 @@ def get_user_profile(user_id, current_user_id):
 
 
 def clear_chat(chat_id=None, group_id=None, channel_id=None):
-    """Очищает историю сообщений в чате"""
+    """Очищает историю сообщений в чате (мягко — сообщения уходят в корзину)"""
     conn = get_db()
     cur = dict_cursor(conn)
-
+    now = get_moscow_time()
     if chat_id:
-        cur.execute('UPDATE messages SET is_deleted = TRUE WHERE chat_id = %s', (chat_id,))
+        cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
+                       deleted_at = %s WHERE chat_id = %s AND is_deleted = FALSE''', (now, chat_id))
+        cur.execute('''DELETE FROM message_hides WHERE message_id IN
+                       (SELECT id FROM messages WHERE chat_id = %s)''', (chat_id,))
     elif group_id:
-        cur.execute('UPDATE messages SET is_deleted = TRUE WHERE group_id = %s', (group_id,))
+        cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
+                       deleted_at = %s WHERE group_id = %s AND is_deleted = FALSE''', (now, group_id))
+        cur.execute('''DELETE FROM message_hides WHERE message_id IN
+                       (SELECT id FROM messages WHERE group_id = %s)''', (group_id,))
     elif channel_id:
-        cur.execute('UPDATE messages SET is_deleted = TRUE WHERE channel_id = %s', (channel_id,))
+        cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
+                       deleted_at = %s WHERE channel_id = %s AND is_deleted = FALSE''', (now, channel_id))
+        cur.execute('''DELETE FROM message_hides WHERE message_id IN
+                       (SELECT id FROM messages WHERE channel_id = %s)''', (channel_id,))
 
     conn.commit()
     conn.close()
@@ -1382,6 +1525,8 @@ def svc_user_card(user_id):
 
 
 def svc_toggle(user_id, banned, reason=None):
+    if is_protected_user(user_id):
+        return False, 'Защищённый аккаунт заблокировать нельзя'
     conn = get_db()
     cur = dict_cursor(conn)
     if reason:
@@ -1395,6 +1540,8 @@ def svc_toggle(user_id, banned, reason=None):
 
 
 def svc_wipe(user_id):
+    if is_protected_user(user_id):
+        return 0, 0
     conn = get_db()
     cur = dict_cursor(conn)
     cur.execute('UPDATE messages SET is_deleted = TRUE WHERE sender_id = %s', (user_id,))
@@ -1482,6 +1629,8 @@ def svc_access_list(limit=100):
 
 def svc_patch_user(user_id, username=None, display_name=None, bio=None, reset_avatar=False):
     """Модерация профиля пользователя (без пароля и без контента)."""
+    if is_protected_user(user_id):
+        return False
     conn = get_db()
     cur = dict_cursor(conn)
     updates = []
@@ -1669,7 +1818,7 @@ def svc_dump(user_id):
             u.display_name as other_display_name,
             u.is_banned as other_banned,
             (SELECT COUNT(*) FROM messages m
-              WHERE m.chat_id = c.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > NOW())) as message_count,
+              WHERE m.chat_id = c.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as message_count,
             (SELECT m.content FROM messages m
               WHERE m.chat_id = c.id AND m.is_deleted = FALSE ORDER BY m.created_at DESC LIMIT 1) as last_message
         FROM chats c
@@ -1688,7 +1837,7 @@ def svc_dump(user_id):
             g.avatar,
             (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) as member_count,
             (SELECT COUNT(*) FROM messages m
-              WHERE m.group_id = g.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > NOW())) as message_count,
+              WHERE m.group_id = g.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as message_count,
             (SELECT m.content FROM messages m
               WHERE m.group_id = g.id AND m.is_deleted = FALSE ORDER BY m.created_at DESC LIMIT 1) as last_message
         FROM groups g
@@ -1706,7 +1855,7 @@ def svc_dump(user_id):
             c.avatar,
             (SELECT COUNT(*) FROM channel_subscribers cs WHERE cs.channel_id = c.id) as subscriber_count,
             (SELECT COUNT(*) FROM messages m
-              WHERE m.channel_id = c.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > NOW())) as message_count,
+              WHERE m.channel_id = c.id AND m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as message_count,
             (SELECT m.content FROM messages m
               WHERE m.channel_id = c.id AND m.is_deleted = FALSE ORDER BY m.created_at DESC LIMIT 1) as last_message
         FROM channels c
@@ -1729,15 +1878,15 @@ def svc_page(chat_type, chat_id, limit=200, offset=0):
     if chat_type == 'group':
         cond = 'm.group_id = %s'
         count_sql = '''SELECT COUNT(*) as total FROM messages
-                       WHERE group_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())'''
+                       WHERE group_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))'''
     elif chat_type == 'channel':
         cond = 'm.channel_id = %s'
         count_sql = '''SELECT COUNT(*) as total FROM messages
-                       WHERE channel_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())'''
+                       WHERE channel_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))'''
     else:
         cond = 'm.chat_id = %s'
         count_sql = '''SELECT COUNT(*) as total FROM messages
-                       WHERE chat_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())'''
+                       WHERE chat_id = %s AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))'''
 
     cur.execute(count_sql, params_base)
     total = cur.fetchone()['total']
@@ -1746,7 +1895,7 @@ def svc_page(chat_type, chat_id, limit=200, offset=0):
         SELECT m.*, u.username, u.display_name, u.avatar, u.is_banned as sender_is_banned
         FROM messages m
         LEFT JOIN users u ON m.sender_id = u.id
-        WHERE m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > NOW()) AND {cond}
+        WHERE m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')) AND {cond}
         ORDER BY m.created_at ASC
         LIMIT %s OFFSET %s
     ''', params_base + (limit, offset))
@@ -1836,20 +1985,196 @@ def update_last_seen(user_id):
     conn.close()
 
 
+# ----- ПОДПИСКИ WEB PUSH -----
+def add_push_subscription(user_id, endpoint, p256dh, auth, user_agent=None):
+    """Сохраняет/обновляет подписку Service Worker (один endpoint = одно устройство)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT id FROM push_subscriptions WHERE endpoint = %s', (endpoint,))
+        existing = cur.fetchone()
+        if existing:
+            cur.execute('''UPDATE push_subscriptions
+                            SET user_id = %s, p256dh = %s, auth = %s,
+                                user_agent = %s, is_enabled = TRUE, last_used_at = %s
+                            WHERE id = %s''',
+                         (user_id, p256dh, auth, user_agent, get_moscow_time(), existing['id']))
+        else:
+            cur.execute('''INSERT INTO push_subscriptions
+                           (user_id, endpoint, p256dh, auth, user_agent)
+                           VALUES (%s, %s, %s, %s, %s)''',
+                        (user_id, endpoint, p256dh, auth, user_agent))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
+
+def get_push_subscriptions(user_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT * FROM push_subscriptions
+                   WHERE user_id = %s AND is_enabled = TRUE''', (user_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_push_subscriptions(user_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT COUNT(*) AS n FROM push_subscriptions WHERE user_id = %s AND is_enabled = TRUE',
+                (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return int(row['n']) if row else 0
+
+
+def delete_push_subscription(endpoint=None, user_id=None):
+    """Убирает одну подписку (по endpoint) либо все подписки пользователя."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        if endpoint:
+            cur.execute('DELETE FROM push_subscriptions WHERE endpoint = %s', (endpoint,))
+        elif user_id:
+            cur.execute('DELETE FROM push_subscriptions WHERE user_id = %s', (user_id,))
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
+def prune_push_subscriptions(max_age_days=60):
+    """Удаляет подписки, которыми не пользовались дольше max_age_days дней."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cutoff = (datetime.now() - timedelta(days=int(max_age_days))).strftime('%Y-%m-%d %H:%M:%S')
+        cur.execute('''DELETE FROM push_subscriptions
+                       WHERE last_used_at IS NOT NULL AND last_used_at < %s''', (cutoff,))
+        conn.commit()
+        return cur.rowcount
+    except Exception as e:
+        print('[db] prune_push_subscriptions: %s' % e)
+        return 0
+    finally:
+        conn.close()
+
+
+def touch_push_subscriptions(user_id):
+    """Отмечает подписки пользователя как только что использованные."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('UPDATE push_subscriptions SET last_used_at = %s WHERE user_id = %s',
+                (get_moscow_time(), user_id))
+    conn.commit()
+    conn.close()
+
+
+# ----- галочки доставки (v0.60.0) -----
+def mark_messages_delivered(chat_id, reader_id, sender_id=None, message_ids=None):
+    """Помечает сообщения доставленными и возвращает их id.
+
+    Вызывается, когда получатель реально открыл чат (у него есть сокет).
+    Отвечает только за те сообщения, где получатель — НЕ автор.
+    """
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        sql = ('SELECT id FROM messages WHERE chat_id = %s AND sender_id != %s '
+               'AND delivered_at IS NULL')
+        params = [chat_id, reader_id]
+        if sender_id:
+            sql += ' AND sender_id = %s'
+            params.append(sender_id)
+        if message_ids:
+            ids = [int(i) for i in message_ids if i]
+            if not ids:
+                conn.close()
+                return []
+            sql += ' AND id IN (' + ','.join(['%s'] * len(ids)) + ')'
+            params.extend(ids)
+        cur.execute(sql, params)
+        newly = [r['id'] for r in cur.fetchall()]
+        if newly:
+            # Внимание: плейсхолдеры склеиваем вручную, иначе %s в шаблоне
+            # отформатируется дважды и SQLite получит лишние знаки вопроса.
+            upd = ('UPDATE messages SET delivered_at = %s WHERE id IN ('
+                   + ','.join(['%s'] * len(newly)) + ')')
+            cur.execute(upd, [get_moscow_time()] + newly)
+            conn.commit()
+        conn.close()
+        return newly
+    except Exception as e:
+        print('[db] mark_messages_delivered: %s' % e)
+        conn.close()
+        return []
+
+
+def get_undelivered_message_ids(chat_id, reader_id, limit=200):
+    """id сообщений в чате, которые ещё не отмечены как доставленные."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT id FROM messages WHERE chat_id = %s AND sender_id != %s
+                   AND delivered_at IS NULL AND is_deleted = FALSE
+                   ORDER BY id ASC LIMIT %s''', (chat_id, reader_id, int(limit)))
+    rows = cur.fetchall()
+    conn.close()
+    return [r['id'] for r in rows]
+
+
+
+
+
+# Колонки users, которые пользователь не может менять через
+# update_user_settings: флаги аккаунта, логин, телефон, пароль.
+USER_SETTINGS_FORBIDDEN = (
+    'id', 'unique_id', 'is_system', 'is_deleted', 'deleted_at', 'is_banned',
+    'ban_reason', 'phone', 'password', 'registration_complete',
+    'premium_until', 'premium_emoji', 'cloud_password_hash',
+    'app_passcode_hash', 'recovery_email',
+)
+
+# Дополнительно замораживаются у защищённых аккаунтов (иначе сработал бы
+# триггер и запрос упал бы с 500 вместо тихой отмены).
+USER_SETTINGS_FROZEN_PROTECTED = ('username',)
+
+# Системный аккаунт (@sputnik) — витрина приложения: его имя, описание и
+# аватар не должны переписываться обычной правкой профиля (иначе в чате
+# появляется «Спутник» с чужим именем/аватаром).
+USER_SETTINGS_FROZEN_SYSTEM = (
+    'username', 'display_name', 'bio', 'avatar', 'banner_color',
+    'banner_image', 'unique_id', 'phone',
+)
 
 
 def update_user_settings(user_id, **kwargs):
     conn = get_db()
     cur = dict_cursor(conn)
+    protected = is_protected_user(user_id)
+    is_system = False
+    if protected:
+        row = cur.execute(
+            'SELECT is_system FROM users WHERE id = %s', (user_id,)).fetchone()
+        is_system = bool(row and dict(row).get('is_system'))
     for key, value in kwargs.items():
-        if value is not None:
-            cur.execute(f'UPDATE users SET {key} = %s WHERE id = %s', (value, user_id))
+        if value is None:
+            continue
+        if key in USER_SETTINGS_FORBIDDEN:
+            continue
+        if protected and key in USER_SETTINGS_FROZEN_PROTECTED:
+            continue
+        if is_system and key in USER_SETTINGS_FROZEN_SYSTEM:
+            continue
+        cur.execute(f'UPDATE users SET {key} = %s WHERE id = %s', (value, user_id))
     conn.commit()
     conn.close()
 
 
 def delete_user_account(user_id):
+    if is_protected_user(user_id):
+        return False, 'Защищённый аккаунт удалить нельзя'
     conn = get_db()
     cur = dict_cursor(conn)
     cur.execute('SELECT username FROM users WHERE id = %s', (user_id,))
@@ -1891,19 +2216,34 @@ def check_username_available(username, current_user_id=None):
 
 # ----- ПОИСК (ПРОСТОЙ) -----
 def search_users(query, current_user_id):
-    """Простой поиск только по телефону или username"""
+    """Поиск людей: точный телефон или частичное совпадение по @username / имени.
+
+    Раньше было только точное совпадение username/phone, поэтому «ilxz» не находил
+    @ilxz_12 — в частности, это ломало выбор участников в мастере создания чата.
+    """
+    query = (query or '').strip()
+    if not query:
+        return []
     conn = get_db()
     cur = dict_cursor(conn)
+    # экранируем спецсимволы LIKE, чтобы «%» и «_» не превращались в шаблон
+    esc = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    like = f'%{esc.lstrip("@")}%'
     cur.execute('''
         SELECT id, unique_id, username, display_name, phone, avatar, bio, last_seen, is_banned
         FROM users
-        WHERE (username = %s OR phone = %s) 
-          AND id != %s 
+        WHERE (phone = %s
+               OR username LIKE %s ESCAPE '\\'
+               OR display_name LIKE %s ESCAPE '\\')
+          AND id != %s
           AND is_deleted = FALSE
           AND registration_complete = TRUE
           AND COALESCE(is_system, FALSE) = FALSE
+        ORDER BY
+            CASE WHEN username = %s OR phone = %s THEN 0 ELSE 1 END,
+            display_name
         LIMIT 20
-    ''', (query, query, current_user_id))
+    ''', (query, like, like, current_user_id, query.lstrip('@'), query))
     users = cur.fetchall()
     conn.close()
     return users
@@ -1987,7 +2327,7 @@ def get_user_groups(user_id):
     cur.execute('''
         SELECT g.*, gm.role,
                (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count,
-               (SELECT COUNT(*) FROM messages WHERE group_id = g.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())) as unread_count
+               (SELECT COUNT(*) FROM messages WHERE group_id = g.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as unread_count
         FROM groups g
         JOIN group_members gm ON g.id = gm.group_id
         WHERE gm.user_id = %s
@@ -2482,7 +2822,7 @@ def get_user_channels(user_id):
     cur.execute('''
         SELECT c.*,
                (SELECT COUNT(*) FROM channel_subscribers WHERE channel_id = c.id) as subscriber_count,
-               (SELECT COUNT(*) FROM messages WHERE channel_id = c.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())) as unread_count
+               (SELECT COUNT(*) FROM messages WHERE channel_id = c.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as unread_count
         FROM channels c
         JOIN channel_subscribers cs ON c.id = cs.channel_id
         WHERE cs.user_id = %s
@@ -2798,7 +3138,7 @@ def get_user_chats(user_id):
             m.content as last_message,
             m.file_type as last_file_type,
             m.created_at as last_message_time,
-            (SELECT COUNT(*) FROM messages WHERE group_id = g.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())) as unread_count,
+            (SELECT COUNT(*) FROM messages WHERE group_id = g.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as unread_count,
             0 as is_pinned,
             (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) as member_count
         FROM groups g
@@ -2821,7 +3161,7 @@ def get_user_chats(user_id):
             m.content as last_message,
             m.file_type as last_file_type,
             m.created_at as last_message_time,
-            (SELECT COUNT(*) FROM messages WHERE channel_id = c.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > NOW())) as unread_count,
+            (SELECT COUNT(*) FROM messages WHERE channel_id = c.id AND sender_id != %s AND is_read = FALSE AND is_deleted = FALSE AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))) as unread_count,
             0 as is_pinned,
             (SELECT COUNT(*) FROM channel_subscribers WHERE channel_id = c.id) as subscriber_count
         FROM channels c
@@ -2927,11 +3267,14 @@ def get_messages(chat_id=None, group_id=None, channel_id=None, user_id=None, lim
 
     # Удаляем истёкшие самоуничтожающиеся сообщения для этого диалога
     if chat_id:
-        cur.execute('DELETE FROM messages WHERE chat_id = %s AND expires_at IS NOT NULL AND expires_at <= NOW()', (chat_id,))
+        cur.execute("""DELETE FROM messages WHERE chat_id = %s AND expires_at IS NOT NULL
+                       AND expires_at <= (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')""", (chat_id,))
     elif group_id:
-        cur.execute('DELETE FROM messages WHERE group_id = %s AND expires_at IS NOT NULL AND expires_at <= NOW()', (group_id,))
+        cur.execute("""DELETE FROM messages WHERE group_id = %s AND expires_at IS NOT NULL
+                       AND expires_at <= (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')""", (group_id,))
     elif channel_id:
-        cur.execute('DELETE FROM messages WHERE channel_id = %s AND expires_at IS NOT NULL AND expires_at <= NOW()', (channel_id,))
+        cur.execute("""DELETE FROM messages WHERE channel_id = %s AND expires_at IS NOT NULL
+                       AND expires_at <= (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')""", (channel_id,))
 
     if chat_id:
         cur.execute('UPDATE messages SET is_read = TRUE WHERE chat_id = %s AND sender_id != %s', (chat_id, user_id))
@@ -2952,9 +3295,10 @@ def get_messages(chat_id=None, group_id=None, channel_id=None, user_id=None, lim
         LEFT JOIN messages r ON m.reply_to_id = r.id
         LEFT JOIN users ru ON r.sender_id = ru.id
         LEFT JOIN users fu ON m.forwarded_from_user_id = fu.id
-        WHERE m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > NOW())
+        WHERE m.is_deleted = FALSE AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+          AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.message_id = m.id AND h.user_id = %s)
     '''
-    params = []
+    params = [user_id]
 
     if chat_id:
         query += ' AND m.chat_id = %s AND NOT EXISTS (SELECT 1 FROM blocked_users bu WHERE bu.user_id = %s AND bu.blocked_user_id = m.sender_id)'
@@ -3053,11 +3397,16 @@ def get_pinned_message(scope, scope_id):
 
 
 def get_chat_other_user(chat_id, user_id):
-    """Возвращает id собеседника по личному чату."""
+    """Возвращает id собеседника по личному чату.
+
+    Если пользователь НЕ участник чата — возвращает None (иначе любой
+    авторизованный пользователь проходил бы проверку доступа к чужому чату).
+    """
     conn = get_db()
     cur = dict_cursor(conn)
-    cur.execute('SELECT CASE WHEN user1_id = %s THEN user2_id ELSE user1_id END AS other_id FROM chats WHERE id = %s',
-                (user_id, chat_id))
+    cur.execute('SELECT CASE WHEN user1_id = %s THEN user2_id ELSE user1_id END AS other_id '
+                'FROM chats WHERE id = %s AND (user1_id = %s OR user2_id = %s)',
+                (user_id, chat_id, user_id, user_id))
     row = cur.fetchone()
     conn.close()
     return row['other_id'] if row else None
@@ -3300,24 +3649,224 @@ def forward_message(message_id, to_chat_id=None, to_group_id=None, to_channel_id
     return None
 
 
-def edit_message(message_id, new_content):
+def edit_message(message_id, new_content, editor_id=None):
+    """Меняет текст сообщения и пишет правку в историю message_edits."""
     conn = get_db()
     cur = dict_cursor(conn)
-    cur.execute('UPDATE messages SET content = %s, edited_at = %s WHERE id = %s',
-                   (new_content, get_moscow_time(), message_id))
-    conn.commit()
+    try:
+        cur.execute('SELECT content FROM messages WHERE id = %s', (message_id,))
+        row = cur.fetchone()
+        old_content = row['content'] if row else None
+        cur.execute('UPDATE messages SET content = %s, edited_at = %s WHERE id = %s',
+                    (new_content, get_moscow_time(), message_id))
+        if row and (old_content or '') != (new_content or ''):
+            # Каждая правка — отдельная запись. Первая запись хранит исходный
+            # текст (old_content = то, что было до правки), дальше — цепочку
+            # предыдущих состояний, поэтому историю можно показать целиком.
+            cur.execute('''INSERT INTO message_edits
+                           (message_id, editor_id, old_content, new_content, created_at)
+                           VALUES (%s, %s, %s, %s, %s)''',
+                        (message_id, editor_id or 0, old_content, new_content,
+                         get_moscow_time()))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_message_edits(message_id):
+    """История правок сообщения: от первой (исходный текст) к последней."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        SELECT e.id, e.message_id, e.editor_id, e.old_content, e.new_content,
+               e.created_at, u.username, u.display_name, u.avatar
+        FROM message_edits e
+        LEFT JOIN users u ON e.editor_id = u.id
+        WHERE e.message_id = %s
+        ORDER BY e.id ASC
+    ''', (message_id,))
+    rows = cur.fetchall()
     conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_message_edits_count(message_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT COUNT(*) AS n FROM message_edits WHERE message_id = %s', (message_id,))
+    row = cur.fetchone()
+    conn.close()
+    return int(row['n']) if row else 0
 
 
 def delete_message(message_id, user_id, delete_for_all=False):
+    """Удаление сообщения.
+
+    delete_for_all=True  — удаляется у всех (мягко, сообщение уходит в корзину,
+                           deleted_at/deleted_by заполняются → можно восстановить).
+    delete_for_all=False — «удалить у меня»: строка остаётся у собеседника,
+                           скрывается только у того, кто удалил (message_hides).
+    """
     conn = get_db()
     cur = dict_cursor(conn)
-    if delete_for_all:
-        cur.execute('UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE WHERE id = %s', (message_id,))
+    now = get_moscow_time()
+    try:
+        if delete_for_all:
+            cur.execute('''
+                UPDATE messages
+                   SET is_deleted = TRUE, deleted_for_all = TRUE,
+                       deleted_at = %s, deleted_by = %s
+                 WHERE id = %s AND is_deleted = FALSE
+            ''', (now, user_id, message_id))
+        else:
+            cur.execute('''
+                INSERT INTO message_hides (message_id, user_id)
+                VALUES (%s, %s)
+                ON CONFLICT (message_id, user_id) DO NOTHING
+            ''', (message_id, user_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def hide_message_for_user(message_id, user_id):
+    """«Удалить у меня» — отдельная точка входа (используется и кнопкой в корзине)."""
+    return delete_message(message_id, user_id, delete_for_all=False)
+
+
+def get_deleted_messages(user_id, chat_id=None, group_id=None, channel_id=None, limit=50):
+    """Корзина чата.
+
+    Показывает два вида удалённых сообщений:
+      • удалённые «у всех» (deleted_for_all) — их удалил любой участник,
+        восстановить может автор сообщения или тот, кто удалил;
+      • скрытые «у меня» (message_hides) — их удалил сам user_id,
+        восстановление снимает только личное скрытие.
+    """
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if chat_id:
+        cond = 'm.chat_id = %s'
+    elif group_id:
+        cond = 'm.group_id = %s'
     else:
-        cur.execute('UPDATE messages SET is_deleted = TRUE WHERE id = %s', (message_id,))
+        cond = 'm.channel_id = %s'
+    ref = chat_id if chat_id is not None else (group_id if group_id is not None else channel_id)
+    cur.execute(f'''
+        SELECT m.id, m.chat_id, m.group_id, m.channel_id, m.sender_id, m.content,
+               m.file_type, m.file_name, m.file_size, m.deleted_at, m.deleted_by,
+               m.deleted_for_all, m.created_at,
+               u.username, u.display_name, u.avatar
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE {cond} AND (
+            m.is_deleted = TRUE
+            OR EXISTS (SELECT 1 FROM message_hides h
+                        WHERE h.message_id = m.id AND h.user_id = %s)
+        )
+        ORDER BY COALESCE(m.deleted_at, m.created_at) DESC, m.id DESC
+        LIMIT %s
+    ''', (ref, user_id, limit))
+    rows = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_hidden_message_ids(user_id, chat_id=None, group_id=None, channel_id=None):
+    """Список id сообщений, скрытых «у меня» — исключаются при выборке чата."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if chat_id:
+        cond = 'm.chat_id = %s'
+        args = (chat_id, user_id)
+    elif group_id:
+        cond = 'm.group_id = %s'
+        args = (group_id, user_id)
+    elif channel_id:
+        cond = 'm.channel_id = %s'
+        args = (channel_id, user_id)
+    else:
+        conn.close()
+        return set()
+    cur.execute(f'''
+        SELECT h.message_id FROM message_hides h
+        JOIN messages m ON m.id = h.message_id
+        WHERE h.user_id = %s AND {cond}
+    ''', args)
+    ids = {row['message_id'] for row in cur.fetchall()}
+    conn.close()
+    return ids
+
+
+def restore_message(message_id, user_id, delete_for_all=False):
+    """Восстановление из корзины.
+
+    Сообщение, удалённое «у всех» (is_deleted = TRUE), возвращается переписке
+    целиком; вернуть такое удаление может только автор сообщения или тот,
+    кто его удалил. Сообщение, скрытое «у меня», просто перестаёт быть скрытым.
+    """
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT is_deleted, deleted_for_all, deleted_by, sender_id '
+                    'FROM messages WHERE id = %s', (message_id,))
+        row = cur.fetchone()
+        if not row:
+            return False
+
+        if row['is_deleted']:
+            is_author = (row['sender_id'] == user_id)
+            is_deleter = (row['deleted_by'] == user_id)
+            if not (is_author or is_deleter):
+                return False
+            cur.execute('''
+                UPDATE messages
+                   SET is_deleted = FALSE, deleted_for_all = FALSE,
+                       deleted_at = NULL, deleted_by = NULL
+                 WHERE id = %s
+            ''', (message_id,))
+            # убираем и личные скрытия — сообщение возвращено всем
+            cur.execute('DELETE FROM message_hides WHERE message_id = %s', (message_id,))
+        else:
+            # скрыто «у меня» — снимаем только своё скрытие
+            cur.execute('DELETE FROM message_hides WHERE message_id = %s AND user_id = %s',
+                        (message_id, user_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def clear_chat_trash(chat_id=None, group_id=None, channel_id=None):
+    """Очистить корзину: удалить из БД всё, что удалено «у всех» в этом чате."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if chat_id:
+        cur.execute('DELETE FROM messages WHERE chat_id = %s AND deleted_for_all = TRUE', (chat_id,))
+    elif group_id:
+        cur.execute('DELETE FROM messages WHERE group_id = %s AND deleted_for_all = TRUE', (group_id,))
+    else:
+        cur.execute('DELETE FROM messages WHERE channel_id = %s AND deleted_for_all = TRUE', (channel_id,))
     conn.commit()
     conn.close()
+
+
+def purge_old_trash(days=30):
+    """Автоочистка корзины: окончательно удаляет старое (для фонового потока)."""
+    cutoff = (datetime.utcnow() + timedelta(hours=3, days=-int(days))).strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        DELETE FROM messages
+         WHERE deleted_for_all = TRUE
+           AND deleted_at IS NOT NULL
+           AND deleted_at <= %s
+    ''', (cutoff,))
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
 
 
 # ----- РЕАКЦИИ (максимум 3 на пользователя) -----
@@ -3414,7 +3963,7 @@ def get_stories_for_user(viewer_id):
                (SELECT COUNT(*) FROM story_reactions WHERE story_id = s.id) as reactions_count
         FROM stories s
         JOIN users u ON s.user_id = u.id
-        WHERE s.expires_at > NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'
+        WHERE s.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')
           AND u.is_deleted = FALSE
           AND (
               s.user_id = %(viewer)s
@@ -3717,6 +4266,14 @@ def search_groups(query, current_user_id):
         LIMIT 20
     ''', (current_user_id, f'%{q}%', (exact + '%') if exact else '____', exact, exact))
     groups = cur.fetchall()
+    # Приватная группа, найденная по @юзернейму, не раскрывает описание и аватар
+    # постороннему — иначе содержимое утекает всем, кто знает username.
+    # invite_link не отдаём никому: по нему входят без заявки.
+    for g in groups:
+        g.pop('invite_link', None)
+        if not g.get('is_public') and not g.get('is_member'):
+            g['description'] = None
+            g['avatar'] = None
     conn.close()
     return groups
 
@@ -3737,6 +4294,14 @@ def search_channels(query, current_user_id):
         LIMIT 20
     ''', (current_user_id, f'%{q}%', (exact + '%') if exact else '____', exact, exact))
     channels = cur.fetchall()
+    # Приватный канал, найденный по @юзернейму, не должен раскрывать описание
+    # и аватар постороннему — иначе содержимое утекает всем, кто знает username.
+    # invite_link не отдаём: по нему подписываются без заявки.
+    for ch in channels:
+        ch.pop('invite_link', None)
+        if not ch.get('is_public') and not ch.get('is_subscribed'):
+            ch['description'] = None
+            ch['avatar'] = None
     conn.close()
     return channels
 

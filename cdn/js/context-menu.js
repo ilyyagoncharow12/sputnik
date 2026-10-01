@@ -184,6 +184,15 @@ function showContextMenu(e, id, content, el) {
         action: 'pin'
     });
 
+    // История правок — только если сообщение уже редактировали
+    if (el.dataset.edited === '1' || el.querySelector('.msg-edited-badge')) {
+        menuItems.push({
+            icon: 'fa-clock-rotate-left',
+            text: 'История',
+            action: 'edits'
+        });
+    }
+
     // Кнопка Удалить - всегда в конце
     menuItems.push({
         icon: 'fa-trash-alt',
@@ -409,6 +418,8 @@ function showContextMenu(e, id, content, el) {
     } else if (action === 'download') {
         // Скачивание файла
         downloadCurrentFile();
+    } else if (action === 'edits') {
+        showMessageEditsHistory(currentContextMessage.id);
     } else if (action === 'add_to_profile') {
         // Добавляет аудио в профиль
         addAudioToProfile();
@@ -730,20 +741,20 @@ function addAudioViaFormData(filePath, title, artist, fileName) {
 
     if (m.poll) content += renderPollHTML(m.poll);
 
-    const editedBadge = m.edited_at ? '<span style="font-size:9px; margin-right:4px;">изм.</span>' : '';
+    const editedBadge = m.edited_at ? '<span class="msg-edited-badge">изм.</span>' : '';
 
     // Экранируем контент для безопасного использования в onclick
     const escapedContent = (m.content || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     return `
-        <div class="message ${out ? 'outgoing' : 'incoming'}" data-message-id="${m.id || 'temp'}" oncontextmenu="showContextMenu(event, ${m.id || 'temp'}, '${escapedContent}', this)">
+        <div class="message ${out ? 'outgoing' : 'incoming'}" data-message-id="${m.id || 'temp'}" data-edited="${m.edited_at ? '1' : '0'}" oncontextmenu="showContextMenu(event, ${m.id || 'temp'}, '${escapedContent}', this)">
             <div class="message-bubble">
                 ${content}
                 <div class="message-reactions"></div>
                 <div class="message-meta">
                     ${editedBadge}
                     <span>${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    ${out ? (m.is_read ? '<i class="fas fa-check-double" style="font-size:8px;color:#53d769;"></i>' : '<i class="fas fa-check" style="font-size:8px;"></i>') : ''}
+                    ${typeof messageTicksHTML === 'function' ? messageTicksHTML(m) : (out && m.chat_id != null ? (m.is_read ? '<i class="fas fa-check-double msg-tick msg-tick--read"></i>' : '<i class="fas fa-check msg-tick msg-tick--sent"></i>') : '')}
                 </div>
             </div>
         </div>

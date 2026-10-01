@@ -16,7 +16,7 @@ from database import (
     svc_note_access, svc_access_list, svc_patch_user, svc_list_groups,
     svc_group_roster, svc_remove_node, svc_detach, svc_list_channels,
     svc_channel_roster, svc_purge_node, svc_find_user, svc_dump, svc_page,
-    svc_counters,
+    svc_counters, is_protected_user,
     create_premium_promo, list_premium_promos, update_premium_promo,
     delete_premium_promo, list_premium_activations, premium_stats,
     get_user_premium, set_user_premium_emoji,
@@ -173,7 +173,11 @@ def _op_ban():
     reason = (data.get('reason') or '').strip()[:300] or None
     if not user_id:
         return jsonify({'error': 'Не указан пользователь'}), 400
-    svc_toggle(user_id, banned, reason)
+    if is_protected_user(user_id):
+        return jsonify({'error': 'Защищённый аккаунт: блокировка запрещена'}), 403
+    ok, err = svc_toggle(user_id, banned, reason)
+    if ok is False:
+        return jsonify({'error': err or 'Не удалось применить'}), 403
     svc_trace(_actor(), 'ban' if banned else 'unban',
               f"user_id={user_id} увеличен={banned} причина={reason}")
     return jsonify({'success': True, 'banned': banned, 'reason': reason})
@@ -185,6 +189,8 @@ def _op_delete_content():
     user_id = int(data.get('user_id', 0))
     if not user_id:
         return jsonify({'error': 'Не указан пользователь'}), 400
+    if is_protected_user(user_id):
+        return jsonify({'error': 'Защищённый аккаунт: содержимое не трогаем'}), 403
     n_msg, n_story = svc_wipe(user_id)
     svc_trace(_actor(), 'delete_content',
               f"user_id={user_id} messages={n_msg} stories={n_story}")
@@ -197,6 +203,8 @@ def _op_edit_profile():
     user_id = int(data.get('user_id', 0))
     if not user_id:
         return jsonify({'error': 'Не указан пользователь'}), 400
+    if is_protected_user(user_id):
+        return jsonify({'error': 'Защищённый аккаунт: правка запрещена'}), 403
     username = (data.get('username') or '').strip() or None
     display_name = (data.get('display_name') or '').strip() or None
     bio = (data.get('bio') or '').strip() or None

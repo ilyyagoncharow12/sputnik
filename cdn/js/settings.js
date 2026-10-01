@@ -3,6 +3,7 @@
     let notificationsPermissionAsked = false;
 
     function openNotifications() {
+        if (typeof openPushSettings === 'function') { openPushSettings(); return; }
         closeBurgerMenu();
         const status = (typeof Notification !== 'undefined') ? Notification.permission : 'unsupported';
         const state = notificationsEnabled ? 'включены' : 'выключены';
@@ -55,9 +56,7 @@
             n.onclick = () => {
                 window.focus();
                 n.close();
-                if (chatScope === 'personal') openChat(chatId, 'personal');
-                else if (chatScope === 'group') openGroupChat(chatId);
-                else if (chatScope === 'channel') openChannel(chatId);
+                if (typeof openChat === 'function') openChat(chatId, chatScope || 'personal');
             };
         } catch (e) {}
     }
@@ -603,6 +602,7 @@ function resetAllAppearance() {
                 <div class="burger-item" onclick="openChatInfo(); closeModal('tempModal');"><i class="fas fa-info-circle"></i> Информация</div>
                 ${currentChatType === 'group' ? `<div class="burger-item" onclick="openGroupInfo(${currentChat.id}); closeModal('tempModal');"><i class="fas fa-users"></i> Участники</div>` : ''}
                 ${currentChatType === 'channel' ? `<div class="burger-item" onclick="openChannelInfo(${currentChat.id}); closeModal('tempModal');"><i class="fas fa-user-shield"></i> Администраторы</div>` : ''}
+                <div class="burger-item" onclick="openChatTrash(); closeModal('tempModal');"><i class="fas fa-trash-restore"></i> Корзина</div>
                 <div class="burger-item" onclick="clearChatWithUser(); closeModal('tempModal');"><i class="fas fa-eraser"></i> Очистить чат</div>
                 ${currentChatType === 'channel' ? `<div class="burger-item" onclick="unsubscribeFromCurrentChannel(); closeModal('tempModal');"><i class="fas fa-bell-slash"></i> Отписаться</div>` : ''}
                 <div class="burger-divider"></div>

@@ -218,13 +218,20 @@
         return [...new Set(matches.map(u => u.replace(/[.,;:!?]+$/, '')))];
     }
 
+    // Превью ссылки само НЕ подгружается — только кнопка под текстом.
+    // Раньше карточка появлялась автоматически и уезжала за край.
     function injectLinkPreview(container, url) {
         if (container.querySelector('.link-preview')) return;
+        removeLinkPreviewButton(container, url);
         fetch(`/api/link_preview?url=${encodeURIComponent(url)}`)
             .then(r => r.json())
             .then(d => {
                 const p = d.preview;
-                if (!p || (!p.title && !p.image_url && !p.description)) return;
+                if (!p || (!p.title && !p.image_url && !p.description)) {
+                    // превью не нашлось — вернём кнопку, чтобы можно было повторить
+                    attachLinkPreviewButton(container, url);
+                    return;
+                }
                 if (container.querySelector('.link-preview')) return;
                 const div = document.createElement('div');
                 div.className = 'link-preview';
@@ -239,14 +246,46 @@
                 div.onclick = () => window.open(url, '_blank');
                 container.appendChild(div);
             })
-            .catch(() => {});
+            .catch(() => { attachLinkPreviewButton(container, url); });
+    }
+
+    // Кнопка «Показать превью» под текстом со ссылкой
+    // container — либо само сообщение, либо его .message-text
+    function attachLinkPreviewButton(container, url) {
+        if (!container) return;
+        const text = container.classList.contains('message-text')
+            ? container
+            : container.querySelector('.message-text');
+        if (!text) return;
+        const msg = container.closest('.message') || container;
+        if (msg.querySelector('.link-preview')) return;
+        if (msg.querySelector('.link-preview-btn')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'link-preview-btn';
+        btn.innerHTML = '<i class="fas fa-eye"></i> Показать превью ссылки';
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            btn.remove();
+            injectLinkPreview(text, url);
+        };
+        text.insertAdjacentElement('afterend', btn);
+    }
+
+    function removeLinkPreviewButton(container, url) {
+        const msg = container.closest('.message') || container;
+        msg.querySelectorAll('.link-preview-btn').forEach(b => b.remove());
     }
 
     function loadLinkPreviews(container) {
+        if (!container) return;
         const textEls = container.querySelectorAll('.message-text');
         textEls.forEach(tx => {
+            if (tx.querySelector('.link-preview')) return;
             const urls = extractUrls(tx.textContent);
-            urls.forEach(url => injectLinkPreview(tx, url));
+            if (!urls.length) return;
+            // как в Telegram — превью только для первой ссылки
+            attachLinkPreviewButton(container, urls[0]);
         });
     }
 
@@ -818,5 +857,78 @@
                     </div>
                 `).join('');
             });
+    }
+
+    // ===== ИСТОРИЯ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ =====
+    // Показывает цепочку правок: сначала исходный текст, потом каждая версия.
+    function showMessageEditsHistory(messageId) {
+        if (!messageId) return;
+        showModal('История редактирования', `
+            <div id="msgEditsBody">
+                <div class="msg-edits-loading"><i class="fas fa-circle-notch fa-spin"></i> Загрузка...</div>
+            </div>
+        `);
+        fetch('/api/message_edits/' + messageId)
+            .then((r) => r.json())
+            .then((d) => {
+                const box = document.getElementById('msgEditsBody');
+                if (!box) return;
+                if (d.error) {
+                    box.className = 'msg-edits-empty';
+                    box.innerHTML = '<i class="fas fa-lock"></i><div>' + escapeHtml(d.error) + '</div>';
+                    return;
+                }
+                const edits = d.edits || [];
+                if (!edits.length) {
+                    box.className = 'msg-edits-empty';
+                    box.innerHTML = '<i class="fas fa-pen"></i>'
+                        + '<div>Сообщение не редактировалось</div>'
+                        + '<div class="msg-edits-hint">История появится после первого редактирования</div>';
+                    return;
+                }
+                box.className = '';
+                let html = '<div class="msg-edits-list">';
+                edits.forEach((e, i) => {
+                    const who = e.display_name
+                        ? (e.display_name + (e.username ? ' @' + e.username : ''))
+                        : ('id ' + (e.editor_id || '?'));
+                    html += `
+                    <div class="msg-edit-step">
+                        <div class="msg-edit-head">
+                            <span class="msg-edit-idx">${i + 1}</span>
+                            <span class="msg-edit-who">${escapeHtml(who)}</span>
+                            <span class="msg-edit-time">${escapeHtml(formatEditTime(e.created_at))}</span>
+                        </div>
+                        <div class="msg-edit-old">
+                            <div class="msg-edit-label">Было</div>
+                            <div class="msg-edit-text">${escapeHtml(e.old_content || '(без текста)')}</div>
+                        </div>
+                        <div class="msg-edit-arrow"><i class="fas fa-arrow-down"></i></div>
+                        <div class="msg-edit-new">
+                            <div class="msg-edit-label">Стало</div>
+                            <div class="msg-edit-text">${escapeHtml(e.new_content || '(без текста)')}</div>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+                box.innerHTML = html;
+            })
+            .catch(() => {
+                const box = document.getElementById('msgEditsBody');
+                if (box) box.className = 'msg-edits-empty',
+                    box.textContent = 'Не удалось загрузить историю';
+            });
+    }
+
+    function formatEditTime(value) {
+        if (!value) return '';
+        try {
+            const d = new Date(value);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleString('ru', {
+                day: '2-digit', month: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        } catch (e) { return ''; }
     }
 

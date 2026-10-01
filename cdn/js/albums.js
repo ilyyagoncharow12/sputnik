@@ -52,6 +52,33 @@ function albumTime(m) {
     } catch (e) { return ''; }
 }
 
+// Галочка для кружков/стикеров/альбомов: пользуемся общей логикой из core.js
+function albumTickHTML(m) {
+    if (typeof messageTicksHTML === 'function') return messageTicksHTML(m);
+    if (!m || m.chat_id == null) return '';
+    if (m.is_read) return '<i class="fas fa-check-double msg-tick msg-tick--read"></i>';
+    if (m.delivered_at) return '<i class="fas fa-check-double msg-tick msg-tick--delivered"></i>';
+    return '<i class="fas fa-check msg-tick msg-tick--sent"></i>';
+}
+
+// Обновляет галочку внутри собранной сетки альбома (по одному из его id).
+function refreshAlbumTick(messageId, state) {
+    if (!messageId) return;
+    const cell = document.querySelector(`.ma-cell[data-mid="${messageId}"]`);
+    if (!cell) return;
+    const grid = cell.closest('.message[data-album-group]');
+    if (!grid) return;
+    if (state === 'read') grid.dataset.isRead = '1';
+    if (state === 'delivered' || state === 'read') grid.dataset.isDelivered = '1';
+    const tickEl = grid.querySelector('.message-meta .msg-tick');
+    if (!tickEl) return;
+    if (state === 'read') {
+        tickEl.className = 'fas fa-check-double msg-tick msg-tick--read';
+    } else if (state === 'delivered' && !tickEl.classList.contains('msg-tick--read')) {
+        tickEl.className = 'fas fa-check-double msg-tick msg-tick--delivered';
+    }
+}
+
 /* ======================= СБОРКА СЕТКИ В DOM ======================= */
 /* Разворачивает уже собранную сетку обратно в список элементов: приход
    нового сообщения альбома (Socket.IO) пересобирает сетку целиком,
@@ -60,7 +87,11 @@ function albumUnitsOf(node) {
     if (node.dataset.albumGroup) {
         let items = [];
         try { items = JSON.parse(node.dataset.albumItems || '[]') || []; } catch (e) { items = []; }
-        return { items, isRead: node.dataset.isRead === '1' };
+        return {
+            items,
+            isRead: node.dataset.isRead === '1',
+            isDelivered: node.dataset.isDelivered === '1',
+        };
     }
     if (!node?.dataset?.album) return null;
     return {
@@ -71,6 +102,7 @@ function albumUnitsOf(node) {
             id: node.dataset.messageId,
         }],
         isRead: node.dataset.isRead === '1',
+        isDelivered: node.dataset.isDelivered === '1',
     };
 }
 
@@ -89,6 +121,7 @@ function mergeAlbumCells(area) {
         const run = [el];
         const items = [];
         let isRead = false;
+        let isDelivered = false;
         let j = i + 1;
         while (j < kids.length) {
             const nx = kids[j];
@@ -96,11 +129,19 @@ function mergeAlbumCells(area) {
             if ((nx.dataset.album || nx.dataset.albumGroup) !== aid) break;
             run.push(nx);
             const u = albumUnitsOf(nx);
-            if (u) { items.push(...u.items); isRead = isRead || u.isRead; }
+            if (u) {
+                items.push(...u.items);
+                isRead = isRead || u.isRead;
+                isDelivered = isDelivered || u.isDelivered;
+            }
             j++;
         }
         const u0 = albumUnitsOf(el);
-        if (u0) { items.push(...u0.items); isRead = isRead || u0.isRead; }
+        if (u0) {
+            items.push(...u0.items);
+            isRead = isRead || u0.isRead;
+            isDelivered = isDelivered || u0.isDelivered;
+        }
 
         // Одно и то же сообщение может попасть в список и из уже собранной
         // сетки, и из отдельного узла (приход через сокет) — оставляем
@@ -125,14 +166,21 @@ function mergeAlbumCells(area) {
 
         const outgoing = el.classList.contains('outgoing');
         const meta = run.map(albumTimeFromDataset).filter(Boolean).pop() || '';
-        const readTick = isRead
-            ? '<i class="fas fa-check-double" style="font-size:8px;color:#53d769;"></i>'
-            : (outgoing ? '<i class="fas fa-check" style="font-size:8px;"></i>' : '');
+        // Галочка по худшему состоянию среди элементов альбома:
+        // прочитано > доставлено > отправлено.
+        const tick = isRead ? 'read' : (isDelivered ? 'delivered' : 'sent');
+        const isPersonal = el.dataset.isPersonal === '1';
+        const readTick = !outgoing || !isPersonal ? '' : (
+            tick === 'read' ? '<i class="fas fa-check-double msg-tick msg-tick--read"></i>'
+                : tick === 'delivered' ? '<i class="fas fa-check-double msg-tick msg-tick--delivered"></i>'
+                    : '<i class="fas fa-check msg-tick msg-tick--sent"></i>');
 
         const grid = document.createElement('div');
         grid.className = `message ${outgoing ? 'outgoing' : 'incoming'}`;
         grid.dataset.albumGroup = aid;
         grid.dataset.isRead = isRead ? '1' : '0';
+        grid.dataset.isDelivered = isDelivered ? '1' : '0';
+        grid.dataset.isPersonal = isPersonal ? '1' : '0';
         grid.dataset.albumItems = JSON.stringify(itemsFinal);
         grid.innerHTML = `
             <div class="message-bubble" style="padding:3px;background:transparent;">
@@ -340,8 +388,7 @@ function installAlbums() {
                     ${m.content ? `<div class="message-text" style="margin-top:6px;">${renderFormattedText(m.content)}</div>` : ''}
                     <div class="message-meta" style="justify-content:flex-end;">
                         <span>${albumTime(m)}</span>
-                        ${out ? (m.is_read ? '<i class="fas fa-check-double" style="font-size:8px;color:#53d769;"></i>'
-                                          : '<i class="fas fa-check" style="font-size:8px;"></i>') : ''}
+                        ${albumTickHTML(m)}
                     </div></div></div>`;
         }
 
@@ -384,6 +431,8 @@ function installAlbums() {
             root.dataset.ord = m.album_order || 0;
             root.dataset.content = m.content || '';
             root.dataset.isRead = m.is_read ? '1' : '0';
+            root.dataset.isDelivered = m.delivered_at ? '1' : '0';
+            root.dataset.isPersonal = m.chat_id != null ? '1' : '0';
         }
         return root.outerHTML;
     };
