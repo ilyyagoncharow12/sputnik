@@ -1612,5 +1612,22 @@ function removeContactById(userId) {
             </div>
         `;
         showModal('Настройки', html);
+        // Обслуживание БД показываем только тем, кому оно доступно
+        // (системный аккаунт или MAINTENANCE_USERS): пункт неактивен,
+        // но лишний запрос не стоит ничего.
+        if (typeof dbMaintenanceAllowed === 'function') {
+            dbMaintenanceAllowed().then(ok => {
+                if (!ok) return;
+                const list = document.querySelector('#tempModal .user-profile-body');
+                if (!list) return;
+                const anchor = list.querySelector('.burger-item.danger');
+                if (!anchor || list.querySelector('.dbm-entry')) return;
+                const item = document.createElement('div');
+                item.className = 'burger-item dbm-entry';
+                item.onclick = () => { closeModal('tempModal'); openDbMaintenance(); };
+                item.innerHTML = '<i class="fas fa-database"></i><span>Обслуживание БД</span>';
+                list.insertBefore(item, anchor);
+            });
+        }
     }
 

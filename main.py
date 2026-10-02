@@ -60,6 +60,9 @@ from database import (
     is_channel_subscriber, can_post_in_channel, delete_channel, add_channel_admin,
     remove_channel_admin, update_channel_settings, get_channel_admins_list,
     can_group_perform, get_channel_rights,
+    get_group_member_permissions, get_group_members_permissions_map,
+    set_group_member_permissions, clear_group_member_permissions,
+    resolve_group_permissions,
     add_reaction, get_message_reactions, get_user_reactions,
     search_groups, search_channels, add_recent_search, get_recent_searches,
     normalize_community_username, community_username_available, get_group_by_username, get_channel_by_username,
@@ -82,6 +85,8 @@ from database import (
     add_group_join_request, get_group_join_request_status, get_group_join_requests,
     approve_group_join_request, reject_group_join_request,
     add_channel_post_view, is_chat_muted, set_chat_mute,
+    # обслуживание БД (раздел 4A CHANGELOG)
+    db_health, backup_database, cleanup_orphans,
     # v0.58.0 — кружки, альбомы, форматирование, стикеры, премиум, 2FA, passcode
     get_user_premium, is_premium_active, set_user_premium_emoji,
     _premium_pack,
@@ -1137,15 +1142,17 @@ def api_get_group(group_id):
     group = get_group_by_id(group_id)
     messages = get_messages(group_id=group_id, user_id=session['user_id'])
     members = get_group_members(group_id)
-    permissions = get_group_permissions(group_id, is_group_member(group_id, session['user_id']))
     user_role = is_group_member(group_id, session['user_id'])
+    # Итоговые права с учётом персональных перекрытий, а не только по роли —
+    # иначе интерфейс показывал бы «можно», а сервер отказывал бы.
+    permissions = resolve_group_permissions(group_id, session['user_id'])
 
     response = {
         'group': dict(group) if group else None,
         'messages': [dict(m) for m in messages],
         'members': [dict(m) for m in members],
         'user_role': user_role,
-        'permissions': dict(permissions) if permissions else None,
+        'permissions': permissions,
         'slow_mode_seconds': int(group['slow_mode_seconds']) if group else 0,
         'muted_notifications': is_chat_muted(session['user_id'], 'group', group_id),
         'join_request_status': get_group_join_request_status(group_id, session['user_id']),
@@ -1157,6 +1164,12 @@ def api_get_group(group_id):
         response['mutes'] = [dict(m) for m in get_group_mutes(group_id)]
         if can_group_perform(group_id, session['user_id'], 'can_add_members') or user_role == 'owner':
             response['join_requests'] = [dict(r) for r in get_group_join_requests(group_id)]
+        # Персональные перекрытия видны только тем, кто может их менять
+        if can_group_perform(group_id, session['user_id'], 'can_change_info'):
+            response['member_permissions'] = {
+                str(uid): perms for uid, perms
+                in get_group_members_permissions_map(group_id).items()
+            }
 
     return jsonify(response)
 
@@ -1185,11 +1198,14 @@ def api_get_channel(channel_id):
     subscribers = get_channel_subscribers(channel_id)
     admins = get_channel_admins_list(channel_id)
 
-    # Считаем просмотры постов канала (не автору) — как в Telegram
+    # Просмотры постов канала засчитываются один раз на пользователя
+    # (не автору). Счётчик сразу обновляем в ответе, иначе клиент
+    # увидит значение на единицу меньше реального.
     if channel and messages:
         for m in messages:
             if m.get('sender_id') != session['user_id'] and m.get('views_count') is not None:
-                add_channel_post_view(m['id'])
+                if add_channel_post_view(m['id'], session['user_id']):
+                    m['views_count'] = (m.get('views_count') or 0) + 1
 
     return jsonify({
         'channel': dict(channel) if channel else None,
@@ -1412,6 +1428,10 @@ def api_send_message():
                 if until:
                     return jsonify({'success': False, 'error': f'Вы в муте в этой группе до {until.strftime("%d.%m %H:%M")}'}), 403
                 return jsonify({'success': False, 'error': 'Вы в муте в этой группе'}), 403
+            # Права на сообщения (роль + персональные перекрытия)
+            if not can_group_perform(group_id, session['user_id'], 'can_send_messages'):
+                return jsonify({'success': False,
+                                'error': 'У вас нет права писать в эту группу'}), 403
             # Медленный режим: нельзя писать чаще, чем раз в N секунд
             group = get_group_by_id(group_id)
             if group and group.get('slow_mode_seconds'):
@@ -1440,6 +1460,12 @@ def api_send_message():
 
         messages = []
         files = request.files.getlist('files')
+        # Медиа отдельно ограничено can_send_media — участнику можно
+        # разрешить текст, но запретить файлы.
+        if group_id and files and any(f and f.filename for f in files):
+            if not can_group_perform(group_id, session['user_id'], 'can_send_media'):
+                return jsonify({'success': False,
+                                'error': 'У вас нет права отправлять медиа в эту группу'}), 403
 
         # Кружок — короткое круговое видеосообщение (file_type задаёт клиент)
         force_type = (request.form.get('file_type') or '').strip()
@@ -1850,6 +1876,102 @@ def api_update_group(group_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/group/<int:group_id>/member_permissions/<int:user_id>', methods=['GET'])
+def api_group_member_permissions_get(group_id, user_id):
+    """Читает персональные права участника (NULL = как у роли)."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    role = is_group_member(group_id, session['user_id'])
+    if role not in ('owner', 'admin'):
+        return jsonify({'success': False, 'error': 'Недостаточно прав'}), 403
+    if role == 'admin' and not can_group_perform(group_id, session['user_id'], 'can_change_info'):
+        return jsonify({'success': False, 'error': 'У вас нет права менять права'}), 403
+    if not is_group_member(group_id, user_id):
+        return jsonify({'error': 'Участник не найден'}), 404
+
+    return jsonify({
+        'success': True,
+        'permissions': dict(get_group_member_permissions(group_id, user_id) or {}),
+        'effective': resolve_group_permissions(group_id, user_id),
+    })
+
+
+@app.route('/api/group/<int:group_id>/member_permissions/<int:user_id>', methods=['POST'])
+def api_group_member_permissions_set(group_id, user_id):
+    """Задаёт персональные права участника, перекрывающие права роли."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    actor_role = is_group_member(group_id, session['user_id'])
+    if actor_role not in ('owner', 'admin'):
+        return jsonify({'success': False, 'error': 'Недостаточно прав'}), 403
+    if actor_role == 'admin' and not can_group_perform(group_id, session['user_id'], 'can_change_info'):
+        return jsonify({'success': False, 'error': 'У вас нет права менять права'}), 403
+
+    target_role = is_group_member(group_id, user_id)
+    if not target_role:
+        return jsonify({'error': 'Участник не найден'}), 404
+    # Права владельца неприкосновенны, а админ не может выдать права выше своих.
+    if target_role == 'owner':
+        return jsonify({'success': False, 'error': 'Права владельца изменить нельзя'}), 403
+
+    data = request.get_json(silent=True) or {}
+    requested = data.get('permissions', data)
+    allowed = ('can_send_messages', 'can_send_media', 'can_add_members',
+               'can_pin_messages', 'can_change_info', 'can_delete_messages',
+               'can_ban_users')
+    clean = {}
+    for key in allowed:
+        if key in requested:
+            val = requested[key]
+            # Только явный true/false; всё прочее = сброс к роли.
+            clean[key] = None if val is None else bool(val)
+    unknown = set(requested.keys()) - set(allowed) - {'permissions'}
+    if unknown:
+        return jsonify({'success': False,
+                        'error': 'Неизвестные права: %s' % ', '.join(sorted(unknown))}), 400
+
+    if actor_role == 'admin':
+        # Админ не может разрешить то, что запрещено ему самому.
+        for key, val in clean.items():
+            if val and not can_group_perform(group_id, session['user_id'], key):
+                return jsonify({'success': False,
+                                'error': 'Нельзя выдать право, которого нет у вас самих'}), 403
+
+    if not set_group_member_permissions(group_id, user_id, clean, updated_by=session['user_id']):
+        return jsonify({'success': False, 'error': 'Не удалось сохранить'}), 500
+
+    socketio.emit('group_permissions_changed',
+                  {'group_id': group_id, 'user_id': user_id},
+                  room=f"group_{group_id}")
+    return jsonify({
+        'success': True,
+        'permissions': dict(get_group_member_permissions(group_id, user_id) or {}),
+        'effective': resolve_group_permissions(group_id, user_id),
+    })
+
+
+@app.route('/api/group/<int:group_id>/member_permissions/<int:user_id>', methods=['DELETE'])
+def api_group_member_permissions_reset(group_id, user_id):
+    """Сбрасывает персональные права — участник снова следует своей роли."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    actor_role = is_group_member(group_id, session['user_id'])
+    if actor_role not in ('owner', 'admin'):
+        return jsonify({'success': False, 'error': 'Недостаточно прав'}), 403
+    if actor_role == 'admin' and not can_group_perform(group_id, session['user_id'], 'can_change_info'):
+        return jsonify({'success': False, 'error': 'У вас нет права менять права'}), 403
+
+    clear_group_member_permissions(group_id, user_id)
+    socketio.emit('group_permissions_changed',
+                  {'group_id': group_id, 'user_id': user_id},
+                  room=f"group_{group_id}")
+    return jsonify({'success': True,
+                    'effective': resolve_group_permissions(group_id, user_id)})
+
+
 @app.route('/api/add_group_member/<int:group_id>', methods=['POST'])
 def api_add_group_member(group_id):
     """Добавление участника в группу (владелец/админ)."""
@@ -2157,7 +2279,10 @@ def api_group_approve_join(group_id):
 
     user_id = approve_group_join_request(request_id, group_id)
     if user_id:
-        socketio.emit('group_join_approved', {'group_id': group_id, 'user_id': user_id},
+        _g = get_group_by_id(group_id) or {}
+        socketio.emit('group_join_approved',
+                      {'group_id': group_id, 'user_id': user_id,
+                       'group_name': _g.get('name') or ''},
                       room=f"user_{user_id}")
         return jsonify({'success': True})
     return jsonify({'success': False, 'error': 'Заявка не найдена'}), 400
@@ -2176,7 +2301,15 @@ def api_group_reject_join(group_id):
     if not request_id:
         return jsonify({'success': False, 'error': 'Не указана заявка'}), 400
 
-    reject_group_join_request(request_id)
+    # Раньше об отказе заявитель не узнавал вообще — события не было.
+    applicant_id = reject_group_join_request(request_id)
+    if not applicant_id:
+        return jsonify({'success': False, 'error': 'Заявка не найдена'}), 400
+    _g = get_group_by_id(group_id) or {}
+    socketio.emit('group_join_rejected',
+                  {'group_id': group_id, 'user_id': applicant_id,
+                   'group_name': _g.get('name') or ''},
+                  room=f"user_{applicant_id}")
     return jsonify({'success': True})
 
 
@@ -5199,14 +5332,18 @@ def api_send_video_message():
 def api_video_message_viewed(mid):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
+    # Просмотр засчитывается один раз на пользователя, и только для
+    # существующего сообщения — иначе счётчик можно было накрутить
+    # перебором id.
+    add_channel_post_view(mid, session['user_id'])
     conn = get_db()
     cur = dict_cursor(conn)
-    cur.execute('UPDATE messages SET views_count = COALESCE(views_count, 0) + 1 WHERE id = %s', (mid,))
-    conn.commit()
     cur.execute('SELECT views_count FROM messages WHERE id = %s', (mid,))
     row = cur.fetchone()
     conn.close()
-    return jsonify({'success': True, 'views': (row or {}).get('views_count', 0)})
+    if not row:
+        return jsonify({'error': 'Сообщение не найдено'}), 404
+    return jsonify({'success': True, 'views': row.get('views_count', 0)})
 
 
 # ---------------------- АЛЬБОМЫ МЕДИА ----------------------
@@ -5442,6 +5579,79 @@ def api_contacts_import():
         'not_found': max(0, len(entries) - len(matched)),
         'matched': matched[:200],
     })
+
+
+# ---------------------- ОБСЛУЖИВАНИЕ БД ----------------------
+# Раздел 4A CHANGELOG: то, что раньше делалось только руками через
+# tools/cleanup_orphans.py. Доступ — системный аккаунт или список
+# логинов из MAINTENANCE_USERS в .env (по умолчанию «admin»).
+
+
+def _maintenance_allowed():
+    if 'user_id' not in session:
+        return False
+    uid = session['user_id']
+    if is_protected_user(uid):
+        return True
+    user = get_user_by_id(uid) or {}
+    names = [n.strip().lower()
+             for n in str(env('MAINTENANCE_USERS', 'admin')).split(',') if n.strip()]
+    return (user.get('username') or '').lower() in names
+
+
+def _maintenance_deny():
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+    return jsonify({'success': False, 'error': 'Недостаточно прав'}), 403
+
+
+@app.route('/api/db/health', methods=['GET'])
+def api_db_health():
+    if not _maintenance_allowed():
+        return _maintenance_deny()
+    info = db_health()
+    return jsonify({'success': True, 'health': info})
+
+
+@app.route('/api/db/backup', methods=['POST'])
+def api_db_backup():
+    if not _maintenance_allowed():
+        return _maintenance_deny()
+    try:
+        path = backup_database()
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Не удалось сделать копию: {e}'}), 500
+    return jsonify({'success': True, 'backup': os.path.basename(path)})
+
+
+@app.route('/api/db/cleanup_orphans', methods=['POST'])
+def api_db_cleanup_orphans():
+    """Убрать записи, ссылающиеся на несуществующие строки.
+
+    По умолчанию — только показать, что будет удалено (dry_run).
+    Настоящая чистка требует apply=True и confirm='DELETE'.
+    Перед чисткой автоматически делается копия БД.
+    """
+    if not _maintenance_allowed():
+        return _maintenance_deny()
+
+    data = request.get_json(silent=True) or {}
+    # Сначала решаем, чистим ли мы вообще. Раньше проверка confirm шла
+    # ПОСЛЕ запуска чистки, поэтому apply=True без confirm всё равно
+    # удалял записи.
+    if data.get('apply'):
+        if data.get('confirm') != 'DELETE':
+            return jsonify({'success': False,
+                            'error': 'Нужна подтверждение: confirm=DELETE'}), 400
+        try:
+            backup = os.path.basename(backup_database())
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Бэкап не удался, чистка отменена: {e}'}), 500
+        report = cleanup_orphans(dry_run=False)
+        report['backup'] = backup
+        return jsonify({'success': True, 'report': report})
+
+    return jsonify({'success': True, 'report': cleanup_orphans(dry_run=True)})
 
 
 # ---------------------- ПРЕМИУМ ----------------------

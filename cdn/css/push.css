@@ -1,0 +1,222 @@
+/* ===== Модалка «Уведомления» (Web Push) — стили в духе остальных модалок ===== */
+
+.push-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* --- статус-герой --- */
+.push-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, .08));
+}
+
+.push-hero--ok {
+    background: linear-gradient(135deg, rgba(52, 199, 89, .16), rgba(52, 199, 89, .04));
+    border-color: rgba(52, 199, 89, .3);
+}
+
+.push-hero--mid {
+    background: linear-gradient(135deg, rgba(255, 159, 10, .14), rgba(255, 159, 10, .03));
+    border-color: rgba(255, 159, 10, .28);
+}
+
+.push-hero--bad {
+    background: linear-gradient(135deg, rgba(255, 69, 58, .14), rgba(255, 69, 58, .03));
+    border-color: rgba(255, 69, 58, .28);
+}
+
+.push-hero-dot {
+    width: 11px;
+    height: 11px;
+    min-width: 11px;
+    border-radius: 50%;
+    margin-top: 5px;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, .05);
+    animation: pushPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pushPulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(255, 255, 255, .05); }
+    50%      { box-shadow: 0 0 0 7px rgba(255, 255, 255, .01); }
+}
+
+.push-hero-text { min-width: 0; }
+
+.push-hero-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-primary, #fff);
+}
+
+.push-hero-hint {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary, rgba(255, 255, 255, .6));
+}
+
+/* --- главная кнопка --- */
+.push-main-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 50px;
+    padding: 14px 18px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #fff;
+    background: linear-gradient(135deg, #0a84ff, #0060df);
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: transform .12s ease, opacity .2s ease;
+}
+
+.push-main-btn:active:not(:disabled) { transform: scale(.985); }
+.push-main-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.push-main-btn--off {
+    background: linear-gradient(135deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .08));
+    border: 1px solid var(--border-color, rgba(255, 255, 255, .12));
+    color: var(--text-primary, #fff);
+}
+
+.push-error {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #ff6b6b;
+    background: rgba(255, 69, 58, .12);
+    border: 1px solid rgba(255, 69, 58, .3);
+    border-radius: 12px;
+}
+
+/* --- секции --- */
+.push-section {
+    display: flex;
+    flex-direction: column;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, .08));
+    background: rgba(255, 255, 255, .03);
+}
+
+.push-section-title {
+    padding: 12px 16px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-secondary, rgba(255, 255, 255, .5));
+}
+
+.push-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background .15s ease;
+}
+
+.push-row + .push-row { border-top: 1px solid rgba(255, 255, 255, .06); }
+.push-row:hover { background: rgba(255, 255, 255, .04); }
+.push-row:active { background: rgba(255, 255, 255, .07); }
+
+.push-row-text { flex: 1; min-width: 0; }
+
+.push-row-title {
+    font-size: 15px;
+    color: var(--text-primary, #fff);
+    margin-bottom: 2px;
+}
+
+.push-row-hint {
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text-secondary, rgba(255, 255, 255, .55));
+}
+
+/* --- переключатель --- */
+.push-switch {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    width: 50px;
+    height: 30px;
+    min-width: 50px;
+    flex: 0 0 50px;
+    margin: 0;
+    border-radius: 15px;
+    background: rgba(120, 120, 128, .36);
+    cursor: pointer;
+    transition: background .2s ease;
+}
+
+.push-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .3);
+    transition: transform .2s cubic-bezier(.3, 1.4, .6, 1);
+}
+
+.push-switch:checked { background: #34c759; }
+.push-switch:checked::after { transform: translateX(20px); }
+.push-switch:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+
+/* --- тест и подпись --- */
+.push-test-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 46px;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: inherit;
+    color: #0a84ff;
+    background: rgba(10, 132, 255, .12);
+    border: 1px solid rgba(10, 132, 255, .3);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background .15s ease;
+}
+
+.push-test-btn:hover:not(:disabled) { background: rgba(10, 132, 255, .2); }
+.push-test-btn:active:not(:disabled) { transform: scale(.99); }
+.push-test-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.push-foot {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary, rgba(255, 255, 255, .45));
+    text-align: center;
+    padding: 0 6px 4px;
+}
+
+/* --- мобильный лист: кнопки ближе к пальцам --- */
+@media (max-width: 768px) {
+    .push-settings { gap: 12px; }
+    .push-main-btn { min-height: 52px; font-size: 16px; }
+    .push-row { min-height: 60px; }
+    .push-test-btn { min-height: 50px; }
+    .push-foot { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+}

@@ -754,6 +754,115 @@ function resetAllAppearance() {
         });
     }
 
+    // ===== ОБСЛУЖИВАНИЕ БД (раздел 4A) =====
+    function dbMaintBytes(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' Б';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' КБ';
+        return (n / 1024 / 1024).toFixed(1) + ' МБ';
+    }
+
+    function dbMaintRow(label, value, ok) {
+        const color = ok === true ? '#2ecc71' : (ok === false ? '#e74c3c' : 'var(--text-muted)');
+        return `<div class="dbm-row"><span>${label}</span><b style="color:${color};">${value}</b></div>`;
+    }
+
+    async function dbMaintenanceAllowed() {
+        try {
+            const r = await fetch('/api/db/health');
+            if (r.status === 403 || r.status === 401) return false;
+            const d = await r.json();
+            return !!(d && d.success);
+        } catch (e) { return false; }
+    }
+
+    function dbMaintenanceBody(h, report, backup) {
+        let rows = '';
+        if (h) {
+            rows += dbMaintRow('Целостность', h.integrity, h.integrity === 'ok');
+            rows += dbMaintRow('Битые ссылки', h.foreign_keys_total, h.foreign_keys_total === 0);
+            rows += dbMaintRow('Таблиц', h.tables, null);
+            rows += dbMaintRow('Размер БД', dbMaintBytes(h.db_size), null);
+        }
+        if (report) {
+            rows += '<div style="height:8px;"></div>';
+            rows += dbMaintRow('Осиротевшие записи', report.total + ' шт.', report.total === 0);
+            (report.steps || []).slice(0, 8).forEach(s => {
+                rows += `<div style="font-size:11px;color:var(--text-muted);padding:2px 0 2px 8px;">`
+                    + `${s.table}.${s.column} → ${s.target}: ${s.count}</div>`;
+            });
+        }
+        if (backup) rows += dbMaintRow('Копия БД', backup, true);
+        return `<div class="dbm-wrap">
+            ${rows || '<div style="color:var(--text-muted);font-size:13px;">Загрузка...</div>'}
+            <div class="dbm-actions">
+                <button class="dbm-btn" onclick="dbMaintenanceRefresh()"><i class="fas fa-rotate"></i> Проверить</button>
+                <button class="dbm-btn" onclick="dbMaintenanceBackup()"><i class="fas fa-copy"></i> Сделать копию</button>
+                <button class="dbm-btn" id="dbmClean" onclick="dbMaintenanceClean(this)"><i class="fas fa-broom"></i> Очистить осиротевшие</button>
+            </div>
+        </div>`;
+    }
+
+    function dbMaintenanceShow(h, report, backup) {
+        showModal('Обслуживание БД', dbMaintenanceBody(h, report, backup));
+    }
+
+    function dbMaintenanceRefresh() {
+        dbMaintenanceShow(null, null, null);
+        fetch('/api/db/health').then(r => r.json()).then(d => {
+            dbMaintenanceShow((d && d.health) || null, null, null);
+        }).catch(() => showToast('Ошибка сети'));
+    }
+
+    function dbMaintenanceBackup() {
+        dbMaintenanceShow(null, null, null);
+        fetch('/api/db/backup', { method: 'POST' }).then(r => r.json()).then(d => {
+            if (d && d.success) {
+                fetch('/api/db/health').then(x => x.json()).then(h => {
+                    dbMaintenanceShow((h && h.health) || null, null, d.backup);
+                });
+            } else showToast((d && d.error) || 'Не удалось');
+        }).catch(() => showToast('Ошибка сети'));
+    }
+
+    function dbMaintenanceClean(btn) {
+        // Двухшаговое подтверждение: кнопка просит подтвердить ещё раз.
+        if (btn && btn.dataset.armed !== '1') {
+            btn.dataset.armed = '1';
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Нажмите ещё раз: удалить записи';
+            btn.style.background = 'var(--danger, #e74c3c)';
+            btn.style.color = '#fff';
+            setTimeout(() => {
+                if (btn.dataset.armed === '1') {
+                    btn.dataset.armed = '0';
+                    btn.innerHTML = '<i class="fas fa-broom"></i> Очистить осиротевшие';
+                    btn.style.background = '';
+                    btn.style.color = '';
+                }
+            }, 6000);
+            return;
+        }
+        dbMaintenanceShow(null, null, null);
+        fetch('/api/db/cleanup_orphans', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apply: true, confirm: 'DELETE' })
+        }).then(r => r.json()).then(d => {
+            if (!d || !d.success) { showToast((d && d.error) || 'Ошибка'); return; }
+            const rep = d.report || {};
+            fetch('/api/db/health').then(x => x.json()).then(h => {
+                dbMaintenanceShow((h && h.health) || null, rep, rep.backup);
+                showToast('Удалено: ' + rep.total);
+            });
+        }).catch(() => showToast('Ошибка сети'));
+    }
+
+    function openDbMaintenance() {
+        closeBurgerMenu();
+        closeModal('tempModal');
+        dbMaintenanceRefresh();
+    }
+
     // ===== ЗАКРЫТИЕ ПОИСКА =====
     document.addEventListener('click', function(e) {
         const searchResults = document.getElementById('searchResults');

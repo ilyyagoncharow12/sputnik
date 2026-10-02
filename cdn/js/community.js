@@ -269,6 +269,8 @@ function commMembersListItems(groupId, d, query) {
     const role = d.user_role;
     const canManage = role === 'owner' ||
         (role === 'admin' && d.permissions && !!d.permissions.can_ban_users);
+    const canSetPerms = role === 'owner' ||
+        (role === 'admin' && d.permissions && !!d.permissions.can_change_info);
     const me = typeof MyId !== 'undefined' ? MyId : (window.MyId || null);
     const q = (query || '').trim().toLowerCase();
 
@@ -302,6 +304,10 @@ function commMembersListItems(groupId, d, query) {
                 if (m.role !== 'admin') {
                     html += `<button class="comm-btn danger" onclick="commKickMember(${groupId}, ${m.id})" title="Исключить"><i class="fas fa-user-minus"></i> Исключить</button>`;
                 }
+            }
+            // Персональные права участника (владелец или админ с can_change_info)
+            if (canSetPerms) {
+                html += `<button class="comm-btn" onclick="commMemberPermsUi(${groupId}, ${m.id}, '${safeName}')" title="Права участника"><i class="fas fa-user-shield"></i> Права</button>`;
             }
         }
         html += `</div></div>`;
@@ -380,6 +386,85 @@ function commRenderPerms(groupId, rows) {
     });
     html += '</table>';
     return html;
+}
+
+// ---------------- ПЕРСОНАЛЬНЫЕ ПРАВА УЧАСТНИКА ----------------
+
+const COMM_PERM_NAMES = [
+    ['can_send_messages', 'Отправка сообщений'],
+    ['can_send_media', 'Отправка медиа'],
+    ['can_add_members', 'Добавление участников'],
+    ['can_pin_messages', 'Закрепление сообщений'],
+    ['can_change_info', 'Изменение информации'],
+    ['can_delete_messages', 'Удаление чужих сообщений'],
+    ['can_ban_users', 'Исключение участников']
+];
+
+function commMemberPermsUi(groupId, userId, name) {
+    const d = window._commGroup || {};
+    const perms = d.member_permissions || {};
+    const ov = perms[String(userId)] || {};
+    const m = (d.members || []).find(x => x.id === userId) || {};
+    const targetRole = m.role || 'member';
+    // Права роли нужны, чтобы показать «По роли: разрешено/запрещено»
+    fetch('/api/get_group_all_permissions/' + groupId).then(r => r.json()).then(all => {
+        const rows = all.permissions || [];
+        const roleRow = rows.find(r => r.role === targetRole) || {};
+        commMemberPermsShow(groupId, userId, name, ov, roleRow, targetRole);
+    }).catch(() => commMemberPermsShow(groupId, userId, name, ov, {}, targetRole));
+}
+
+function commMemberPermsShow(groupId, userId, name, ov, roleRow, targetRole) {
+    let html = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">
+        «По роли» — участник следует правам роли. «Разрешено»/«Запрещено» перекрывают роль.
+    </div>`;
+    COMM_PERM_NAMES.forEach(k => {
+        const cur = ov[k[0]];
+        const val = cur === undefined || cur === null ? 'inherit' : (cur ? 'allow' : 'deny');
+        const roleVal = roleRow[k[0]] ? 'да' : 'нет';
+        const suffix = cur === undefined || cur === null
+            ? ` <span style="color:var(--text-muted);">· по роли: ${roleVal}</span>`
+            : (cur ? ' <span style="color:#2ecc71;">· выдано</span>' : ' <span style="color:#e74c3c;">· запрещено</span>');
+        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="flex:1;font-size:13px;">${k[1]}${suffix}</div>
+            <select class="comm-field" id="cmp_${k[0]}" style="width:130px;">
+                <option value="inherit"${val === 'inherit' ? ' selected' : ''}>По роли</option>
+                <option value="allow"${val === 'allow' ? ' selected' : ''}>Разрешено</option>
+                <option value="deny"${val === 'deny' ? ' selected' : ''}>Запрещено</option>
+            </select>
+        </div>`;
+    });
+    html += `<div class="comm-actionbar">
+        <button class="comm-btn" onclick="commSaveMemberPerms(${groupId}, ${userId})"><i class="fas fa-check"></i> Сохранить</button>
+        <button class="comm-btn" onclick="commResetMemberPerms(${groupId}, ${userId})"><i class="fas fa-undo"></i> Сбросить</button>
+    </div>`;
+    showModal('Права · ' + name, html);
+}
+
+function commSaveMemberPerms(groupId, userId) {
+    const p = {};
+    COMM_PERM_NAMES.forEach(k => {
+        const el = document.getElementById('cmp_' + k[0]);
+        if (!el) return;
+        const v = el.value;
+        p[k[0]] = v === 'allow' ? true : (v === 'deny' ? false : null);
+    });
+    fetch(`/api/group/${groupId}/member_permissions/${userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: p })
+    }).then(r => r.json()).then(d => {
+        if (d.success) { commToast('Права сохранены'); openGroupInfo(groupId); }
+        else commToast(d.error || 'Ошибка');
+    }).catch(() => commToast('Ошибка сети'));
+}
+
+function commResetMemberPerms(groupId, userId) {
+    fetch(`/api/group/${groupId}/member_permissions/${userId}`, { method: 'DELETE' })
+        .then(r => r.json()).then(d => {
+            if (d.success) { commToast('Права сброшены'); openGroupInfo(groupId); }
+            else commToast(d.error || 'Ошибка');
+        }).catch(() => commToast('Ошибка сети'));
 }
 
 // ---------------- ДЕЙСТВИЯ С ГРУППОЙ ----------------
@@ -957,8 +1042,17 @@ function commDeleteChannel(channelId) {
         });
 
         socket.on('group_join_approved', function (d) {
-            if (typeof showToast === 'function') showToast('Вас приняли в группу!');
+            const nm = (d && d.group_name) ? (' «' + d.group_name + '»') : '';
+            if (typeof showToast === 'function') showToast('Вас приняли в группу' + nm + '!');
+            // После одобрения группа становится обычным чатом — обновляем
+            // и список групп, и общий список чатов.
             if (typeof loadGroupsList === 'function') loadGroupsList();
+            if (typeof loadChatsList === 'function') loadChatsList();
+        });
+
+        socket.on('group_join_rejected', function (d) {
+            const nm = (d && d.group_name) ? (' «' + d.group_name + '»') : '';
+            if (typeof showToast === 'function') showToast('Заявка в группу' + nm + ' отклонена');
         });
 
         socket.on('mention', function (d) {

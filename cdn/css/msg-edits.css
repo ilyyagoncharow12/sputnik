@@ -1,0 +1,177 @@
+
+/* ===== ПРЕДПРОСМОТР ССЫЛКИ (v0.60.2) =====
+   Превью не подгружается само — под текстом со ссылкой стоит кнопка. */
+.link-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, .12));
+    border-radius: 20px;
+    background: rgba(255, 255, 255, .04);
+    color: #0a84ff;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s;
+}
+
+.link-preview-btn:hover {
+    background: rgba(10, 132, 255, .12);
+    border-color: rgba(10, 132, 255, .45);
+}
+
+.link-preview-btn i { font-size: 11.5px; }
+
+.message.outgoing .link-preview-btn {
+    background: rgba(255, 255, 255, .12);
+    border-color: rgba(255, 255, 255, .2);
+    color: #fff;
+}
+
+.message.outgoing .link-preview-btn:hover {
+    background: rgba(255, 255, 255, .2);
+    border-color: rgba(255, 255, 255, .32);
+}
+
+/* ===== ИСТОРИЯ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ (v0.60.0) ===== */
+
+.msg-edits-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 28px 10px;
+    font-size: 14px;
+    color: var(--text-secondary, rgba(255, 255, 255, .55));
+}
+
+.msg-edits-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 32px 16px;
+    text-align: center;
+    font-size: 15px;
+    color: var(--text-secondary, rgba(255, 255, 255, .6));
+}
+
+.msg-edits-empty > i {
+    font-size: 30px;
+    opacity: .5;
+    margin-bottom: 2px;
+}
+
+.msg-edits-hint {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-secondary, rgba(255, 255, 255, .4));
+    max-width: 260px;
+}
+
+.msg-edits-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.msg-edit-step {
+    border: 1px solid var(--border-color, rgba(255, 255, 255, .08));
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, .03);
+}
+
+.msg-edit-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+}
+
+.msg-edit-idx {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 19px;
+    height: 19px;
+    min-width: 19px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    background: #0a84ff;
+}
+
+.msg-edit-who {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    color: var(--text-primary, #fff);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.msg-edit-time {
+    color: var(--text-secondary, rgba(255, 255, 255, .45));
+    white-space: nowrap;
+}
+
+.msg-edit-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+
+.msg-edit-old .msg-edit-label { color: #ff6b6b; }
+.msg-edit-new .msg-edit-label { color: #34c759; }
+
+.msg-edit-text {
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 8px 10px;
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-primary, #fff);
+}
+
+.msg-edit-old .msg-edit-text {
+    background: rgba(255, 107, 107, .1);
+    text-decoration: line-through;
+    text-decoration-color: rgba(255, 107, 107, .5);
+    color: var(--text-secondary, rgba(255, 255, 255, .7));
+}
+
+.msg-edit-new .msg-edit-text { background: rgba(52, 199, 89, .1); }
+
+.msg-edit-arrow {
+    text-align: center;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--text-secondary, rgba(255, 255, 255, .35));
+}
+
+@media (max-width: 768px) {
+    .msg-edits-list { max-height: 55vh; }
+    .msg-edit-text { font-size: 14.5px; }
+}
+
+/* Пометка «изм.» у сообщения */
+.msg-edited-badge {
+    font-size: 9.5px;
+    margin-right: 4px;
+    font-style: italic;
+    color: var(--text-secondary, rgba(255, 255, 255, .5));
+}

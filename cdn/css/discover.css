@@ -1,0 +1,152 @@
+/* ===== ПОИСК ЧАТОВ / ВИТРИНА ГРУПП (v0.60.4) ===== */
+
+.disc-wrap {
+    padding: 14px 16px 18px;
+    max-height: 64vh;
+    overflow-y: auto;
+}
+
+.disc-results { margin-top: 12px; }
+
+.disc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 6px;
+    border-radius: 12px;
+}
+
+.disc-row:hover { background: rgba(255, 255, 255, .04); }
+
+.disc-ava {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex: 0 0 42px;
+    object-fit: cover;
+    overflow: hidden;
+    background: rgba(255, 255, 255, .09);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.disc-ava img { width: 100%; height: 100%; object-fit: cover; }
+
+.disc-row-main { flex: 1 1 auto; min-width: 0; }
+.disc-row-name {
+    font-size: 14.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.disc-row-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.disc-chev { color: var(--text-secondary); font-size: 12px; }
+
+.disc-btn {
+    flex: 0 0 auto;
+    padding: 7px 13px;
+    border: none;
+    border-radius: 16px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity .15s;
+}
+
+.disc-btn-join { background: #0a84ff; color: #fff; }
+.disc-btn-join:hover { opacity: .88; }
+.disc-btn-mine { background: rgba(255, 255, 255, .1); color: var(--text-primary); }
+.disc-btn-pending { background: rgba(255, 255, 255, .07); color: var(--text-secondary); cursor: default; }
+
+.disc-empty {
+    padding: 30px 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* --- витрина --- */
+.disc-hero {
+    text-align: center;
+    padding: 6px 0 4px;
+}
+
+.disc-hero .disc-ava {
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 11px;
+    flex: none;
+    font-size: 30px;
+}
+
+.disc-hero-name { font-size: 18px; font-weight: 600; }
+.disc-hero-meta { font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; }
+.disc-hero-desc {
+    margin-top: 9px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+.disc-sec-title {
+    margin: 16px 0 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.disc-members { display: flex; flex-direction: column; gap: 2px; }
+
+.disc-member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 2px;
+}
+
+.disc-member .disc-ava { width: 34px; height: 34px; flex-basis: 34px; font-size: 14px; }
+
+.disc-private-note {
+    display: flex;
+    gap: 8px;
+    padding: 11px 13px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin-bottom: 10px;
+}
+
+.disc-private-note i { margin-top: 2px; color: #ff9f0a; }
+
+.disc-banned {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255, 69, 58, .13);
+    color: #ff453a;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .disc-wrap { padding: 12px 13px 16px; max-height: 60vh; }
+    .disc-row { padding: 7px 4px; }
+    .disc-btn { padding: 8px 12px; }
+}

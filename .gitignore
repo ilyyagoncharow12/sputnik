@@ -227,3 +227,6 @@ __pycache__/
 *.db-shm
 # VAPID-ключи Web Push: приватный ключ нельзя коммитить
 vapid_keys.json
+# Резервные копии БД из раздела «Обслуживание БД»
+backups/
+backup_*.db

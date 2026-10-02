@@ -1,0 +1,244 @@
+/* ===== МАСТЕР СОЗДАНИЯ ЧАТА (v0.60.4) ===== */
+
+.cw-steps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 16px 4px;
+    overflow-x: auto;
+}
+
+.cw-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.cw-step-line {
+    flex: 1 1 8px;
+    min-width: 8px;
+    height: 1px;
+    background: rgba(255, 255, 255, .14);
+}
+
+.cw-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .08);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    transition: background .2s, color .2s;
+}
+
+.cw-step.active { color: var(--text-primary); }
+.cw-step.active .cw-dot { background: #0a84ff; color: #fff; }
+.cw-step.done { color: #30d158; }
+.cw-step.done .cw-dot { background: rgba(48, 209, 88, .2); color: #30d158; }
+
+.cw-body {
+    padding: 14px 16px 4px;
+    min-height: 190px;
+    max-height: 52vh;
+    overflow-y: auto;
+}
+
+.cw-hint {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 12px;
+}
+
+/* --- поиск и выбор участников --- */
+.cw-results { margin-top: 8px; }
+
+.cw-res-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .12s;
+}
+
+.cw-res-item:hover { background: rgba(255, 255, 255, .05); }
+
+.cw-res-item img,
+.cw-res-ava {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 34px;
+    background: rgba(255, 255, 255, .09);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.cw-res-main { flex: 1 1 auto; min-width: 0; }
+.cw-res-name { font-size: 14px; }
+.cw-res-sub { font-size: 12px; color: var(--text-secondary); }
+.cw-res-item i { color: #0a84ff; width: 16px; text-align: center; }
+
+.cw-chosen-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 14px 0 7px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+}
+
+.cw-clear {
+    margin-left: auto;
+    border: none;
+    background: none;
+    color: #0a84ff;
+    font-family: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+
+.cw-chosen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.cw-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px 4px 4px;
+    border-radius: 16px;
+    background: rgba(10, 132, 255, .14);
+    font-size: 12.5px;
+    max-width: 190px;
+}
+
+.cw-chip img,
+.cw-chip > span:first-child {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 22px;
+    background: rgba(255, 255, 255, .12);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.cw-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cw-chip i { cursor: pointer; color: var(--text-secondary); font-size: 11px; }
+.cw-chip i:hover { color: #ff453a; }
+
+.cw-empty {
+    padding: 14px 8px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.6;
+}
+
+/* --- настройки --- */
+.cw-switch {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.cw-switch input { margin-top: 2px; }
+
+.cw-note {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.cw-note i { margin-top: 2px; color: #0a84ff; }
+
+/* --- финальный шаг --- */
+.cw-final { text-align: center; padding: 10px 0 4px; }
+
+.cw-final-avatar {
+    width: 66px;
+    height: 66px;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0a84ff, #5e5ce6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 27px;
+    font-weight: 700;
+}
+
+.cw-final-name { font-size: 17px; font-weight: 600; }
+.cw-final-meta { font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; }
+.cw-final-desc {
+    margin-top: 9px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.cw-result { margin-top: 8px; }
+
+.cw-done {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #30d158;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 0;
+}
+
+.cw-footer {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px 16px;
+}
+
+.cw-footer .user-profile-btn { flex: 1 1 0; justify-content: center; }
+
+@media (max-width: 768px) {
+    .cw-body { max-height: 46vh; min-height: 160px; padding: 12px 13px 2px; }
+    .cw-step-label { display: none; }
+    .cw-step.active .cw-step-label { display: inline; }
+    .cw-steps { padding: 10px 13px 2px; gap: 3px; }
+    .cw-footer { padding: 10px 13px 14px; }
+}

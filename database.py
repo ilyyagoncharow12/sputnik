@@ -602,6 +602,40 @@ def init_db():
         )
     ''')
 
+    # Персональные права участника группы (перекрывают права по роли).
+    # NULL в колонке = «как у роли», TRUE/FALSE = явное разрешение/запрет.
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS group_member_permissions (
+            group_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            can_send_messages BOOLEAN,
+            can_send_media BOOLEAN,
+            can_add_members BOOLEAN,
+            can_pin_messages BOOLEAN,
+            can_change_info BOOLEAN,
+            can_delete_messages BOOLEAN,
+            can_ban_users BOOLEAN,
+            updated_by INTEGER,
+            updated_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            PRIMARY KEY (group_id, user_id),
+            FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+
+    # Кто уже смотрел пост канала: без этой таблицы views_count рос на КАЖДОМ
+    # открытии канала (пере-открытие и догрузка засчитывались повторно).
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS message_views (
+            message_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            viewed_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            PRIMARY KEY (message_id, user_id),
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+
     # Таблица channels
     cur.execute('''
         CREATE TABLE IF NOT EXISTS channels (
@@ -2411,6 +2445,9 @@ def delete_group(group_id, user_id):
     group = cur.fetchone()
 
     if group and group['owner_id'] == user_id:
+        # У таблицы messages нет внешних ключей, поэтому сообщения группы
+        # оставались в базе навсегда. Удаляем их явно.
+        cur.execute('DELETE FROM messages WHERE group_id = %s', (group_id,))
         cur.execute('DELETE FROM groups WHERE id = %s', (group_id,))
         conn.commit()
         conn.close()
@@ -2462,13 +2499,123 @@ def update_group_permissions(group_id, role, **kwargs):
     conn.close()
 
 
+def get_group_member_permissions(group_id, user_id):
+    """Персональные перекрытия прав участника (NULL = как у роли)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT * FROM group_member_permissions WHERE group_id = %s AND user_id = %s',
+                (group_id, user_id))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def get_group_members_permissions_map(group_id):
+    """Все персональные перекрытия группы: {user_id: {...}}."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT * FROM group_member_permissions WHERE group_id = %s', (group_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return {r['user_id']: dict(r) for r in rows}
+
+
+def set_group_member_permissions(group_id, user_id, permissions, updated_by=None):
+    """Сохраняет персональные права участника. None — сброс к правам роли.
+
+    Обновляются только переданные ключи: остальные перекрытия сохраняются.
+    Пустой dict удаляет строку целиком (участник снова следует роли).
+    """
+    allowed = ('can_send_messages', 'can_send_media', 'can_add_members',
+               'can_pin_messages', 'can_change_info', 'can_delete_messages',
+               'can_ban_users')
+    clean = {k: v for k, v in (permissions or {}).items() if k in allowed}
+    if not clean:
+        return clear_group_member_permissions(group_id, user_id)
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+    keys = list(clean.keys())
+    cols = ', '.join(keys)
+    marks = ', '.join(['%s'] * len(keys))
+    values = [clean[k] for k in keys]
+    try:
+        # Вставка создаёт строку только с переданными правами, обновление
+        # трогает ровно их — чужие перекрытия участника не затираются.
+        cur.execute(f'''
+            INSERT INTO group_member_permissions (group_id, user_id, {cols}, updated_by)
+            VALUES (%s, %s, {marks}, %s)
+            ON CONFLICT (group_id, user_id) DO UPDATE SET
+                {', '.join('%s = excluded.%s' % (k, k) for k in keys)},
+                updated_by = excluded.updated_by,
+                updated_at = (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')
+        ''', [group_id, user_id] + values + [updated_by])
+        conn.commit()
+        return True
+    except Exception as e:
+        print('[db] set_group_member_permissions: %s' % e)
+        return False
+    finally:
+        conn.close()
+
+
+def clear_group_member_permissions(group_id, user_id):
+    """Сбрасывает персональные права — участник снова следует своей роли."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('DELETE FROM group_member_permissions WHERE group_id = %s AND user_id = %s',
+                (group_id, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def resolve_group_permissions(group_id, user_id):
+    """Итоговые права участника: роль + персональные перекрытия."""
+    role = is_group_member(group_id, user_id)
+    if not role:
+        return None
+    if role == 'owner':
+        return {'role': role, 'is_owner': True,
+                **{k: True for k in ('can_send_messages', 'can_send_media',
+                                     'can_add_members', 'can_pin_messages',
+                                     'can_change_info', 'can_delete_messages',
+                                     'can_ban_users')}}
+    perms = get_group_permissions(group_id, role)
+    result = {
+        'role': role,
+        'is_owner': False,
+        'can_send_messages': bool(perms.get('can_send_messages')) if perms else False,
+        'can_send_media': bool(perms.get('can_send_media')) if perms else False,
+        'can_add_members': bool(perms.get('can_add_members')) if perms else False,
+        'can_pin_messages': bool(perms.get('can_pin_messages')) if perms else False,
+        'can_change_info': bool(perms.get('can_change_info')) if perms else False,
+        'can_delete_messages': bool(perms.get('can_delete_messages')) if perms else False,
+        'can_ban_users': bool(perms.get('can_ban_users')) if perms else False,
+    }
+    override = get_group_member_permissions(group_id, user_id)
+    if override:
+        for key, val in override.items():
+            if key in result and val is not None:
+                result[key] = bool(val)
+    return result
+
+
 def can_group_perform(group_id, user_id, permission='can_send_messages'):
-    """Проверяет право участника группы по его роли (владелец имеет все права)."""
+    """Проверяет право участника: персональные перекрытия важнее прав роли.
+
+    Владелец имеет все права и не может быть ограничен.
+    """
     role = is_group_member(group_id, user_id)
     if not role:
         return False
     if role == 'owner':
         return True
+
+    override = get_group_member_permissions(group_id, user_id)
+    if override and override.get(permission) is not None:
+        return bool(override[permission])
+
     perms = get_group_permissions(group_id, role)
     if not perms:
         return False
@@ -2598,12 +2745,23 @@ def get_group_mutes(group_id):
 # ----- Заявки на вступление в группы -----
 
 def add_group_join_request(group_id, user_id, message=None):
+    """Подаёт заявку на вступление.
+
+    На паре (group_id, user_id) стоит UNIQUE, поэтому повторная заявка
+    ПЕРЕИСПОЛЬЗУЕТ старую строку: раньше был DO NOTHING, и после отказа
+    подать заявку заново было невозможно — insert молча игнорировался,
+    а интерфейс показывал «Заявка отправлена» до бесконечности.
+    """
     conn = get_db()
     cur = dict_cursor(conn)
     try:
         cur.execute('''
             INSERT INTO group_join_requests (group_id, user_id, message, status)
-            VALUES (%s, %s, %s, 'pending') ON CONFLICT DO NOTHING
+            VALUES (%s, %s, %s, 'pending')
+            ON CONFLICT (group_id, user_id) DO UPDATE SET
+                status = 'pending',
+                message = excluded.message,
+                requested_at = (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')
         ''', (group_id, user_id, message))
         conn.commit()
         return True
@@ -2664,32 +2822,267 @@ def approve_group_join_request(request_id, group_id):
 
 
 def reject_group_join_request(request_id):
+    """Отклоняет заявку и возвращает user_id заявителя (чтобы сообщить ему)."""
     conn = get_db()
     cur = dict_cursor(conn)
     try:
+        cur.execute("SELECT user_id FROM group_join_requests WHERE id = %s AND status = 'pending'",
+                    (request_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
         cur.execute("UPDATE group_join_requests SET status = 'rejected' WHERE id = %s", (request_id,))
         conn.commit()
-        return True
+        return row['user_id']
     except:
-        return False
+        return None
     finally:
         conn.close()
+
+
+# ----- Обслуживание БД: проверка целостности, бэкап, чистка осиротевших ----
+
+# Таблицы-ссылки: (таблица, колонка) -> на что ссылается.
+_ORPHAN_USER_REFS = [
+    ('channel_admins', 'user_id'), ('channel_subscribers', 'user_id'),
+    ('channels', 'owner_id'), ('chat_folders', 'user_id'),
+    ('chats', 'user1_id'), ('chats', 'user2_id'),
+    ('folder_chats', 'other_user_id'), ('group_join_requests', 'user_id'),
+    ('group_members', 'user_id'), ('group_mutes', 'muted_by'),
+    ('group_member_permissions', 'user_id'),
+    ('linked_accounts', 'master_user_id'), ('linked_accounts', 'linked_user_id'),
+    ('login_codes', 'user_id'), ('message_reactions', 'user_id'),
+    ('message_views', 'user_id'), ('message_reads', 'user_id'),
+    ('messages', 'sender_id'), ('messages', 'forwarded_from_user_id'),
+    ('poll_votes', 'user_id'), ('polls', 'created_by'),
+    ('recent_searches', 'user_id'), ('story_interactions', 'user_id'),
+    ('story_reactions', 'user_id'), ('story_views', 'user_id'),
+    ('user_sessions', 'user_id'), ('contacts', 'user_id'),
+    ('contacts', 'contact_id'), ('blocked_users', 'user_id'),
+    ('blocked_users', 'blocked_user_id'), ('stories', 'user_id'),
+    ('stickers', 'user_id'), ('premium_activations', 'user_id'),
+    ('calls', 'user_id'), ('call_participants', 'user_id'),
+]
+_ORPHAN_MESSAGE_REFS = [
+    ('message_reactions', 'message_id'), ('message_views', 'message_id'),
+    ('message_reads', 'message_id'), ('message_forwards', 'message_id'),
+    ('polls', 'message_id'), ('stories', 'message_id'),
+    ('messages', 'reply_to_id'),
+]
+_ORPHAN_OWNER_REFS = [
+    ('chat_folders', 'id'), ('chats', 'id'), ('groups', 'id'),
+    ('channels', 'id'), ('stories', 'id'),
+]
+# На какую таблицу указывает колонка-ссылка.
+_ORPHAN_REF_KIND = {
+    'user_id': 'users', 'sender_id': 'users', 'muted_by': 'users',
+    'created_by': 'users', 'contact_id': 'users', 'blocked_user_id': 'users',
+    'user1_id': 'users', 'user2_id': 'users', 'other_user_id': 'users',
+    'master_user_id': 'users', 'linked_user_id': 'users', 'member_id': 'users',
+    'message_id': 'messages', 'reply_to_id': 'messages',
+    'forwarded_from_user_id': 'users',
+    'folder_id': 'chat_folders', 'chat_id': 'chats',
+    'group_id': 'groups', 'channel_id': 'channels',
+    'poll_id': 'polls',
+}
+_ORPHAN_CHILD_REFS = sorted({
+    (t, c) for lst in (_ORPHAN_USER_REFS, _ORPHAN_MESSAGE_REFS, _ORPHAN_OWNER_REFS)
+    for (t, c) in lst
+} | {
+    ('folder_chats', 'folder_id'), ('messages', 'chat_id'),
+    ('folder_chats', 'chat_id'), ('polls', 'chat_id'),
+    ('group_members', 'group_id'), ('group_permissions', 'group_id'),
+    ('group_mutes', 'group_id'), ('group_join_requests', 'group_id'),
+    ('group_member_permissions', 'group_id'), ('messages', 'group_id'),
+    ('polls', 'group_id'), ('channel_admins', 'channel_id'),
+    ('channel_subscribers', 'channel_id'), ('messages', 'channel_id'),
+    ('polls', 'channel_id'), ('poll_votes', 'poll_id'),
+    ('group_mutes', 'member_id'), ('group_members', 'user_id'),
+})
+
+
+def db_health():
+    """Состояние БД: целостность, битые ссылки, размер, число таблиц/записей."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    info = {'ok': True, 'integrity': 'ok', 'foreign_keys': [],
+            'tables': 0, 'db_path': DB_PATH, 'db_size': 0}
+    try:
+        cur.execute('PRAGMA integrity_check')
+        row = cur.fetchone()
+        integrity = (row or {}).get('integrity_check') or 'ok'
+        info['integrity'] = integrity
+        if integrity != 'ok':
+            info['ok'] = False
+
+        cur.execute('PRAGMA foreign_key_check')
+        fk = cur.fetchall() or []
+        info['foreign_keys'] = [dict(r) for r in fk][:50]
+        info['foreign_keys_total'] = len(fk)
+        if fk:
+            info['ok'] = False
+
+        cur.execute("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'")
+        info['tables'] = (cur.fetchone() or {}).get('n', 0)
+        try:
+            info['db_size'] = os.path.getsize(DB_PATH)
+        except OSError:
+            info['db_size'] = 0
+    except Exception as e:
+        info['ok'] = False
+        info['error'] = str(e)
+    finally:
+        conn.close()
+    return info
+
+
+def backup_database():
+    """Копия БД рядом с ней: backups/sputnik_YYYYmmdd_HHMMSS.db."""
+    import shutil
+    from datetime import datetime as _dt
+    stamp = _dt.now().strftime('%Y%m%d_%H%M%S')
+    folder = os.path.join(os.path.dirname(os.path.abspath(DB_PATH)), 'backups')
+    os.makedirs(folder, exist_ok=True)
+    target = os.path.join(folder, os.path.basename(DB_PATH).rsplit('.', 1)[0] + f'_{stamp}.db')
+    # Копия через SQLite, а не shutil: так берётся согласованный снимок,
+    # даже если в момент копирования кто-то пишет в базу.
+    src = sqlite3.connect(DB_PATH)
+    try:
+        dst = sqlite3.connect(target)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    return target
+
+
+def cleanup_orphans(dry_run=True, passes=6):
+    """Удаляет записи, ссылающиеся на несуществующие строки.
+
+    Логика перенесена из tools/cleanup_orphans.py, чтобы то же самое можно
+    было делать из интерфейса (пункт A раздела 4 CHANGELOG).
+    """
+    conn = get_db()
+    cur = dict_cursor(conn)
+    removed = []
+    total = 0
+    try:
+        cur.execute('PRAGMA foreign_keys = OFF')
+
+        def _ids(table):
+            cur.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = %s", (table,))
+            if not cur.fetchone():
+                return set()
+            cur.execute('SELECT id FROM %s' % table)
+            return {r['id'] for r in cur.fetchall()}
+
+        for _n in range(passes):
+            live = {
+                'users': _ids('users') | {0, -1},   # системные/технические
+                'chats': _ids('chats'),
+                'messages': _ids('messages'),
+                'chat_folders': _ids('chat_folders'),
+                'groups': _ids('groups'),
+                'channels': _ids('channels'),
+                'stories': _ids('stories'),
+                'polls': _ids('polls'),
+            }
+            cur.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+            tables = [r['name'] for r in cur.fetchall()]
+
+            steps = []
+            for table in tables:
+                cur.execute('PRAGMA table_info(%s)' % table)
+                cols = {r['name'] for r in cur.fetchall()}
+                for t, col in _ORPHAN_CHILD_REFS:
+                    if t != table or col not in cols:
+                        continue
+                    kind = _ORPHAN_REF_KIND.get(col)
+                    alive = live.get(kind)
+                    if alive is None:
+                        continue
+                    marks = ','.join(['%s'] * len(alive)) if alive else 'NULL'
+                    params = tuple(sorted(alive))
+                    where = f'{col} IS NOT NULL AND {col} NOT IN ({marks})'
+                    cur.execute(f'SELECT COUNT(*) AS n FROM {table} WHERE {where}', params)
+                    n = (cur.fetchone() or {}).get('n', 0)
+                    if not n:
+                        continue
+                    if 'id' in cols:
+                        cur.execute(f'SELECT id FROM {table} WHERE {where}', params)
+                        ids = [r['id'] for r in cur.fetchall()]
+                        steps.append((table, 'id IN', ids))
+                    else:
+                        # У части таблиц (message_views) нет колонки id: там
+                        # удаляем по условию, иначе они оставались сиротами
+                        # и ломали foreign_key_check.
+                        steps.append((table, col, None))
+
+            if not steps:
+                break
+            for table, key, ids in steps:
+                if ids is None:
+                    # Таблица без колонки id: количество считаем тем же условием
+                    cur.execute(f'SELECT COUNT(*) AS n FROM {table} WHERE {key} IS NOT NULL '
+                                f'AND {key} NOT IN (%s)' % ','.join(['%s'] * len(live[_ORPHAN_REF_KIND[key]])),
+                                tuple(sorted(live[_ORPHAN_REF_KIND[key]])))
+                    n = (cur.fetchone() or {}).get('n', 0)
+                    removed.append({'table': table, 'column': key, 'count': n, 'ids': []})
+                    total += n
+                    continue
+                removed.append({'table': table, 'column': key,
+                                'count': len(ids), 'ids': sorted(ids)[:50]})
+                total += len(ids)
+            if dry_run:
+                break
+            for table, key, ids in steps:
+                if key == 'id IN':
+                    marks = ','.join(['%s'] * len(ids))
+                    cur.execute(f'DELETE FROM {table} WHERE id IN ({marks})', tuple(ids))
+                else:
+                    alive = live[_ORPHAN_REF_KIND[key]]
+                    marks = ','.join(['%s'] * len(alive))
+                    cur.execute(f'DELETE FROM {table} WHERE {key} IS NOT NULL '
+                                f'AND {key} NOT IN ({marks})', tuple(sorted(alive)))
+            conn.commit()
+        conn.commit()
+    finally:
+        cur.execute('PRAGMA foreign_keys = ON')
+        conn.close()
+    return {'total': total, 'steps': removed[:80], 'dry_run': bool(dry_run)}
 
 
 # ----- Телеграм: просмотры постов канала и мьют уведомлений -----
 
-def add_channel_post_view(message_id):
-    """Увеличивает счётчик просмотров поста канала."""
+def add_channel_post_view(message_id, user_id):
+    """Засчитывает просмотр поста канала. Один и тот же пользователь
+    повторно пост не «досматривает»: как в Telegram, считаются уникальные
+    просмотры, а не открытия чата.
+
+    Возвращает True, если просмотр был новым (счётчик вырос).
+    """
     conn = get_db()
     cur = dict_cursor(conn)
     try:
-        cur.execute('UPDATE messages SET views_count = views_count + 1 WHERE id = %s', (message_id,))
+        cur.execute('''
+            INSERT INTO message_views (message_id, user_id)
+            VALUES (%s, %s) ON CONFLICT (message_id, user_id) DO NOTHING
+        ''', (message_id, user_id))
+        if cur.rowcount < 1:
+            return False
+        cur.execute('UPDATE messages SET views_count = COALESCE(views_count, 0) + 1 WHERE id = %s',
+                    (message_id,))
         conn.commit()
         return True
     except:
         return False
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def is_chat_muted(user_id, chat_type, chat_id):
@@ -2948,6 +3341,8 @@ def delete_channel(channel_id, user_id):
     channel = cur.fetchone()
 
     if channel and channel['owner_id'] == user_id:
+        # См. delete_group: у messages нет внешних ключей.
+        cur.execute('DELETE FROM messages WHERE channel_id = %s', (channel_id,))
         cur.execute('DELETE FROM channels WHERE id = %s', (channel_id,))
         conn.commit()
         conn.close()

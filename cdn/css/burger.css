@@ -329,3 +329,25 @@
     }
 }
 
+
+/* Обслуживание БД (экран настроек) */
+.dbm-wrap { font-size: 13px; }
+.dbm-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0; border-bottom: 1px solid var(--border-color);
+}
+.dbm-row:last-of-type { border-bottom: none; }
+.dbm-row span { color: var(--text-muted); }
+.dbm-actions {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 12px;
+}
+.dbm-btn {
+    width: 100%; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border-color); background: var(--bg-secondary);
+    color: var(--text-primary); font-size: 13px; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.dbm-btn:hover { background: var(--bg-hover); }
+@media (max-width: 768px) {
+    .dbm-btn { padding: 12px; font-size: 14px; }
+}
