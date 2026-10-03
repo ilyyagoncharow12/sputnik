@@ -1,4 +1,5 @@
 import os
+import socket
 import json
 import uuid
 import re
@@ -12,7 +13,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
 from werkzeug.utils import secure_filename
 from PIL import Image
 
-from config import env
+from config import env, save_env
 
 # Корректный MIME для локальных woff2-шрифтов (Unbounded)
 import mimetypes
@@ -42,6 +43,7 @@ from database import (
     edit_message, delete_message, forward_message,
     get_message_by_id, pin_message, unpin_message, unpin_message_by_message_id, get_pinned_message,
     get_chat_other_user, get_link_preview,
+    get_personal_chat_id, get_user_media, MEDIA_KINDS,
     create_poll, get_polls_for_messages, get_poll_by_id, vote_poll, close_poll,
     get_contacts, add_contact, rename_contact, search_users,
     add_to_favorites, get_favorites,
@@ -102,6 +104,8 @@ from database import (
     get_message_edits, get_message_edits_count,
     # v0.60.3 — корзина удалённых
     get_deleted_messages, restore_message, clear_chat_trash, purge_old_trash,
+    # v0.62.2 — онлайн-статус (с учётом приватности last_seen)
+    can_see_last_seen, can_see_last_seen_many,
 )
 
 from werkzeug.security import check_password_hash  # не используется напрямую
@@ -113,7 +117,35 @@ import bcrypt
 import push
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = env('SECRET_KEY', '89e=)_)_)I(E*(UIM<#*URM38um489ur74ncyrc7y54n54vm,yu6v,c0uy58u897JMM87Y78Y89ym87yn7)Y*Y_Y870y&T#67t63tye78m340yvf8v4tymuv8bymuv6754y68902m5,4cuio32pdx,jlk23')
+
+
+def get_secret_key():
+    """Ключ подписи сессий.
+
+    Раньше здесь стоял захардкоженный ключ из кода. Если файл .env не
+    переезжает вместе с программой (например, на флешке остались только
+    .py), сессии подписывались чем-то, что есть в открытом коде —
+    значит cookie можно было подделать и зайти под любым user_id.
+    Теперь: берём из окружения/.env, иначе генерируем случайный и
+    СРАЗУ пишем его в .env, чтобы он не менялся при перезапусках.
+    """
+    key = env('SECRET_KEY')
+    if key and len(key) >= 32:
+        return key
+    generated = secrets.token_urlsafe(64)
+    if save_env('SECRET_KEY', generated):
+        print('[SECURITY] SECRET_KEY был сгенерирован и сохранён в .env '
+              '(%d символов). Сделайте резервную копию этого файла.' % len(generated))
+        return generated
+    # .env недоступна для записи: работаем на случайном ключе. Сессии
+    # сбросятся при перезапуске, но подделать их невозможно.
+    print('[SECURITY] ВНИМАНИЕ: SECRET_KEY не задан и .env не записывается — '
+          'используется временный случайный ключ. Сессии сбросятся при '
+          'перезапуске сервера. Создайте .env с SECRET_KEY вручную.')
+    return generated
+
+
+app.config['SECRET_KEY'] = get_secret_key()
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
@@ -132,7 +164,49 @@ def no_store_html(response):
 
 
 
-socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60, ping_interval=25)
+def _local_ips():
+    """IP-адреса этой машины — с них приходят запросы с телефона/ПК."""
+    ips = {'127.0.0.1', 'localhost', '::1'}
+    try:
+        ips.update(socket.gethostbyname_ex(socket.gethostname())[2])
+    except Exception:
+        pass
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.settimeout(0.3)
+        probe.connect(('8.8.8.8', 80))
+        ips.add(probe.getsockname()[0])
+        probe.close()
+    except Exception:
+        pass
+    return ips
+
+
+def allowed_origins():
+    """Список origin'ов, с которых разрешены HTTP-запросы и WebSocket.
+
+    Раньше стоял cors_allowed_origins='*'. Через него любой сайт,
+    открытый в том же браузере, мог подключиться к сокету и слушать
+    сообщения пользователя (WebSocket не подчиняется SameSite, поэтому
+    cookie уезжали вместе с соединением).
+    """
+    ports = ['5000', str(os.environ.get('HTTPS_PORT', '5443'))]
+    origins = []
+    for extra in (env('ALLOWED_ORIGINS') or '').split(','):
+        extra = extra.strip().rstrip('/')
+        if extra:
+            origins.append(extra)
+    for ip in _local_ips():
+        for p in ports:
+            origins.append('http://%s:%s' % (ip, p))
+            origins.append('https://%s:%s' % (ip, p))
+    return list(dict.fromkeys(origins))
+
+
+ALLOWED_ORIGINS = allowed_origins()
+
+socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS,
+                    ping_timeout=60, ping_interval=25)
 # Инициализация WebRTC менеджера
 webrtc_manager = init_webrtc(socketio)
 
@@ -950,7 +1024,9 @@ def api_link_preview():
     if not url.startswith(('http://', 'https://')):
         return jsonify({'preview': None})
 
-    preview = get_link_preview(url)
+    # ?force=1 — перезагрузить превью, не дожидаясь истечения срока (кнопка «Обновить»)
+    force = request.args.get('force') in ('1', 'true', 'yes')
+    preview = get_link_preview(url, force_refresh=force)
     return jsonify({'preview': preview})
 
 
@@ -1117,6 +1193,34 @@ def api_search_users():
     return jsonify([dict(u) for u in users])
 
 
+def _last_seen_allowed(viewer_id, target_id):
+    """Может ли viewer_id видеть время захода target_id (с защитой от ошибок)."""
+    if not target_id or target_id == viewer_id:
+        return True
+    try:
+        return bool(can_see_last_seen(viewer_id, target_id))
+    except Exception:
+        return False
+
+
+def _attach_presence(user_id, other_id, payload):
+    """Проставляет is_online в ответе профиля, если его положено видеть.
+
+    Если пользователь скрыл время захода ('nobody' или не контакт при
+    'contacts'), зелёную точку не показываем — иначе можно было бы узнать
+    «в сети» по косвенному признаку.
+    """
+    if not other_id or other_id == user_id:
+        payload['is_online'] = False
+        return payload
+    try:
+        allowed = can_see_last_seen(user_id, other_id)
+    except Exception:
+        allowed = False
+    payload['is_online'] = bool(allowed and is_user_online(other_id))
+    return payload
+
+
 @app.route('/api/get_chats_list')
 def api_get_chats_list():
     if 'user_id' not in session:
@@ -1127,7 +1231,24 @@ def api_get_chats_list():
     except Exception:
         pass
 
-    chats = get_user_chats(session['user_id'])
+    uid = session['user_id']
+    chats = get_user_chats(uid)
+
+    # Онлайн-статус показываем только тем, кому положено видеть время захода
+    visible = can_see_last_seen_many(uid, [c.get('other_user_id') for c in chats
+                                           if c.get('chat_type') == 'personal'])
+    for c in chats:
+        if c.get('chat_type') != 'personal':
+            c['is_online'] = False
+            continue
+        other = c.get('other_user_id')
+        c['is_online'] = bool(other and other != uid and other in visible
+                              and is_user_online(other))
+        # Кто скрыл время захода — тому и last_seen показывать нельзя
+        # (иначе «в сети» можно было бы вычислить по нулевому времени).
+        if other and other != uid and other not in visible and not c.get('has_blocked_me'):
+            c['last_seen'] = None
+
     return jsonify(chats)
 
 
@@ -1301,6 +1422,16 @@ def api_get_chat(user_id):
         if other_user_profile.get('has_blocked_me'):
             other_user_profile['avatar'] = None
             other_user_profile['last_seen'] = None
+
+        # Онлайн-статус — только если собеседник разрешил видеть время захода
+        if not other_user_profile.get('has_blocked_me'):
+            _attach_presence(current_user_id, user_id, other_user_profile)
+            # Приватность 'nobody'/'contacts': время захода тоже скрываем,
+            # иначе «в сети» определялось бы по слишком свежему last_seen.
+            if not _last_seen_allowed(current_user_id, user_id):
+                other_user_profile['last_seen'] = None
+        else:
+            other_user_profile['is_online'] = False
 
         return jsonify({
             'chat_id': chat_id,
@@ -3090,7 +3221,7 @@ def api_get_user(user_id):
 
     user = get_user_by_id(user_id)
     if user and not user['is_deleted']:
-        return jsonify({
+        payload = {
             'id': user['id'],
             'unique_id': user['unique_id'],
             'username': user['username'],
@@ -3099,8 +3230,12 @@ def api_get_user(user_id):
             'avatar': user['avatar'],
             'bio': user['bio'] or '',
             'birthday': user['birthday'] or '',
-            'last_seen': user['last_seen']
-        })
+            # Время захода отдаём только если его положено видеть,
+            # иначе по нему можно вычислить, что человек сейчас в сети
+            'last_seen': user['last_seen'] if _last_seen_allowed(session['user_id'], user_id) else None
+        }
+        _attach_presence(session['user_id'], user_id, payload)
+        return jsonify(payload)
     return jsonify({'error': 'User not found'}), 404
 
 
@@ -3111,8 +3246,71 @@ def api_get_user_profile(user_id):
 
     user = get_user_profile(user_id, session['user_id'])
     if user:
+        user = dict(user)
+        if user.get('has_blocked_me'):
+            user['avatar'] = None
+            user['last_seen'] = None
+            user['is_online'] = False
+        else:
+            _attach_presence(session['user_id'], user_id, user)
+            # Время захода скрыто настройкой приватности — не показываем его
+            if not user['is_online'] and not _last_seen_allowed(session['user_id'], user_id):
+                user['last_seen'] = None
         return jsonify(user)
     return jsonify({'error': 'User not found'}), 404
+
+
+@app.route('/api/get_user_media/<int:user_id>')
+@rate_limit(limit=60, window=60)
+def api_get_user_media(user_id):
+    """Медиа пользователя для галереи в профиле.
+
+    Показываем только то, что человек отправил в личном чате с тем,
+    кто смотрит профиль: медиа из групп и каналов не показываем
+    (иначе можно было бы выбрать случайного пользователя и посмотреть
+    его файлы). Своему профилю — медиа из «Избранного».
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    viewer_id = session['user_id']
+
+    target = get_user_by_id(user_id)
+    if not target or target['is_deleted']:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Блокировка в любую сторону — медиа не показываем
+    try:
+        if is_user_blocked(viewer_id, user_id) or is_user_blocked(user_id, viewer_id):
+            return jsonify({'error': 'Доступ заблокирован'}), 403
+    except Exception:
+        return jsonify({'error': 'Доступ заблокирован'}), 403
+
+    if not get_personal_chat_id(viewer_id, user_id):
+        return jsonify({'error': 'Нет доступа к медиа'}), 403
+
+    media_type = (request.args.get('type') or 'all').strip().lower()
+    if media_type not in ('all',) and media_type not in MEDIA_KINDS:
+        media_type = 'all'
+    try:
+        limit = max(1, min(int(request.args.get('limit', 30)), 100))
+    except (TypeError, ValueError):
+        limit = 30
+    try:
+        offset = max(0, int(request.args.get('offset', 0)))
+    except (TypeError, ValueError):
+        offset = 0
+
+    items, counts, total = get_user_media(viewer_id, user_id,
+                                         media_type=media_type,
+                                         limit=limit, offset=offset)
+    return jsonify({
+        'items': items,
+        'counts': counts,
+        'total': total,
+        'type': media_type,
+        'has_more': offset + len(items) < total
+    })
 
 
 @app.route('/api/update_profile', methods=['POST'])
@@ -3937,7 +4135,8 @@ def api_get_user_by_username():
             'avatar': user['avatar'],
             'phone': user['phone'],
             'bio': user['bio'],
-            'last_seen': user['last_seen']
+            # как и в /api/get_user — время захода только при разрешении
+            'last_seen': user['last_seen'] if _last_seen_allowed(session['user_id'], user['id']) else None
         })
     return jsonify({'error': 'Not found'}), 404
 
@@ -4652,6 +4851,30 @@ def is_user_online(user_id):
     return bool(online_user_sids.get(user_id))
 
 
+def notify_presence(user_id, online):
+    """Сообщает тем, кому положено видеть присутствие, что user_id в сети/не в сети.
+
+    Онлайн-статус подчиняется той же настройке приватности, что и время захода
+    (privacy_last_seen): при 'nobody' не сообщаем никому, при 'contacts' —
+    только контактам, при 'everyone' — всем, кто сейчас подключён.
+    """
+    try:
+        for viewer in list(online_user_sids.keys()):
+            if viewer == user_id:
+                continue
+            try:
+                if not can_see_last_seen(viewer, user_id):
+                    continue
+            except Exception:
+                continue
+            socketio.emit('presence_update', {
+                'user_id': user_id,
+                'online': bool(online)
+            }, to=f"user_{viewer}")
+    except Exception as e:
+        print('[presence] notify failed: %s' % e)
+
+
 def clear_active_call(call_id):
     """Убирает call_id из active_calls у всех, кто его держит."""
     for uid in list(active_calls.keys()):
@@ -4667,9 +4890,13 @@ def handle_connect():
             disconnect()
             return
         join_room(f"user_{session['user_id']}")
+        was_offline = not online_user_sids.get(session['user_id'])
         online_user_sids.setdefault(session['user_id'], set()).add(request.sid)
         update_last_seen(session['user_id'])
         emit('connected', {'user_id': session['user_id']})
+        # Заходил ли пользователь с другой вкладки — тогда «в сети» уже горело
+        if was_offline:
+            notify_presence(session['user_id'], True)
 
 
 @socketio.on('disconnect')
@@ -4682,6 +4909,7 @@ def handle_disconnect():
             sids.discard(request.sid)
             if not sids:
                 online_user_sids.pop(user_id, None)
+                notify_presence(user_id, False)
         # Если пользователь отключился во время звонка — снять «занятость»
         active_calls.pop(user_id, None)
         for room_id, room_data in list(video_rooms.items()):

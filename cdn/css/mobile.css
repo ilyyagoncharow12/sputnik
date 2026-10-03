@@ -238,3 +238,17 @@ body.mobile .mobile-gesture,
         font-size: 14px;
     }
 }
+
+/* ===== Превью ссылки на телефоне ===== */
+@media (max-width: 768px) {
+    /* Палец крупнее курсора — увеличиваем зону нажатия */
+    .link-preview .link-preview-refresh {
+        width: 34px;
+        height: 34px;
+        font-size: 13px;
+    }
+
+    .link-preview {
+        max-width: 100%;
+    }
+}

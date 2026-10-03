@@ -682,6 +682,8 @@ function composerInstallSend() {
         composerAutosize();
         cancelReply();
         cancelSchedule();
+        // текст отправлен — черновик больше не нужен
+        if (typeof clearCurrentDraft === 'function') clearCurrentDraft();
         if (fileInput) fileInput.value = '';
         if (typeof pendingFiles !== 'undefined') pendingFiles = [];
 

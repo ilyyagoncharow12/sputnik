@@ -1,4 +1,17 @@
     // ===== ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ =====
+// Строка «Медиа» в профиле: открывает галерею файлов из личного чата.
+// Имя передаём через data-атрибут (не в onclick), чтобы кавычки и
+// спецсимволы в имени не ломали разметку и не попадали в код.
+function mediaRowHTML(userId, displayName) {
+    const id = Number(userId);
+    const who = String(displayName == null ? '' : displayName);
+    return `<div class="media-row-link" data-user-id="${id}" data-name="${escapeAttr(who)}"
+                onclick="openUserMedia(Number(this.dataset.userId), this.dataset.name)">
+                <span class="label"><i class="fas fa-photo-film"></i> медиа</span>
+                <span class="value">смотреть <i class="fas fa-chevron-right"></i></span>
+            </div>`;
+}
+
 function openUserProfileModal(userId) {
 
 // Запоминаем, откуда пришли — из чата или из контактов
@@ -66,12 +79,14 @@ function openUserProfileModal(userId) {
 
                                         <div class="avatar-wrap">
                                             ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: #2c2c2e;"><i class="fas fa-user-slash" style="color: #8e8e93; font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
+                                            ${user.is_online ? `<span class="online-dot"></span>` : ''}
                                         </div>
 
                                         <div class="name-wrap">
                                             <div class="display-name">${premiumNameHTML(displayName, userId)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
                                             <div class="username">@${escapeHtml(user.username)}</div>
                                             <div class="id">ID: ${user.unique_id}</div>
+                                            ${user.is_online ? `<div class="id online-text">в сети</div>` : ''}
                                         </div>
 
                                         ${songHtml}
@@ -117,6 +132,8 @@ function openUserProfileModal(userId) {
                                                 <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
                                             </div>
 
+                                            ${mediaRowHTML(user.id, displayName)}
+
                                             ${isBlocked ? `
                                                 <button class="unblock-btn" onclick="unblockUserAction(${user.id}); closeModal('tempModal');">
                                                     <i class="fas fa-unlock"></i> Разблокировать
@@ -152,12 +169,14 @@ function openUserProfileModal(userId) {
 
                                         <div class="avatar-wrap">
                                             ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: #2c2c2e;"><i class="fas fa-user-slash" style="color: #8e8e93; font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
+                                            ${user.is_online ? `<span class="online-dot"></span>` : ''}
                                         </div>
 
                                         <div class="name-wrap">
                                             <div class="display-name">${premiumNameHTML(displayName, userId)}${user.is_banned ? ' <span style="color:#4fc3f7;">❄</span>' : ''}</div>
                                             <div class="username">@${escapeHtml(user.username)}</div>
                                             <div class="id">ID: ${user.unique_id}</div>
+                                            ${user.is_online ? `<div class="id online-text">в сети</div>` : ''}
                                         </div>
 
                                         <div class="body">
@@ -201,6 +220,8 @@ function openUserProfileModal(userId) {
                                                 <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
                                             </div>
 
+                                            ${mediaRowHTML(user.id, displayName)}
+
                                             ${isBlocked ? `
                                                 <button class="unblock-btn" onclick="unblockUserAction(${user.id}); closeModal('tempModal');">
                                                     <i class="fas fa-unlock"></i> Разблокировать
@@ -240,6 +261,94 @@ function openUserProfileModal(userId) {
                     openUserProfileModalFallback(user);
                 });
         });
+}
+
+// Раньше эта функция вызывалась, но нигде не была определена — профиль
+// падал с ReferenceError, если /api/check_contact не ответил.
+function openUserProfileModalFallback(user) {
+    if (!user || user.error) {
+        alert('Пользователь не найден');
+        return;
+    }
+    const displayName = user.display_name || user.username || 'Пользователь';
+    let bannerStyle = '';
+    if (user.banner_image) {
+        bannerStyle = `background-image: url('/${user.banner_image}'); background-size: cover; background-position: center;`;
+    } else if (user.banner_color) {
+        bannerStyle = `background: ${user.banner_color};`;
+    } else {
+        bannerStyle = `background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);`;
+    }
+
+    const html = `
+        <div class="other-profile">
+            <div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">
+                <div class="banner" style="${bannerStyle}">
+                    <div class="overlay"></div>
+                    <div class="top-bar">
+                        <button class="back-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                    </div>
+                </div>
+
+                <div class="avatar-wrap">
+                    ${user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${escapeHtml(displayName[0].toUpperCase())}</div>`}
+                    ${user.is_online ? `<span class="online-dot"></span>` : ''}
+                </div>
+
+                <div class="name-wrap">
+                    <div class="display-name">${premiumNameHTML(displayName, user.id)}</div>
+                    <div class="username">@${escapeHtml(user.username)}</div>
+                    <div class="id">ID: ${user.unique_id}</div>
+                    ${user.is_online ? `<div class="id online-text">в сети</div>` : ''}
+                </div>
+
+                <div class="body">
+                    ${user.bio ? `<div class="bio-box"><div class="bio-text">${escapeHtml(user.bio)}</div></div>` : ''}
+
+                    <div class="actions">
+                        <button class="action-btn" onclick="openChat(${user.id}, 'personal'); closeModal('tempModal');">
+                            <i class="fas fa-comment"></i><span>Чат</span>
+                        </button>
+                        <button class="action-btn" onclick="makeCallToUser(${user.id}); closeModal('tempModal');">
+                            <i class="fas fa-phone"></i><span>Звонок</span>
+                        </button>
+                        <button class="action-btn" onclick="startVideoCallToUser(${user.id}); closeModal('tempModal');">
+                            <i class="fas fa-video"></i><span>Видео</span>
+                        </button>
+                        <button class="action-btn" onclick="showChatSearchModal(${currentChat ? currentChat.chat_id : ''}); closeModal('tempModal');">
+                            <i class="fas fa-search"></i><span>Поиск</span>
+                        </button>
+                        <button class="more-btn" onclick="showUserMenu(${user.id})">
+                            <i class="fas fa-ellipsis-h"></i><span>ещё</span>
+                        </button>
+                    </div>
+
+                    <div class="info-box">
+                        <div class="info-row">
+                            <span class="label">мобильный</span>
+                            <span class="value blue">${user.phone || 'Номер скрыт'}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">имя пользователя</span>
+                            <span class="value blue">@${escapeHtml(user.username)}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">день рождения</span>
+                            <span class="value">${user.birthday || 'Не указан'}</span>
+                        </div>
+                    </div>
+
+                    <div class="about-box">
+                        <div class="about-label">о себе</div>
+                        <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
+                    </div>
+
+                    ${mediaRowHTML(user.id, displayName)}
+                </div>
+            </div>
+        </div>`;
+
+    premiumMount(html);
 }
 
 
@@ -496,6 +605,7 @@ function openMyProfile() {
                             html += `<div class="about-text">${u.bio ? escapeHtml(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
 
+                            html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
                             html += '</div>'; // body
                             html += '</div>'; // modal-content
                             html += '</div>'; // other-profile
@@ -540,6 +650,7 @@ function openMyProfile() {
                             html += '<div class="about-label">о себе</div>';
                             html += `<div class="about-text">${u.bio ? escapeHtml(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
+                            html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
                             html += '</div>';
                             html += '</div>';
                             html += '</div>';

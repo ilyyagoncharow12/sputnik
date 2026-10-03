@@ -674,6 +674,9 @@ function addAudioViaFormData(filePath, title, artist, fileName) {
                 });
         }
     });
+
+    // Кнопки «Показать превью ссылки» для всей загруженной истории
+    if (typeof loadLinkPreviews === 'function') loadLinkPreviews(c);
 }
 
     function formatMessage(m) {

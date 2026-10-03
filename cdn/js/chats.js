@@ -236,7 +236,14 @@
             const statusEl = document.getElementById('chatUserStatus');
             if (statusEl && !statusEl.classList.contains('typing')) {
                 const me = (chatsData || []).find(x => String(x.other_user_id) === String(currentChat.other_user_id));
-                if (me && me.last_seen) statusEl.textContent = formatLastSeen(me.last_seen);
+                // Онлайн-статус ведёт presence.js: не затираем «в сети» временем захода
+                if (typeof window.isUserOnline === 'function' && window.isUserOnline(currentChat.other_user_id)) {
+                    statusEl.textContent = 'в сети';
+                } else if (me && me.last_seen !== null && me.last_seen !== undefined) {
+                    statusEl.textContent = formatLastSeen(me.last_seen);
+                } else if (me) {
+                    statusEl.textContent = 'был(а) давно';
+                }
             }
         }
 
@@ -269,6 +276,8 @@
                     } else {
                         chatsData = list;
                     }
+                    // Онлайн-точки обновляем всегда, даже когда список не перерисован
+                    if (typeof window.updatePresenceUI === 'function') window.updatePresenceUI();
                 })
                 .catch(() => {})
                 .finally(() => { liveTicker.busy = false; });
@@ -434,6 +443,8 @@ function continueOpenChat(id, type) {
 
             displayMessages(d.messages || []);
             showPinnedForCurrentChat();
+            // восстанавливаем неотправленный текст этого чата
+            if (typeof loadChatDraft === 'function') loadChatDraft();
             if (d.messages && d.messages.length > 0) {
                 document.getElementById('messageInput').focus();
             }

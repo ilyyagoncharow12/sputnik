@@ -218,44 +218,94 @@
         return [...new Set(matches.map(u => u.replace(/[.,;:!?]+$/, '')))];
     }
 
+    function fetchLinkPreview(url, force) {
+        return fetch(`/api/link_preview?url=${encodeURIComponent(url)}${force ? '&force=1' : ''}`)
+            .then(r => r.json())
+            .then(d => d.preview || null);
+    }
+
+    function previewIsEmpty(p) {
+        return !p || (!p.title && !p.image_url && !p.description);
+    }
+
+    // Рисует карточку превью внутри контейнера сообщения
+    function renderLinkPreview(container, url, p) {
+        const div = document.createElement('div');
+        div.className = 'link-preview';
+        let inner = '';
+        if (p.image_url) inner += `<img src="${escapeAttr(p.image_url)}" onerror="this.remove()">`;
+        inner += `<div class="link-preview-info">` +
+            (p.title ? `<div class="link-preview-title">${escapeHtml(p.title)}</div>` : '') +
+            (p.description ? `<div class="link-preview-desc">${escapeHtml(p.description)}</div>` : '') +
+            (p.site_name ? `<div class="link-preview-site">${escapeHtml(p.site_name)}</div>` : `<div class="link-preview-site">${escapeHtml(url.split('/')[2])}</div>`) +
+            `</div>` +
+            // Кэш превью живёт 24 часа — кнопка обновляет его досрочно
+            `<button type="button" class="link-preview-refresh" title="Обновить превью"><i class="fas fa-rotate"></i></button>`;
+        div.innerHTML = inner;
+        div.onclick = (e) => {
+            if (e.target.closest('.link-preview-refresh')) {
+                e.stopPropagation();
+                refreshLinkPreview(container, url);
+                return;
+            }
+            window.open(url, '_blank');
+        };
+        container.appendChild(div);
+        return div;
+    }
+
     // Превью ссылки само НЕ подгружается — только кнопка под текстом.
     // Раньше карточка появлялась автоматически и уезжала за край.
     function injectLinkPreview(container, url) {
         if (container.querySelector('.link-preview')) return;
         removeLinkPreviewButton(container, url);
-        fetch(`/api/link_preview?url=${encodeURIComponent(url)}`)
-            .then(r => r.json())
-            .then(d => {
-                const p = d.preview;
-                if (!p || (!p.title && !p.image_url && !p.description)) {
+        fetchLinkPreview(url, false)
+            .then(p => {
+                if (previewIsEmpty(p)) {
                     // превью не нашлось — вернём кнопку, чтобы можно было повторить
                     attachLinkPreviewButton(container, url);
                     return;
                 }
                 if (container.querySelector('.link-preview')) return;
-                const div = document.createElement('div');
-                div.className = 'link-preview';
-                let inner = '';
-                if (p.image_url) inner += `<img src="${escapeAttr(p.image_url)}" onerror="this.remove()">`;
-                inner += `<div class="link-preview-info">` +
-                    (p.title ? `<div class="link-preview-title">${escapeHtml(p.title)}</div>` : '') +
-                    (p.description ? `<div class="link-preview-desc">${escapeHtml(p.description)}</div>` : '') +
-                    (p.site_name ? `<div class="link-preview-site">${escapeHtml(p.site_name)}</div>` : `<div class="link-preview-site">${escapeHtml(url.split('/')[2])}</div>`) +
-                    `</div>`;
-                div.innerHTML = inner;
-                div.onclick = () => window.open(url, '_blank');
-                container.appendChild(div);
+                renderLinkPreview(container, url, p);
             })
             .catch(() => { attachLinkPreviewButton(container, url); });
     }
 
-    // Кнопка «Показать превью» под текстом со ссылкой
-    // container — либо само сообщение, либо его .message-text
+    // Обновление превью по кнопке. Старая карточка остаётся на месте, пока
+    // не пришли новые данные: если сеть недоступна, превью не пропадает.
+    function refreshLinkPreview(container, url) {
+        if (!container) return;
+        const card = container.querySelector('.link-preview');
+        const btn = card ? card.querySelector('.link-preview-refresh') : null;
+        const restore = () => {
+            if (!btn) return;
+            btn.classList.remove('spinning');
+            btn.disabled = false;
+        };
+        if (btn) {
+            btn.classList.add('spinning');
+            btn.disabled = true;
+        }
+        fetchLinkPreview(url, true)
+            .then(p => {
+                if (previewIsEmpty(p)) { restore(); return; }
+                if (card) card.remove();
+                renderLinkPreview(container, url, p);
+            })
+            .catch(restore);
+    }
+
+    // Кнопка «Показать превью» под текстом со ссылкой.
+    // container — элемент с текстом сообщения (.message-text), само сообщение
+    // (.message) либо контейнер со списком сообщений.
     function attachLinkPreviewButton(container, url) {
         if (!container) return;
         const text = container.classList.contains('message-text')
             ? container
-            : container.querySelector('.message-text');
+            : (container.classList.contains('message')
+                ? container.querySelector('.message-text')
+                : container.querySelector('.message-text'));
         if (!text) return;
         const msg = container.closest('.message') || container;
         if (msg.querySelector('.link-preview')) return;
@@ -277,15 +327,21 @@
         msg.querySelectorAll('.link-preview-btn').forEach(b => b.remove());
     }
 
+    // Навешивает кнопки превью на все сообщения внутри контейнера.
+    // Раньше кнопка всегда попадала в первое сообщение списка, а не в то,
+    // где реально лежит ссылка.
     function loadLinkPreviews(container) {
         if (!container) return;
-        const textEls = container.querySelectorAll('.message-text');
-        textEls.forEach(tx => {
-            if (tx.querySelector('.link-preview')) return;
+        const msgs = [];
+        if (container.classList && container.classList.contains('message')) msgs.push(container);
+        container.querySelectorAll('.message').forEach(m => msgs.push(m));
+        msgs.forEach(msg => {
+            const tx = msg.querySelector('.message-text');
+            if (!tx || msg.querySelector('.link-preview')) return;
             const urls = extractUrls(tx.textContent);
             if (!urls.length) return;
             // как в Telegram — превью только для первой ссылки
-            attachLinkPreviewButton(container, urls[0]);
+            attachLinkPreviewButton(tx, urls[0]);
         });
     }
 

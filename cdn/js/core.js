@@ -232,11 +232,15 @@ document.getElementById('burgerOverlay').onclick = function() {
         const l = new Date(ls);
         const n = new Date();
         const diff = Math.floor((n - l) / 60000);
-        if (diff < 1) return 'в сети';
-        if (diff < 60) return `${diff} мин`;
+        // «в сети» показывается только по реальному присутствию (presence.js),
+        // здесь — время последнего захода.
+        if (diff < 1) return 'только что';
+        if (diff < 60) return `${diff} мин назад`;
         const h = Math.floor(diff / 60);
-        if (h < 24) return `${h} ч`;
-        return `${Math.floor(h / 24)} дн`;
+        if (h < 24) return `${h} ч назад`;
+        const d = Math.floor(h / 24);
+        if (d === 1) return 'вчера';
+        return `${d} дн назад`;
     }
 
     function formatStoryTime(t) {

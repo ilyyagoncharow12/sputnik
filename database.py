@@ -7,8 +7,11 @@ import sys
 import random
 import re
 import urllib.request
+import urllib.error
+import ipaddress
+import socket
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from datetime import datetime, timedelta
 from PIL import Image
 
@@ -914,6 +917,9 @@ def init_db():
             created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
         )
     ''')
+    # v0.62.3 — кэш превью имеет срок годности (LINK_PREVIEW_TTL_HOURS, по умолчанию 24ч),
+    # иначе заголовок/картинка страницы могли измениться, а в чате оставалось старое.
+    cur3.execute("ALTER TABLE link_previews ADD COLUMN IF NOT EXISTS fetched_at TIMESTAMPTZ")
     cur3.execute('''
         CREATE TABLE IF NOT EXISTS polls (
             id SERIAL PRIMARY KEY,
@@ -1409,13 +1415,46 @@ def generate_unique_id():
 
 
 # ----- ПОЛЬЗОВАТЕЛИ -----
+def generate_temp_username(phone, cur=None):
+    """Временный username на первом этапе регистрации.
+
+    Раньше он строился из первых 8 цифр телефона, поэтому два номера с
+    одинаковым началом (например +70000000001 и +70000000042) получали
+    один username, и регистрация второго падала с UNIQUE constraint.
+    """
+    base = 'user_%s' % re.sub(r'\D', '', phone or '')[:8]
+    if not base or base == 'user_':
+        base = 'user_%s' % generate_unique_id()[-6:]
+    username = base
+    suffix = 1
+    own_conn = None
+    if cur is None:
+        own_conn = get_db()
+        cur = dict_cursor(own_conn)
+    try:
+        while True:
+            cur.execute('SELECT 1 FROM users WHERE username = %s LIMIT 1', (username,))
+            if not cur.fetchone():
+                return username
+            suffix += 1
+            username = '%s_%d' % (base, suffix)
+            if suffix > 200:  # страховка от бесконечного цикла
+                username = '%s_%s' % (base, generate_unique_id()[-5:])
+                cur.execute('SELECT 1 FROM users WHERE username = %s LIMIT 1', (username,))
+                if not cur.fetchone():
+                    return username
+    finally:
+        if own_conn is not None:
+            own_conn.close()
+
+
 def create_user_initial(phone, password, email=None):
     """Первый этап регистрации"""
     conn = get_db()
     cur = dict_cursor(conn)
     try:
         unique_id = generate_unique_id()
-        temp_username = f"user_{phone.replace('+', '').replace(' ', '')[:8]}"
+        temp_username = generate_temp_username(phone, cur)
         cur.execute('''
             INSERT INTO users (unique_id, phone, username, display_name, password, last_seen, email, registration_complete)
             VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE)
@@ -3791,6 +3830,93 @@ def get_pinned_message(scope, scope_id):
     return msg
 
 
+def get_personal_chat_id(a_id, b_id):
+    """id личного чата между двумя пользователями (без создания чата).
+
+    В отличие от get_or_create_chat ничего не создаёт — нужно для
+    проверки доступа (например, к медиа из профиля).
+    """
+    if not a_id or not b_id:
+        return None
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute(
+        'SELECT id FROM chats WHERE (user1_id = %s AND user2_id = %s) OR (user1_id = %s AND user2_id = %s)',
+        (a_id, b_id, b_id, a_id)
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row['id'] if row else None
+
+
+# Типы медиа из messages.file_type -> группы для вкладок галереи профиля
+MEDIA_KINDS = {
+    'photo': ('photo',),
+    'video': ('video', 'video_circle'),
+    'audio': ('audio', 'voice'),
+    'file': ('document', 'sticker'),
+}
+
+
+def get_user_media(viewer_id, target_id, media_type='all', limit=30, offset=0):
+    """Медиа, отправленные target_id в личном чате с viewer_id.
+
+    Возвращает (items, counts, total) — список медиа, счётчики по типам
+    и общее количество. Тип 'all' отдаёт фото/видео/аудио/файлы вперемешку.
+    Своему профилю показываем медиа из «Избранного» (чат с самим собой).
+    """
+    chat_id = get_personal_chat_id(viewer_id, target_id)
+    if not chat_id:
+        return [], {k: 0 for k in MEDIA_KINDS}, 0
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+
+    base_where = '''
+        FROM messages m
+        WHERE m.chat_id = %s AND m.sender_id = %s
+          AND m.is_deleted = FALSE
+          AND m.file_path IS NOT NULL AND m.file_path != ''
+          AND (m.expires_at IS NULL OR m.expires_at > (NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+          AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.message_id = m.id AND h.user_id = %s)
+    '''
+    base_params = [chat_id, target_id, viewer_id]
+
+    # Счётчики по типам — считаем одним проходом без LIMIT
+    counts = {k: 0 for k in MEDIA_KINDS}
+    cur.execute('SELECT m.file_type %s' % base_where, base_params)
+    for row in cur.fetchall():
+        ft = (row['file_type'] or '').lower()
+        for kind, types in MEDIA_KINDS.items():
+            if ft in types:
+                counts[kind] += 1
+    total = sum(counts.values())
+
+    where = base_where
+    params = list(base_params)
+    # Неизвестный тип считаем 'all' — так же, как в /api/get_user_media
+    if not media_type or media_type not in MEDIA_KINDS:
+        media_type = 'all'
+    if media_type != 'all':
+        types = MEDIA_KINDS[media_type]
+        placeholders = ', '.join(['%s'] * len(types))
+        where += ' AND LOWER(m.file_type) IN (%s)' % placeholders
+        params.extend(types)
+
+    where += ' ORDER BY m.created_at DESC, m.id DESC LIMIT %s OFFSET %s'
+    params.extend([limit, offset])
+
+    cur.execute('''
+        SELECT m.id, m.chat_id, m.file_type, m.file_path, m.file_name,
+               m.file_size, m.content, m.created_at, m.media_duration,
+               m.album_id, m.album_order
+        %s
+    ''' % where, params)
+    items = [dict(r) for r in cur.fetchall()]
+    conn.close()
+    return items, counts, total
+
+
 def get_chat_other_user(chat_id, user_id):
     """Возвращает id собеседника по личному чату.
 
@@ -3870,48 +3996,179 @@ def extract_link_preview(page_html, base_url):
     }
 
 
-def get_link_preview(url):
-    """Возвращает превью по URL: из кэша или скачивая страницу."""
-    conn = get_db()
-    cur = dict_cursor(conn)
-    cur.execute('SELECT title, description, image_url, site_name FROM link_previews WHERE url = %s', (url,))
-    row = cur.fetchone()
-    if row:
-        conn.close()
-        return dict(row)
+# ----- ЗАЩИТА ОТ SSRF (превью ссылок) -----
+# Сервер сам ходит по URL, который прислал пользователь. Без проверки
+# любой мог заставить его открыть 127.0.0.1 (внутренние страницы, флаги,
+# админ-панель) или 169.254.169.254 (метаданные облака) — и получить
+# содержимое ответа в превью. Поэтому: только http(s), только публичные
+# IP, каждый редирект проверяется заново.
 
-    if not (url.startswith('http://') or url.startswith('https://')):
-        conn.close()
+def is_public_ip(ip_str):
+    """True только для реально публичного адреса."""
+    try:
+        ip = ipaddress.ip_address(str(ip_str).strip())
+    except ValueError:
+        return False
+    if (ip.is_private or ip.is_loopback or ip.is_link_local or
+            ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+        return False
+    # 100.64.0.0/10 (CGNAT) и 192.0.0.0/24 — не публичные
+    if ip.version == 4 and (ip in ipaddress.ip_network('100.64.0.0/10') or
+                            ip in ipaddress.ip_network('192.0.0.0/24')):
+        return False
+    return True
+
+
+def is_safe_public_url(url):
+    """Проверяет, что url ведёт на публичный интернет-адрес."""
+    try:
+        parsed = urlparse(str(url))
+    except Exception:
+        return False
+    if parsed.scheme not in ('http', 'https'):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    try:
+        ipaddress.ip_address(host)          # адрес прямо в URL
+        return is_public_ip(host)
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except Exception:
+        return False
+    if not infos:
+        return False
+    # все адреса, куда резолвится имя, должны быть публичными
+    return all(is_public_ip(info[4][0]) for info in infos)
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Запрещает редиректы на внутренние адреса (обход фильтра через 302)."""
+
+    max_redirections = 5
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_safe_public_url(newurl):
+            raise urllib.error.URLError('redirect to a blocked address')
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def fetch_public_url(url, timeout=8, max_bytes=500000):
+    """Скачивает страницу по публичному URL. None — если адрес небезопасен
+    или страница недоступна."""
+    if not is_safe_public_url(url):
+        return None
+    opener = urllib.request.build_opener(_SafeRedirectHandler())
+    try:
+        req = urllib.request.Request(
+            url, headers={'User-Agent': 'Mozilla/5.0 (Sputnik Messenger)'})
+        with opener.open(req, timeout=timeout) as resp:
+            raw = resp.read(max_bytes)
+            try:
+                return raw.decode(resp.headers.get_content_charset() or 'utf-8',
+                                  errors='replace')
+            except Exception:
+                return raw.decode('utf-8', errors='replace')
+    except Exception:
         return None
 
-    page_html = None
+
+def link_preview_ttl_hours():
+    """Срок жизни кэша превью в часах (настройка LINK_PREVIEW_TTL_HOURS)."""
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Sputnik Messenger)'})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            raw = resp.read(500000)
-            try:
-                page_html = raw.decode(resp.headers.get_content_charset() or 'utf-8', errors='replace')
-            except Exception:
-                page_html = raw.decode('utf-8', errors='replace')
+        import config
+        val = int(config.env('LINK_PREVIEW_TTL_HOURS', 24) or 24)
     except Exception:
+        try:
+            val = int(os.environ.get('LINK_PREVIEW_TTL_HOURS') or 24)
+        except (TypeError, ValueError):
+            val = 24
+    return max(1, min(val, 24 * 30))
+
+
+def _link_preview_is_fresh(row, ttl_hours):
+    """Не устарел ли кэш превью. Пустое fetched_at = запись со времён до TTL."""
+    if ttl_hours <= 0:
+        return True
+    fetched = (row or {}).get('fetched_at')
+    if not fetched:
+        return False
+    try:
+        when = datetime.fromisoformat(str(fetched))
+    except (TypeError, ValueError):
+        return False
+    if when.tzinfo is not None:
+        # get_moscow_datetime() возвращает наивное локальное время
+        when = when.replace(tzinfo=None)
+    return (get_moscow_datetime() - when).total_seconds() < ttl_hours * 3600
+
+
+def get_link_preview(url, force_refresh=False):
+    """Возвращает превью по URL: из кэша или скачивая страницу.
+
+    Кэш живёт link_preview_ttl_hours() (по умолчанию 24 часа) — потом
+    превью обновляется, чтобы в чате не висела устаревшая карточка.
+    force_refresh=True — обновить немедленно (кнопка «Обновить превью»).
+    """
+    # Проверка безопасности ДО чтения кеша: иначе ранее сохранённая
+    # запись для внутреннего адреса продолжала бы отдаваться наружу.
+    if not is_safe_public_url(url):
+        return None
+
+    ttl_hours = link_preview_ttl_hours()
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+    if not force_refresh:
+        cur.execute('''
+            SELECT title, description, image_url, site_name, fetched_at
+            FROM link_previews WHERE url = %s
+        ''', (url,))
+        row = cur.fetchone()
+        if row and _link_preview_is_fresh(row, ttl_hours):
+            data = dict(row)
+            data.pop('fetched_at', None)
+            data['cached'] = True
+            conn.close()
+            return data
+    else:
+        # принудительное обновление имеет смысл только для уже известных ссылок
+        cur.execute('SELECT 1 FROM link_previews WHERE url = %s', (url,))
+        if not cur.fetchone():
+            conn.close()
+            return None
+
+    page_html = fetch_public_url(url)
+    if page_html is None:
         conn.close()
         return None
 
     info = extract_link_preview(page_html, url)
+    if info.get('image_url'):
+        # картинку грузит уже клиент — оставляем только http(s), иначе в
+        # разметку попадёт произвольная строка
+        if not is_safe_public_url(info['image_url']):
+            info['image_url'] = ''
     try:
         cur.execute('''
-            INSERT INTO link_previews (url, title, description, image_url, site_name)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO link_previews (url, title, description, image_url, site_name, fetched_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (url) DO UPDATE SET title = EXCLUDED.title,
                                             description = EXCLUDED.description,
                                             image_url = EXCLUDED.image_url,
-                                            site_name = EXCLUDED.site_name
-        ''', (url, info['title'], info['description'], info['image_url'], info.get('site_name', '')))
+                                            site_name = EXCLUDED.site_name,
+                                            fetched_at = EXCLUDED.fetched_at
+        ''', (url, info['title'], info['description'], info['image_url'],
+              info.get('site_name', ''), get_moscow_time()))
         conn.commit()
     except Exception:
         pass
     finally:
         conn.close()
+    info['cached'] = False
     return info
 
 
@@ -5719,6 +5976,50 @@ def can_see_last_seen(viewer_id, target_id):
 
     conn.close()
     return False
+
+
+def can_see_last_seen_many(viewer_id, target_ids):
+    """Версии can_see_last_seen сразу для списка пользователей (без N+1 запросов).
+
+    Возвращает множество id, время захода/онлайн которых viewer_id видит.
+    """
+    ids = [int(i) for i in (target_ids or []) if i is not None and int(i) != int(viewer_id)]
+    if not ids:
+        return set()
+
+    conn = get_db()
+    cur = dict_cursor(conn)
+
+    marks = ','.join(['%s'] * len(ids))
+    cur.execute(f'SELECT id, privacy_last_seen FROM users WHERE id IN ({marks})', tuple(ids))
+    rows = cur.fetchall()
+    visible = set()
+
+    need_contacts = []
+    for r in rows:
+        privacy = r['privacy_last_seen'] or 'everyone'
+        if privacy == 'everyone':
+            visible.add(r['id'])
+        elif privacy == 'contacts':
+            need_contacts.append(r['id'])
+
+    if need_contacts:
+        cmarks = ','.join(['%s'] * len(need_contacts))
+        cur.execute(f'''
+            SELECT DISTINCT contact_id FROM contacts
+            WHERE user_id = %s AND contact_id IN ({cmarks})
+        ''', tuple([viewer_id] + need_contacts))
+        for r in cur.fetchall():
+            visible.add(r['contact_id'])
+        cur.execute(f'''
+            SELECT DISTINCT user_id FROM contacts
+            WHERE contact_id = %s AND user_id IN ({cmarks})
+        ''', tuple([viewer_id] + need_contacts))
+        for r in cur.fetchall():
+            visible.add(r['user_id'])
+
+    conn.close()
+    return visible
 
 
 def can_see_profile_photo(viewer_id, target_id):

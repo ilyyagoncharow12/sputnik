@@ -1,0 +1,42 @@
+/* Онлайн-статус: зелёная точка «в сети» (v0.62.2) */
+.online-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #22c55e;
+    border: 2px solid var(--bg-primary, #0f0f0f);
+    box-sizing: content-box;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.online-dot.hidden {
+    display: none;
+}
+
+.chat-avatar,
+#chatUserAvatar,
+.profile-avatar-wrap,
+.avatar-wrap {
+    position: relative;
+}
+
+#chatUserAvatar .online-dot {
+    width: 14px;
+    height: 14px;
+    right: 2px;
+    bottom: 2px;
+}
+
+.online-text {
+    color: #22c55e;
+    margin-top: 2px;
+}
+
+@media (max-width: 768px) {
+    .online-dot { width: 12px; height: 12px; }
+    #chatUserAvatar .online-dot { width: 13px; height: 13px; }
+}

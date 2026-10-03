@@ -1,0 +1,29 @@
+/* Черновики сообщений (v0.62.0) */
+.draft-hint {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.draft-hint button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 11px;
+    line-height: 1;
+}
+
+.draft-hint button:hover {
+    color: var(--danger, #e74c3c);
+}
+
+@media (max-width: 768px) {
+    .draft-hint { padding: 5px 10px; font-size: 11px; }
+}

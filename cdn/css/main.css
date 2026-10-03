@@ -690,7 +690,7 @@
             border: 1px solid var(--border-color);
             border-radius: 10px;
             cursor: pointer;
-            max-width: 340px;
+            max-width: 100%;
             background: rgba(128, 128, 128, 0.06);
             overflow: hidden;
         }
@@ -724,6 +724,37 @@
         .link-preview .link-preview-site {
             font-size: 10px;
             color: var(--text-tertiary, var(--text-secondary));
+        }
+
+        /* Кнопка обновления превью (кэш живёт 24 часа) */
+        .link-preview .link-preview-refresh {
+            align-self: flex-start;
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: rgba(128, 128, 128, 0.14);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .link-preview .link-preview-refresh:hover {
+            background: var(--primary-color, #2b8d8d);
+            color: #fff;
+        }
+
+        .link-preview .link-preview-refresh.spinning i {
+            animation: lp-spin 0.9s linear infinite;
+        }
+
+        @keyframes lp-spin {
+            to { transform: rotate(360deg); }
         }
 
         .poll-box {
@@ -767,6 +798,13 @@
             max-width: 75%;
             position: relative;
             animation: fadeIn 0.2s ease;
+        }
+
+        /* Без min-width:0 пузырь-флекс-элемент не сжимался и вместе с
+           превью ссылки вылезал за правый край экрана на телефоне */
+        .message-bubble {
+            min-width: 0;
+            max-width: 100%;
         }
 
         .message.outgoing {
