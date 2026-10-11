@@ -6270,4 +6270,6 @@ if __name__ == '__main__':
     schedule_story_cleanup()
     schedule_worker()
     maybe_start_https()
-    socketio.run(app, host=APP_HOST, port=APP_PORT, debug=APP_DEBUG)
+    # В проде (debug=False) Werkzeug требует явного allow_unsafe_werkzeug.
+    socketio.run(app, host=APP_HOST, port=APP_PORT, debug=APP_DEBUG,
+                 allow_unsafe_werkzeug=not APP_DEBUG)

@@ -5,7 +5,7 @@
 Последнее обновление: 11.10.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v0.65.0
+ТЕКУЩАЯ ВЕРСИЯ: v1.0.0
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -204,13 +204,50 @@
      при следующем старте приложения). Для параноиков — держать
      sputnik.db на флешке только в своём распоряжении.
 [?] В базе остался тестовый промокод ILXZ-12 (3 дня, 1 активация,
-    активаций 0) — он снова доступен. Удалить или оставить как
-    «приветственный»?
+     активаций 0) — он снова доступен. Удалить или оставить как
+     «приветственный»?
+[?] get_system_user() на ПУСТОЙ PG-базе: INSERT sputnik проходит (строка
+    id=2 создаётся), но fetchone() после commit возвращает None — первый
+    smoke дал FAIL, повторный 19/19. Подозрение на fetch-RETURNING после
+    commit в _PgCursor. Воспроизвести и починить (см. v1.0.0 выше).
 
 
 ========================================================
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
+
+[11.10.2026] — v1.0.0: ПРОД-ДЕПЛОЙ (PostgreSQL, сервер, nginx 606)
+  Файлы: database.py, main.py, .env.example, requirements.txt (уже был
+  psycopg2), tools/_check_postgres.py (новый), CHANGELOG.txt. На сервере:
+  /opt/sputnik, systemd-юнит sputnik, nginx-сайт sputnik (:606 ssl).
+
+  1) АДАПТЕР POSTGRES (DB_BACKEND=sqlite|postgres, дефолт sqlite —
+     локально ничего не поменялось). При postgres: коннект через
+  psycopg2 + RealDictCursor (DATABASE_URL), _translate_sql отключается
+  (SQL в коде изначально PG-диалект), гарды защищённых — plpgsql-триггеры,
+  db_health — через information_schema/pg_database_size, бэкап — pg_dump
+  в backups/*.sql. except sqlite3.IntegrityError → DBIntegrityError.
+  2) ПРОД-РЕЖИМ: DEBUG/APP_HOST/APP_PORT из env (дефолты как было);
+  при debug=False — allow_unsafe_werkzeug=True (иначе Flask-SocketIO
+  отказывается стартовать); ProxyFix за nginx; COOKIE_SECURE=1 ставит
+  Secure на JWT-cookie за TLS-прокси.
+  3) СЕРВЕР root@opencode.kiselgram.ru (Ubuntu 22.04): PG в docker
+  kiselgram-db-1:5433 (созданы роль+БД sputnik, пароль только на сервере),
+  код в /opt/sputnik (юзер sputnik), venv, postgresql-client, прод-.env
+  собран НА сервере (свежий SECRET_KEY; ADMIN/VAPID не заданы — панель
+  и push выключены; локальные .env/sputnik.db/certs на прод не копировались,
+  БД прод — пустая, тестовые данные не переливались).
+  4) NGINX: сайт sputnik — listen 606 ssl (сертификат
+  opencode.kiselgram.ru), прокси на 127.0.0.1:5000 + websocket-upgrade,
+  client_max_body_size 550m.
+  ПРОВЕРЕНО: PG-smoke на сервере 19/19 (init, регистрация/вход,
+  сообщения, опросы, сессии/отзыв, bcrypt, гарды DELETE/UPDATE, health);
+  снаружи https://opencode.kiselgram.ru:606/auth → 200 + sputnik_session
+  с Secure;HttpOnly;SameSite=Lax. Откат: systemctl stop sputnik (+
+  rm /etc/nginx/sites-enabled/sputnik при нужде).
+  ИЗВЕСТНО: первая smoke-проверка get_system_user на пустой БД дала FAIL
+  (строка создалась, fetch вернул None) — повторный прогон 19/19;
+  разобраться при случае (см. раздел 2).
 
 [11.10.2026] — AGENTS.md приведён к реальности (без смены версии):
   Файлы: AGENTS.md, CHANGELOG.txt
