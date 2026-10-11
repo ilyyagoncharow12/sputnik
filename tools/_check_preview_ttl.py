@@ -150,10 +150,18 @@ finally:
 # 8) API: параметр force
 app = main.app
 app.config['TESTING'] = True
+# Берём id реального пользователя: сессию с несуществующим id
+# before_request теперь честно отбивает (v0.63.0).
+_conn = db.get_db()
+_cur = db.dict_cursor(_conn)
+_cur.execute('SELECT id FROM users WHERE is_deleted = FALSE ORDER BY id LIMIT 1')
+_row = _cur.fetchone()
+_conn.close()
+_uid = _row['id'] if _row else 1
 with app.test_client() as c:
     c.get('/auth?mode=login')
     with c.session_transaction() as s:
-        s['user_id'] = 1
+        s['user_id'] = _uid
     r = c.get('/api/link_preview?url=' + URL)
     check('API без force отвечает 200', r.status_code == 200, r.status_code)
     check('API отдаёт ключ preview', 'preview' in (r.get_json() or {}))

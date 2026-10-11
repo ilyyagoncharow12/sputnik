@@ -1546,6 +1546,37 @@ def is_user_banned(user_id):
     return bool(row and row['is_banned'])
 
 
+def is_user_deleted(user_id):
+    """Удалён ли аккаунт (мягкое удаление). Нужно, чтобы открытая вкладка
+    удалённого пользователя не продолжала работать (см. before_request)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT is_deleted FROM users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if row is None:
+        return True  # пользователя нет — считаем недоступным
+    return bool(row['is_deleted'])
+
+
+def get_account_flags(user_id):
+    """Бан и мягкое удаление аккаунта одним запросом (для before_request,
+    чтобы не делать два обращения к БД на каждый запрос)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT is_banned, ban_reason, is_deleted FROM users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    if row is None:
+        return {'exists': False, 'is_banned': False, 'ban_reason': None, 'is_deleted': True}
+    return {
+        'exists': True,
+        'is_banned': bool(row['is_banned']),
+        'ban_reason': row['ban_reason'],
+        'is_deleted': bool(row['is_deleted']),
+    }
+
+
 def get_ban_info(user_id):
     """Возвращает статус бана и причину (для экрана 'Аккаунт заблокирован')."""
     conn = get_db()
@@ -5185,6 +5216,24 @@ def delete_all_sessions_except(user_id, current_token):
     conn.close()
 
 
+def session_token_active(session_token):
+    """Жива ли серверная сессия (используется для отзыва JWT).
+
+    Возвращает True, только если строка с таким session_token ещё есть в
+    user_sessions. После logout / «завершить сессию» строка удаляется, и
+    соответствующий JWT-токен перестаёт приниматься (jwt_session.py).
+    """
+    if not session_token:
+        return False
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('SELECT 1 FROM user_sessions WHERE session_token = %s', (session_token,))
+        return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
 # ----- ПРЕДЗАГРУЗОЧНЫЕ АВАТАРКИ -----
 def get_preloaded_avatars():
     conn = get_db()
@@ -6394,7 +6443,11 @@ def check_cloud_password(user_id, plain_password):
     conn.close()
     if not row or not row.get('cloud_password_hash'):
         return None  # 2FA не настроена
-    return _verify_secret(row['cloud_password_hash'], plain_password or '')
+    ok = _verify_secret(row['cloud_password_hash'], plain_password or '')
+    if ok:
+        _rehash_secret_if_legacy(user_id, 'cloud_password_hash',
+                                 row['cloud_password_hash'], plain_password or '')
+    return ok
 
 
 def get_cloud_password_info(user_id):
@@ -6442,7 +6495,11 @@ def check_app_passcode(user_id, plain_passcode):
     conn.close()
     if not row or not row.get('app_lock_enabled') or not row.get('app_passcode_hash'):
         return None
-    return _verify_secret(row['app_passcode_hash'], str(plain_passcode or ''))
+    ok = _verify_secret(row['app_passcode_hash'], str(plain_passcode or ''))
+    if ok:
+        _rehash_secret_if_legacy(user_id, 'app_passcode_hash',
+                                 row['app_passcode_hash'], str(plain_passcode or ''))
+    return ok
 
 
 def get_app_lock_info(user_id):
@@ -6465,14 +6522,52 @@ def get_app_lock_info(user_id):
 
 
 # ---------- ХЕШИ ДЛЯ СЕКРЕТОВ (2FA / PASSCODE) ----------
+# Раньше облачный пароль (2FA) и код блокировки приложения хранились как
+# несолёный SHA-256: одинаковые коды у разных людей давали одинаковый хэш,
+# а 4-значный код (всего 10000 комбинаций) вскрывался перебором мгновенно.
+# Теперь — bcrypt с солью, как у обычных паролей. Старые хэши продолжают
+# проверяться и при первом успешном вводе автоматически переписываются.
 def _hash_secret(plain):
+    return bcrypt.hashpw(str(plain).encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+def _is_bcrypt_secret(stored):
+    return isinstance(stored, str) and stored.startswith('$2')
+
+
+def _legacy_secret_hash(plain):
     return hashlib.sha256(('sp1n:' + str(plain)).encode('utf-8')).hexdigest()
 
 
 def _verify_secret(stored, plain):
     if not stored:
         return False
-    return hashlib.sha256(('sp1n:' + str(plain)).encode('utf-8')).hexdigest() == stored
+    if _is_bcrypt_secret(stored):
+        try:
+            return bcrypt.checkpw(str(plain).encode('utf-8'), stored.encode('utf-8'))
+        except Exception:
+            return False
+    # Совместимость со старым несолёным SHA-256 (до миграции).
+    return _legacy_secret_hash(plain) == stored
+
+
+def _rehash_secret_if_legacy(user_id, column, stored, plain):
+    """Переписывает старый sha256-хэш секрета на bcrypt после удачной проверки.
+
+    column — только внутренняя константа ('cloud_password_hash' /
+    'app_passcode_hash'), значение никогда не приходит от пользователя.
+    """
+    if _is_bcrypt_secret(stored):
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('UPDATE users SET %s = %%s WHERE id = %%s' % column,
+                    (_hash_secret(plain), user_id))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 # ---------- ОТЛОЖЕННЫЕ СООБЩЕНИЯ ----------

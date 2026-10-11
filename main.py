@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 
 from config import env, save_env
+from jwt_session import JwtSessionInterface, COOKIE_NAME as SESSION_COOKIE_NAME
 
 # Корректный MIME для локальных woff2-шрифтов (Unbounded)
 import mimetypes
@@ -81,7 +82,7 @@ from database import (
     link_account, get_linked_accounts, get_master_account,
     get_system_user, ensure_system_chat, send_system_message,
     create_login_code, verify_login_code,
-    is_user_banned, get_ban_info,
+    is_user_banned, get_ban_info, is_user_deleted, get_account_flags,
     ban_group_member, unban_group_member, is_group_banned, get_group_bans,
     mute_group_member, unmute_group_member, is_group_muted, get_group_mutes,
     add_group_join_request, get_group_join_request_status, get_group_join_requests,
@@ -151,8 +152,14 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # False для localhost
+# Secure — только под HTTPS (USE_HTTPS=1), иначе браузер на localhost
+# молча отбросит cookie и вход сломается.
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('USE_HTTPS') == '1'
 app.config['SESSION_PERMANENT'] = True
+# v0.64.0 — сессии хранятся не в cookie-сеансе itsdangerous, а в JWT
+# (jwt_session.py). Cookie остаётся HttpOnly/SameSite, тип токена — JWT.
+app.config['SESSION_COOKIE_NAME'] = SESSION_COOKIE_NAME
+app.session_interface = JwtSessionInterface(SESSION_COOKIE_NAME)
 
 
 @app.after_request
@@ -248,6 +255,56 @@ def rate_limit(limit=60, window=60):
     return decorator
 
 
+# Защита от перебора секрета по АККАУНТУ (не по IP).
+# Обычный rate_limit() считает запросы с одного адреса — атакующий обходит
+# его сменой IP. Здесь попытки привязаны к конкретному телефону/пользователю,
+# поэтому перебрать пароль, код входа или облачный пароль нельзя даже с
+# множества адресов. Хранится в памяти, сбрасывается при перезапуске (как и
+# RATE_LIMIT_REQUESTS).
+AUTH_FAILURES = defaultdict(deque)
+AUTH_MAX_FAILURES = 5
+AUTH_LOCK_WINDOW = 300  # 5 минут
+
+
+def auth_failure_key(kind, ident):
+    return '%s:%s' % (kind, ident)
+
+
+def auth_lock_remaining(key):
+    """Сколько секунд аккаунт ещё заперт после серии неудач (0 — не заперт)."""
+    dq = AUTH_FAILURES.get(key)
+    if not dq:
+        return 0
+    now = time.time()
+    while dq and now - dq[0] > AUTH_LOCK_WINDOW:
+        dq.popleft()
+    if len(dq) >= AUTH_MAX_FAILURES:
+        return max(1, int(AUTH_LOCK_WINDOW - (now - dq[0])) + 1)
+    return 0
+
+
+def auth_locked_response(key):
+    """Готовый 429-ответ, если аккаунт заперт после серии неудач, иначе None."""
+    retry_after = auth_lock_remaining(key)
+    if not retry_after:
+        return None
+    resp = jsonify({
+        'error': 'Слишком много неудачных попыток. Попробуйте через %d мин.' % max(1, retry_after // 60),
+        'retry_after': retry_after,
+    })
+    resp.status_code = 429
+    resp.headers['Retry-After'] = str(retry_after)
+    return resp
+
+
+def note_auth_failure(key):
+    AUTH_FAILURES[key].append(time.time())
+
+
+def clear_auth_failures(key):
+    AUTH_FAILURES.pop(key, None)
+
+
 # CSRF-защита: каждый не-GET запрос к API должен нести заголовок X-CSRF-Token
 GET_METHODS = ('GET', 'HEAD', 'OPTIONS')
 
@@ -282,15 +339,23 @@ def ban_check():
     uid = session.get('user_id')
     if uid:
         try:
-            banned = is_user_banned(uid)
+            flags = get_account_flags(uid)
         except Exception:
             return None
-        if banned:
+        if flags['is_banned']:
             info = get_ban_info(uid)
             session.clear()
             if path.startswith('/api/'):
                 return jsonify({'error': banned_message(info['ban_reason']),
                                 'banned': True, 'ban_reason': info['ban_reason']}), 403
+            return redirect(url_for('auth'))
+        # Живая сессия удалённого аккаунта: пока вкладка открыта, запросы
+        # продолжали проходить (например, открытие чата вновь создавало
+        # чаты-сироты). Теперь при первом же запросе сессия сбрасывается.
+        if flags['is_deleted'] and not path.startswith('/logout'):
+            session.clear()
+            if path.startswith('/api/'):
+                return jsonify({'error': 'Аккаунт удалён', 'deleted': True}), 403
             return redirect(url_for('auth'))
     return None
 
@@ -515,6 +580,13 @@ def auth():
         # === ВХОД ===
         if action == 'login':
             auth_type = request.form.get('auth_type', 'password')
+            lock_key = auth_failure_key('login', phone)
+
+            # Перебор по аккаунту: если слишком много неудач — не проверяем
+            # ни пароль, ни код, даже если запросы идут с разных IP.
+            locked = auth_locked_response(lock_key)
+            if locked:
+                return locked
 
             # Вход по 5-значному коду
             if auth_type == 'code':
@@ -523,7 +595,9 @@ def auth():
                     return jsonify({'error': 'Введите телефон и код входа'}), 400
                 user = verify_login_code(phone, code)
                 if not user:
+                    note_auth_failure(lock_key)
                     return jsonify({'error': 'Неверный или просроченный код входа'}), 401
+                clear_auth_failures(lock_key)
                 if user['is_deleted']:
                     return jsonify({'error': 'Аккаунт удалён'}), 403
                 if is_user_banned(user['id']):
@@ -546,7 +620,9 @@ def auth():
                 return jsonify({'error': 'Заполните все поля'}), 400
             user = verify_user(phone, password)
             if not user:
+                note_auth_failure(lock_key)
                 return jsonify({'error': 'Неверный номер или пароль'}), 401
+            clear_auth_failures(lock_key)
             if user['is_deleted']:
                 return jsonify({'error': 'Аккаунт удалён'}), 403
             if is_user_banned(user['id']):
@@ -3947,12 +4023,41 @@ def api_update_banner():
     return jsonify({'success': False, 'error': 'No data provided'}), 400
 
 # ---------------------- ЗАГРУЗКА ФАЙЛОВ ----------------------
-def _safe_file(folder, filename):
-    root = os.path.abspath(folder)
+def _resolve_under(root, filename):
+    """Абсолютный путь к файлу внутри root или None, если он выходит наружу.
+
+    Защита от path traversal (`../`): без неё через download_file можно
+    было прочитать исходники, .env или sputnik.db."""
+    root = os.path.abspath(root)
     full = os.path.abspath(os.path.join(root, filename))
-    if not full.startswith(root + os.sep) or not os.path.isfile(full):
+    if full != root and not full.startswith(root + os.sep):
+        return None
+    return full
+
+
+def _safe_file(folder, filename):
+    full = _resolve_under(folder, filename)
+    if not full or not os.path.isfile(full):
         abort(404)
     return full
+
+
+def _resolve_media_path(file_path):
+    """Резолвит пользовательский путь к файлу строго внутри static/.
+
+    Понимает `static/...`, `uploads/...` и путь без префикса (тогда ищет
+    в static/uploads). Возвращает abs-путь существующего файла или None."""
+    file_path = (file_path or '').replace('--', '/').lstrip('/')
+    if file_path.startswith('static/'):
+        base, rel = 'static', file_path[len('static/'):]
+    elif file_path.startswith('uploads/'):
+        base, rel = 'static', file_path
+    else:
+        base, rel = os.path.join('static', 'uploads'), file_path
+    full = _resolve_under(base, rel)
+    if full and os.path.isfile(full):
+        return full
+    return None
 
 
 @app.route('/uploads/<path:filename>')
@@ -4159,18 +4264,10 @@ def api_download_file(filepath):
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    # Декодируем путь (заменяем -- на /)
-    filepath = filepath.replace('--', '/')
+    # Резолвим путь строго внутри static/ (защита от ../ — path traversal)
+    full_path = _resolve_media_path(filepath)
 
-    # Определяем полный путь к файлу
-    if filepath.startswith('static/'):
-        full_path = filepath
-    elif filepath.startswith('uploads/'):
-        full_path = os.path.join('static', filepath)
-    else:
-        full_path = os.path.join('static', 'uploads', filepath)
-
-    if os.path.exists(full_path):
+    if full_path:
         return send_file(full_path, as_attachment=True)
 
     return jsonify({'error': 'File not found'}), 404
@@ -4200,15 +4297,9 @@ def api_add_to_playlist_from_message():
         if not file_path:
             return jsonify({'error': 'No file path'}), 400
 
-        # Определяем полный путь
-        if file_path.startswith('static/'):
-            full_path = file_path
-        elif file_path.startswith('uploads/'):
-            full_path = os.path.join('static', file_path)
-        else:
-            full_path = os.path.join('static', 'uploads', file_path)
-
-        if not os.path.exists(full_path):
+        # Резолвим путь строго внутри static/ (защита от ../ — path traversal)
+        full_path = _resolve_media_path(file_path)
+        if not full_path:
             return jsonify({'error': 'File not found'}), 404
 
         # Копируем в папку музыки
@@ -4371,6 +4462,15 @@ def api_switch_account():
     session['username'] = user['username']
     session['display_name'] = user['display_name'] or user['username']
     session['phone'] = user['phone']
+
+    # Новая серверная сессия под целевой аккаунт, чтобы отзыв токенов
+    # (logout / terminate_session) работал корректно и для переключённого.
+    session_token = str(uuid.uuid4())
+    ua = request.headers.get('User-Agent', 'Unknown')
+    device_name, _device_type = get_device_name(ua)
+    ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or ''
+    add_session(user['id'], session_token, device_name, ip, get_ip_location(ip))
+    session['session_token'] = session_token
     session.modified = True
 
     return jsonify({'success': True})
@@ -6033,6 +6133,11 @@ def api_2fa_verify():
     if not phone or not pw:
         return jsonify({'success': False, 'error': 'Введите телефон и облачный пароль'}), 400
 
+    lock_key = auth_failure_key('2fa', phone)
+    locked = auth_locked_response(lock_key)
+    if locked:
+        return locked
+
     user = check_phone_exists(phone)
     if not user:
         return jsonify({'success': False, 'error': 'Аккаунт не найден'}), 404
@@ -6045,8 +6150,10 @@ def api_2fa_verify():
         return jsonify({'success': True, 'twofa_required': False,
                         'redirect': url_for('chat_page')})
     if not res:
+        note_auth_failure(lock_key)
         return jsonify({'success': False, 'error': 'Неверный облачный пароль'}), 401
 
+    clear_auth_failures(lock_key)
     user = get_user_by_id(user['id'])
     complete_login(user, True, method='code')
     # complete_login() возвращает Response с redirect — для JS отдаём сам URL
@@ -6132,10 +6239,18 @@ def api_app_lock_off():
 def api_app_lock_verify():
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
+    lock_key = auth_failure_key('lock', session['user_id'])
+    locked = auth_locked_response(lock_key)
+    if locked:
+        return locked
     res = check_app_passcode(session['user_id'], str((request.get_json(silent=True) or {}).get('passcode') or ''))
     if res is None:
         return jsonify({'success': True, 'required': False})
-    return jsonify({'success': bool(res), 'required': True})
+    if res:
+        clear_auth_failures(lock_key)
+        return jsonify({'success': True, 'required': True})
+    note_auth_failure(lock_key)
+    return jsonify({'success': False, 'required': True})
 
 
 if __name__ == '__main__':
