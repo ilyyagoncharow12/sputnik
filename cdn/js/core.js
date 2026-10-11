@@ -102,22 +102,19 @@ function showModalWithRoute(title, content, returnTo) {
         modalHistory.push(returnTo);
     }
 
-    // Оригинальная showModal
+    // Оригинальная showModal (единый TG-стиль через классы)
     const modalBody = document.getElementById('tempModalBody');
     if (modalBody) {
         modalBody.innerHTML = `
-            <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white;">
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
-                    <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
-                        <button onclick="closeModalWithRoute()" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
-                        
-                    </div>
-                    <div style="font-size: 18px; font-weight: 600;">${title || ''}</div>
-                    <div style="width: 20px;"></div>
+            <div class="tg-modal-wrapper">
+                <div class="tg-modal-header">
+                    <button class="close-btn" onclick="closeModalWithRoute()">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="title">${title || ''}</div>
+                    <div style="width: 24px;"></div>
                 </div>
-                <div style="padding: 20px;">
+                <div class="tg-modal-body">
                     ${content}
                 </div>
             </div>
@@ -276,19 +273,17 @@ document.getElementById('burgerOverlay').onclick = function() {
             content.includes('edit-profile-modal') || content.includes('playlist-header')) {
             modalBody.innerHTML = content;
         } else {
-            // Для обычных модалок добавляем заголовок и обертку
+            // Для обычных модалок — единый TG-стиль через классы
             modalBody.innerHTML = `
-                <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
-                        <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
-                            <button onclick="closeModalWithRoute()" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
-                                <i class="fas fa-arrow-left"></i>
-                            </button>
-                            </div>
-                        <div style="font-size: 18px; font-weight: 600;">${title || ''}</div>
-                        <div style="width: 20px;"></div>
+                <div class="tg-modal-wrapper">
+                    <div class="tg-modal-header">
+                        <button class="close-btn" onclick="closeModalWithRoute()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="title">${title || ''}</div>
+                        <div style="width: 24px;"></div>
                     </div>
-                    <div style="padding: 20px;">
+                    <div class="tg-modal-body">
                         ${content}
                     </div>
                 </div>

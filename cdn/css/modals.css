@@ -1,4 +1,4 @@
-        /* ===== МОДАЛЬНЫЕ ОКНА ===== */
+        /* ===== МОДАЛЬНЫЕ ОКНА (единый TG-стиль) ===== */
         .modal {
             display: none;
             position: fixed;
@@ -11,6 +11,7 @@
             z-index: 1100;
             align-items: center;
             justify-content: center;
+            padding: 16px;
         }
 
         .modal.active {
@@ -18,22 +19,23 @@
         }
 
         .modal-content {
-            background: var(--bg-primary);
-            border-radius: 28px;
-            width: 90%;
+            background: #0f0f0f;
+            color: #fff;
+            border-radius: 24px;
+            width: 100%;
             max-width: 500px;
             max-height: 85vh;
             overflow: hidden;
-            box-shadow: var(--shadow-xl);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
             display: flex;
             flex-direction: column;
-            animation: modalSlideIn 0.3s ease;
+            animation: modalSlideIn 0.25s ease;
         }
 
         @keyframes modalSlideIn {
             from {
                 opacity: 0;
-                transform: scale(0.95) translateY(-20px);
+                transform: scale(0.96) translateY(12px);
             }
             to {
                 opacity: 1;
@@ -42,46 +44,47 @@
         }
 
         .modal-header {
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-bottom: 1px solid #2c2c2e;
             display: flex;
-            justify-content: flex-end;
             align-items: center;
+            gap: 6px;
         }
 
         .modal-header h3 {
-            font-size: 20px;
-            font-weight: 700;
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
             flex: 1;
+            text-align: center;
+            margin: 0;
         }
 
         .modal-close {
             background: none;
             border: none;
-            color: var(--text-muted);
-            font-size: 24px;
+            color: #8e8e93;
+            font-size: 20px;
             cursor: pointer;
-            width: 36px;
-            height: 36px;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all var(--transition-fast);
+            transition: background 0.2s, color 0.2s;
+            flex-shrink: 0;
         }
 
         .modal-close:hover {
-            background: var(--bg-hover);
-            color: var(--danger-color);
+            background: #1c1c1e;
+            color: #fff;
         }
 
         .modal-body {
             padding: 20px;
             overflow-y: auto;
+            color: #fff;
         }
 
         .modal-body::-webkit-scrollbar {
@@ -89,17 +92,17 @@
         }
 
         .modal-body::-webkit-scrollbar-track {
-            background: var(--bg-tertiary);
+            background: transparent;
         }
 
         .modal-body::-webkit-scrollbar-thumb {
-            background: var(--primary-color);
+            background: #2c2c2e;
             border-radius: 10px;
         }
 
         .modal-footer {
             padding: 16px 20px;
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid #2c2c2e;
             display: flex;
             gap: 12px;
             justify-content: flex-end;
@@ -108,60 +111,62 @@
         .modal-btn {
             padding: 12px 24px;
             border-radius: 14px;
-            font-size: 14px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all var(--transition-fast);
+            transition: background 0.2s;
             border: none;
             font-family: var(--font-family);
         }
 
         .modal-btn-primary {
-            background: var(--primary-gradient);
-            color: white;
+            background: #007aff;
+            color: #fff;
         }
 
         .modal-btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
+            background: #0a84ff;
         }
 
         .modal-btn-secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-primary);
+            background: #1c1c1e;
+            color: #007aff;
         }
 
         .modal-btn-secondary:hover {
-            background: var(--bg-hover);
+            background: #2c2c2e;
         }
 
         .modal-btn-danger {
-            background: var(--danger-color);
-            color: white;
+            background: #1c1c1e;
+            color: #ff3b30;
         }
 
         .modal-btn-danger:hover {
-            background: #dc2626;
-            transform: translateY(-2px);
+            background: #2c2c2e;
         }
 
         .modal-input {
             width: 100%;
-            padding: 14px 16px;
-            border: 2px solid var(--border-color);
-            border-radius: 14px;
-            font-size: 14px;
+            padding: 12px 16px;
+            border: 1px solid #2c2c2e;
+            border-radius: 12px;
+            font-size: 15px;
             font-family: var(--font-family);
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            margin-bottom: 16px;
-            transition: all var(--transition-fast);
+            background: #1c1c1e;
+            color: #fff;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
         }
 
         .modal-input:focus {
             outline: none;
-            border-color: var(--primary-color);
-            background: var(--bg-primary);
+            border-color: #007aff;
+        }
+
+        .modal-input::placeholder {
+            color: #8e8e93;
         }
 
         /* ===== ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ (НОВЫЙ ДИЗАЙН) ===== */

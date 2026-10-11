@@ -152,9 +152,14 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# Secure — только под HTTPS (USE_HTTPS=1), иначе браузер на localhost
-# молча отбросит cookie и вход сломается.
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('USE_HTTPS') == '1'
+# Secure — только под HTTPS (USE_HTTPS=1 или COOKIE_SECURE=1 для работы
+# за TLS-терминирующим прокси), иначе браузер на localhost молча отбросит
+# cookie и вход сломается.
+app.config['SESSION_COOKIE_SECURE'] = (
+    os.environ.get('USE_HTTPS') == '1' or env('COOKIE_SECURE', '0') == '1')
+# За прокси (nginx): верить X-Forwarded-* для схемы/хоста/IP.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 app.config['SESSION_PERMANENT'] = True
 # v0.64.0 — сессии хранятся не в cookie-сеансе itsdangerous, а в JWT
 # (jwt_session.py). Cookie остаётся HttpOnly/SameSite, тип токена — JWT.
@@ -6254,9 +6259,15 @@ def api_app_lock_verify():
 
 
 if __name__ == '__main__':
+    # Прод-режим — только через env (на проде DEBUG=0: иначе висит
+    # дебаг-консоль Werkzeug). Локальные дефолты не меняются.
+    APP_HOST = env('APP_HOST', '0.0.0.0')
+    APP_PORT = int(env('APP_PORT', '5000') or 5000)
+    APP_DEBUG = env('DEBUG', '1') == '1'
     local_ip = get_local_ip()
-    print(f"\n[START] Server starting on http://localhost:5000 (net: http://{local_ip}:5000)")
+    print(f"\n[START] Server starting on http://localhost:{APP_PORT} (net: http://{local_ip}:{APP_PORT})"
+          + ('' if APP_DEBUG else ' [PROD, debug off]'))
     schedule_story_cleanup()
     schedule_worker()
     maybe_start_https()
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host=APP_HOST, port=APP_PORT, debug=APP_DEBUG)

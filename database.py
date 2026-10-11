@@ -25,6 +25,28 @@ except Exception:
 
 DB_PATH = env('SQLITE_PATH', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sputnik.db'))
 
+# Бэкенд БД: 'sqlite' (по умолчанию, файл DB_PATH) или 'postgres'
+# (живой PostgreSQL через DATABASE_URL, без _translate_sql — SQL в коде
+# изначально пишется в PG-диалекте). Переключение — только через .env.
+DB_BACKEND = (env('DB_BACKEND', 'sqlite') or 'sqlite').strip().lower()
+DATABASE_URL = env('DATABASE_URL', '') or ''
+
+try:
+    import psycopg2 as _psycopg2
+    import psycopg2.extras as _pg_extras
+    import psycopg2.errors as _pg_errors
+    DBIntegrityError = _pg_errors.IntegrityError
+except Exception:
+    _psycopg2 = None
+    _pg_extras = None
+    _pg_errors = None
+    DBIntegrityError = sqlite3.IntegrityError
+
+
+def is_postgres():
+    """True, если работаем на живом PostgreSQL (прод)."""
+    return DB_BACKEND == 'postgres'
+
 
 # =============================================================================
 #  СОВМЕСТИМЫЙ СЛОЙ БД: PostgreSQL-синтаксис -> SQLite
@@ -201,6 +223,82 @@ class _CompatConnection:
         return cur
 
 
+class _PgCursor:
+    """Тонкая обёртка над psycopg2 RealDictCursor под интерфейс _CompatCursor.
+
+    SQL идёт как есть (PG-диалект, %s-плейсхолдеры) — _translate_sql
+    на этом пути НЕ вызывается.
+    """
+
+    def __init__(self, pg_conn):
+        self._cur = pg_conn.cursor(cursor_factory=_pg_extras.RealDictCursor)
+        self.rowcount = -1
+        self.lastrowid = None
+
+    def execute(self, sql, params=None):
+        if params is None:
+            self._cur.execute(sql)
+        else:
+            self._cur.execute(sql, params)
+        try:
+            self.rowcount = self._cur.rowcount if self._cur.rowcount is not None else -1
+        except Exception:
+            self.rowcount = -1
+        return self
+
+    def executemany(self, sql, seq):
+        self._cur.executemany(sql, seq)
+        return self
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        return dict(row) if row is not None else None
+
+    def fetchall(self):
+        return [dict(r) for r in self._cur.fetchall()]
+
+    def fetchmany(self, size=None):
+        rows = self._cur.fetchmany(size) if size else self._cur.fetchall()
+        return [dict(r) for r in rows]
+
+    def close(self):
+        try:
+            self._cur.close()
+        except Exception:
+            pass
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class _PgConnection:
+    """Обёртка над psycopg2-соединением под интерфейс _CompatConnection."""
+
+    def __init__(self, dsn):
+        self._conn = _psycopg2.connect(dsn)
+
+    def cursor(self, cursor_factory=None):
+        return _PgCursor(self._conn)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+    def execute(self, sql, params=None):
+        cur = self.cursor()
+        cur.execute(sql, params)
+        self._conn.commit()
+        return cur
+
+
 def get_moscow_time():
     """Возвращает текущее московское время (UTC+3)"""
     return (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S')
@@ -211,6 +309,13 @@ def get_moscow_datetime():
 
 
 def get_db():
+    if is_postgres():
+        if _psycopg2 is None:
+            raise RuntimeError('DB_BACKEND=postgres, но psycopg2 не установлен '
+                               '(python -m pip install -r requirements.txt)')
+        if not DATABASE_URL:
+            raise RuntimeError('DB_BACKEND=postgres, но не задан DATABASE_URL в .env')
+        return _PgConnection(DATABASE_URL)
     conn = _CompatConnection(DB_PATH)
     return conn
 
@@ -1203,6 +1308,30 @@ def install_protected_users_guard():
     conn = get_db()
     try:
         cur = conn.cursor()
+        if is_postgres():
+            # Тот же гард на живом PostgreSQL (plpgsql вместо SQLite-синтаксиса).
+            names = sorted(protected_usernames())
+            marks = ','.join("'%s'" % n.replace("'", "''") for n in names)
+            cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_no_delete ON users')
+            cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_flags ON users')
+            cur.execute('''CREATE OR REPLACE FUNCTION trg_users_protected_guard()
+                RETURNS trigger AS $func$
+                BEGIN
+                    IF (OLD.is_system IS TRUE OR lower(OLD.username) IN (''' + marks + ''')) THEN
+                        RAISE EXCEPTION 'Защищённый аккаунт изменять нельзя';
+                    END IF;
+                    IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+                END; $func$ LANGUAGE plpgsql''')
+            cur.execute('''CREATE TRIGGER trg_users_protected_no_delete
+                BEFORE DELETE ON users FOR EACH ROW
+                EXECUTE FUNCTION trg_users_protected_guard()''')
+            cur.execute('''CREATE TRIGGER trg_users_protected_flags
+                BEFORE UPDATE OF is_deleted, deleted_at, is_banned, ban_reason,
+                               is_system, username, phone, password
+                ON users FOR EACH ROW
+                EXECUTE FUNCTION trg_users_protected_guard()''')
+            conn.commit()
+            return
         cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_no_delete')
         cur.execute('DROP TRIGGER IF EXISTS trg_users_protected_flags')
         cur.execute('''
@@ -2978,6 +3107,21 @@ def db_health():
     info = {'ok': True, 'integrity': 'ok', 'foreign_keys': [],
             'tables': 0, 'db_path': DB_PATH, 'db_size': 0}
     try:
+        if is_postgres():
+            # Живой PostgreSQL: PRAGMA/sqlite_master здесь нет.
+            cur.execute('SELECT version() AS v')
+            info['integrity'] = 'ok'
+            cur.execute("SELECT COUNT(*) AS n FROM information_schema.tables "
+                        "WHERE table_schema = 'public'")
+            info['tables'] = (cur.fetchone() or {}).get('n', 0)
+            try:
+                cur.execute('SELECT pg_database_size(current_database()) AS n')
+                info['db_size'] = (cur.fetchone() or {}).get('n', 0)
+            except Exception:
+                info['db_size'] = 0
+            # DSN без пароля, чтобы не светить секрет в отчётах.
+            info['db_path'] = ('postgres:' + DATABASE_URL.split('@')[-1]) if DATABASE_URL else 'postgres'
+            return info
         cur.execute('PRAGMA integrity_check')
         row = cur.fetchone()
         integrity = (row or {}).get('integrity_check') or 'ok'
@@ -3007,7 +3151,21 @@ def db_health():
 
 
 def backup_database():
-    """Копия БД рядом с ней: backups/sputnik_YYYYmmdd_HHMMSS.db."""
+    """Копия БД рядом с ней: backups/sputnik_YYYYmmdd_HHMMSS.db (.sql на Postgres)."""
+    if is_postgres():
+        import shutil
+        import subprocess
+        from datetime import datetime as _dt
+        pg_dump = shutil.which('pg_dump')
+        if not pg_dump:
+            raise RuntimeError('pg_dump не найден — поставьте postgresql-client')
+        stamp = _dt.now().strftime('%Y%m%d_%H%M%S')
+        folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
+        os.makedirs(folder, exist_ok=True)
+        target = os.path.join(folder, f'sputnik_{stamp}.sql')
+        with open(target, 'w', encoding='utf-8') as f:
+            subprocess.run([pg_dump, DATABASE_URL], stdout=f, check=True, timeout=900)
+        return target
     import shutil
     from datetime import datetime as _dt
     stamp = _dt.now().strftime('%Y%m%d_%H%M%S')
@@ -4691,7 +4849,7 @@ def add_story_interaction(story_id, user_id, interaction_type, reply_text=None):
             VALUES (%s, %s, %s, %s)
         ''', (story_id, user_id, interaction_type, reply_text))
         conn.commit()
-    except sqlite3.IntegrityError:
+    except DBIntegrityError:
         pass
     finally:
         conn.close()

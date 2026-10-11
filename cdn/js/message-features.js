@@ -455,14 +455,14 @@
         if (!currentChat) { showToast('Сначала откройте чат'); return; }
         showModal('Новый опрос', `
             <div style="display:flex;flex-direction:column;gap:12px;">
-                <input id="pollQuestion" placeholder="Вопрос" style="background:#2c2c2e;border:none;border-radius:12px;padding:12px;color:#fff;outline:none;font-size:14px;">
+                <input id="pollQuestion" class="tg-input" placeholder="Вопрос">
                 <div id="pollOptionsList" style="display:flex;flex-direction:column;gap:8px;">
                 </div>
-                <button onclick="addPollOption()" style="background:none;border:1px dashed #3a3a3c;border-radius:12px;padding:10px;color:#0a84ff;cursor:pointer;">+ Добавить вариант</button>
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);">
-                    <input type="checkbox" id="pollAnonymous" style="accent-color:#0a84ff;"> Анонимный опрос
+                <button class="tg-dashed-btn" onclick="addPollOption()">+ Добавить вариант</button>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8e8e93;">
+                    <input type="checkbox" id="pollAnonymous" style="accent-color:#007aff;"> Анонимный опрос
                 </label>
-                <button onclick="createPollFromModal()" style="background:#0a84ff;border:none;border-radius:12px;padding:12px;color:#fff;font-weight:600;cursor:pointer;">Создать опрос</button>
+                <button class="tg-btn tg-btn-primary tg-btn-block" onclick="createPollFromModal()">Создать опрос</button>
             </div>
         `);
         addPollOption();
@@ -474,9 +474,8 @@
         if (!list) return;
         if (list.querySelectorAll('.poll-opt').length >= 6) { showToast('Максимум 6 вариантов'); return; }
         const inp = document.createElement('input');
-        inp.className = 'poll-opt';
+        inp.className = 'tg-input poll-opt';
         inp.placeholder = `Вариант ${list.querySelectorAll('.poll-opt').length + 1}`;
-        inp.style.cssText = 'background:#2c2c2e;border:none;border-radius:12px;padding:12px;color:#fff;outline:none;font-size:14px;';
         list.appendChild(inp);
     }
 

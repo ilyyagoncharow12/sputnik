@@ -363,19 +363,19 @@ function showUserMenu(userId) {
 
             if (data.is_contact) {
                 html += `
-                    <button class="contact-action-item" onclick="renameContactDialog(${userId}); closeModal('tempModal');">
+                    <button class="tg-action-item" onclick="renameContactDialog(${userId}); closeModal('tempModal');">
                         <i class="fas fa-edit"></i>
                         <span>Переименовать контакт</span>
                     </button>
                     <div class="contact-action-divider"></div>
-                    <button class="contact-action-item danger" onclick="removeContactById(${userId}); closeModal('tempModal');">
+                    <button class="tg-action-item danger" onclick="removeContactById(${userId}); closeModal('tempModal');">
                         <i class="fas fa-user-minus"></i>
                         <span>Удалить из контактов</span>
                     </button>
                 `;
             } else {
                 html += `
-                    <button class="contact-action-item" onclick="addContactDialog(${userId}); closeModal('tempModal');">
+                    <button class="tg-action-item" onclick="addContactDialog(${userId}); closeModal('tempModal');">
                         <i class="fas fa-user-plus"></i>
                         <span>Добавить в контакты</span>
                     </button>
@@ -384,7 +384,7 @@ function showUserMenu(userId) {
 
             html += `
                 <div class="contact-action-divider"></div>
-                <button class="contact-action-item" onclick="closeModal('tempModal');">
+                <button class="tg-action-item" onclick="closeModal('tempModal');">
                     <i class="fas fa-times"></i>
                     <span>Закрыть</span>
                 </button>
@@ -666,6 +666,7 @@ function openEditProfile() {
         .then(r => r.json())
         .then(u => {
             let html = `
+                <div class="tg-modal-wrapper">
                 <div class="edit-profile-modal">
                     <div class="edit-header">
                         <button class="cancel-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
@@ -689,6 +690,7 @@ function openEditProfile() {
                         <label>День рождения</label>
                         <input type="date" id="editBirthday" value="${u.birthday || ''}">
                     </div>
+                </div>
                 </div>
             `;
             closeModal('tempModal');
@@ -1083,18 +1085,17 @@ function changeAvatar() {
         .then(r => r.json())
         .then(avatars => {
             let html = `
-                <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden;">
-                    <div class="modal-header-block">
-                        <button class="close-modal-btn" onclick="closeModal('tempModal')">
+                <div class="tg-modal-wrapper">
+                    <div class="tg-modal-header">
+                        <button class="close-btn" onclick="closeModal('tempModal')">
                             <i class="fas fa-arrow-left"></i>
                         </button>
-                        
-                        <h3>Изменить фотографию</h3>
-                        <div style="width: 28px;"></div>
+                        <div class="title">Изменить фотографию</div>
+                        <div style="width: 24px;"></div>
                     </div>
-                    <div class="modal-body-content">
+                    <div class="tg-modal-body">
                         <div style="margin-bottom: 24px;">
-                            <button onclick="uploadCustomAvatar()" style="width: 100%; padding: 14px; background: #1c1c1e; border: none; border-radius: 14px; color: #007aff; font-size: 15px; font-weight: 500; cursor: pointer; transition: 0.2s; font-family: var(--font-family);" onmouseover="this.style.background='#2c2c2e'" onmouseout="this.style.background='#1c1c1e'">
+                            <button class="tg-action-btn" onclick="uploadCustomAvatar()">
                                 <i class="fas fa-cloud-upload-alt"></i> Загрузить свою фотографию
                             </button>
                         </div>
@@ -1125,17 +1126,16 @@ function changeAvatar() {
         .catch(err => {
             console.error('Error loading avatars:', err);
             let html = `
-                <div style="background: #0f0f0f; border-radius: 24px; overflow: hidden;">
-                    <div class="modal-header-block">
-                        <button class="close-modal-btn" onclick="closeModal('tempModal')">
+                <div class="tg-modal-wrapper">
+                    <div class="tg-modal-header">
+                        <button class="close-btn" onclick="closeModal('tempModal')">
                             <i class="fas fa-arrow-left"></i>
                         </button>
-                        
-                        <h3>Изменить фотографию</h3>
-                        <div style="width: 28px;"></div>
+                        <div class="title">Изменить фотографию</div>
+                        <div style="width: 24px;"></div>
                     </div>
-                    <div class="modal-body-content">
-                        <button onclick="uploadCustomAvatar()" style="width: 100%; padding: 14px; background: #1c1c1e; border: none; border-radius: 14px; color: #007aff; font-size: 15px; font-weight: 500; cursor: pointer; font-family: var(--font-family);">
+                    <div class="tg-modal-body">
+                        <button class="tg-action-btn" onclick="uploadCustomAvatar()">
                             <i class="fas fa-cloud-upload-alt"></i> Загрузить свою фотографию
                         </button>
                         <input type="file" id="customAvatarInput" accept="image/*" style="display: none;" onchange="handleCustomAvatarUpload(this)">
