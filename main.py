@@ -46,6 +46,8 @@ from database import (
     get_chat_other_user, get_link_preview,
     get_personal_chat_id, get_user_media, MEDIA_KINDS,
     create_poll, get_polls_for_messages, get_poll_by_id, vote_poll, close_poll,
+    create_support_ticket, get_support_tickets, get_support_ticket,
+    add_support_reply, get_support_replies, set_support_ticket_status,
     get_contacts, add_contact, rename_contact, search_users,
     add_to_favorites, get_favorites,
     add_call, update_call_status, get_call_history,
@@ -79,7 +81,7 @@ from database import (
     delete_folder,
     update_folder_chats,
     get_folder_accessible_chats,
-    link_account, get_linked_accounts, get_master_account,
+    link_account, get_linked_accounts, get_master_account, get_linked_account_unread,
     get_system_user, ensure_system_chat, send_system_message,
     create_login_code, verify_login_code,
     is_user_banned, get_ban_info, is_user_deleted, get_account_flags,
@@ -764,12 +766,17 @@ def chat_page():
     groups = get_user_groups(session['user_id'])
     channels = get_user_channels(session['user_id'])
     avatars = get_preloaded_avatars()
+    settings = get_user_settings(session['user_id']) or {}
+    unread = get_linked_account_unread(session['user_id'])
 
     return render_template(template,
-                           user=dict(user),
-                           chats=[dict(chat) for chat in chats] if chats else [],
-                           contacts=[dict(c) for c in contacts] if contacts else [],
-                           call_history=[dict(c) for c in call_history] if call_history else [],
+                            user=dict(user),
+                            chats=[dict(chat) for chat in chats] if chats else [],
+                            contacts=[dict(c) for c in contacts] if contacts else [],
+                            call_history=[dict(c) for c in call_history] if call_history else [],
+                            banner_color=settings.get('banner_color') or '',
+                            banner_image=settings.get('banner_image') or '',
+                            unread=unread,
                            favorites=[dict(f) for f in favorites] if favorites else [],
                            groups=[dict(group) for group in groups] if groups else [],
                            channels=[dict(channel) for channel in channels] if channels else [],
@@ -3275,6 +3282,166 @@ def api_search_in_chat():
 
 # ---------------------- ПРОФИЛЬ ----------------------
 @app.route('/api/get_my_user')
+def api_get_my_user():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user = get_user_by_id(session['user_id'])
+    if user:
+        return jsonify({
+            'id': user['id'],
+            'unique_id': user['unique_id'],
+            'username': user['username'],
+            'display_name': user['display_name'],
+            'phone': user['phone'],
+            'avatar': user['avatar'],
+            'bio': user['bio'] or '',
+            'birthday': user['birthday'] or '',
+            'last_seen': user['last_seen']
+        })
+    return jsonify({'error': 'User not found'}), 404
+
+
+# ---------------------- ТЕХПОДДЕРЖКА ----------------------
+SUPPORT_CATEGORIES = [
+    {'id': 'account', 'name': 'Проблема с аккаунтом', 'icon': 'fa-user',
+     'template': 'Опишите проблему с аккаунтом:\n1. Что произошло?\n2. Когда это началось?\n3. Логин или телефон аккаунта'},
+    {'id': 'chat', 'name': 'Проблема с чатами', 'icon': 'fa-comments',
+     'template': 'Опишите проблему с чатами:\n1. Какой чат не работает?\n2. Что происходит вместо ожидаемого?\n3. Скриншот (если есть)'},
+    {'id': 'messages', 'name': 'Проблема с сообщениями', 'icon': 'fa-envelope',
+     'template': 'Опишите проблему с сообщениями:\n1. Какое сообщение потерялось?\n2. Когда вы его отправили?\n3. Кому отправляли?'},
+    {'id': 'calls', 'name': 'Проблема со звонками', 'icon': 'fa-phone',
+     'template': 'Опишите проблему со звонками:\n1. Какой тип звонка не работает?\n2. Что вы видите вместо звонка?\n3. Устройство и ОС'},
+    {'id': 'media', 'name': 'Проблема с медиа', 'icon': 'fa-image',
+     'template': 'Опишите проблему с медиа:\n1. Какой файл не открывается?\n2. Формат и размер файла\n3. Скриншот ошибки'},
+    {'id': 'other', 'name': 'Другое', 'icon': 'fa-question',
+     'template': 'Опишите вашу проблему:\n1. Что произошло?\n2. Что вы ожидали?\n3. Дополнительные детали'},
+]
+
+
+@app.route('/api/support/categories')
+def api_support_categories():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(SUPPORT_CATEGORIES)
+
+
+@app.route('/api/support/tickets', methods=['GET'])
+def api_support_tickets_list():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    tickets = get_support_tickets(user_id=session['user_id'])
+    return jsonify([dict(t) for t in tickets])
+
+
+@app.route('/api/support/tickets', methods=['POST'])
+def api_support_ticket_create():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json(silent=True) or {}
+    category = (data.get('category') or '').strip()
+    subject = (data.get('subject') or '').strip()
+    message = (data.get('message') or '').strip()
+    attachments = data.get('attachments') or []
+    if not category or not subject or not message:
+        return jsonify({'error': 'Заполните все поля'}), 400
+    tid = create_support_ticket(session['user_id'], category, subject, message, attachments)
+    if not tid:
+        return jsonify({'error': 'Не удалось создать тикет'}), 500
+    return jsonify({'success': True, 'ticket_id': tid})
+
+
+@app.route('/api/support/tickets/<int:ticket_id>', methods=['GET'])
+def api_support_ticket_get(ticket_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    ticket = get_support_ticket(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Тикет не найден'}), 404
+    replies = get_support_replies(ticket_id)
+    return jsonify({**dict(ticket), 'replies': [dict(r) for r in replies]})
+
+
+@app.route('/api/support/tickets/<int:ticket_id>/reply', methods=['POST'])
+def api_support_ticket_reply(ticket_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    ticket = get_support_ticket(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Тикет не найден'}), 404
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    if not message:
+        return jsonify({'error': 'Введите сообщение'}), 400
+    add_support_reply(ticket_id, from_admin=False, message=message,
+                      attachments=data.get('attachments') or [])
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/support/tickets', methods=['GET'])
+def api_admin_support_tickets():
+    if not session.get('admin'):
+        return jsonify({'error': 'Forbidden'}), 403
+    tickets = get_support_tickets(status=request.args.get('status'), limit=200)
+    return jsonify([dict(t) for t in tickets])
+
+
+@app.route('/api/admin/support/tickets/<int:ticket_id>', methods=['GET'])
+def api_admin_support_ticket_get(ticket_id):
+    if not session.get('admin'):
+        return jsonify({'error': 'Forbidden'}), 403
+    ticket = get_support_ticket(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Тикет не найден'}), 404
+    replies = get_support_replies(ticket_id)
+    return jsonify({**dict(ticket), 'replies': [dict(r) for r in replies]})
+
+
+@app.route('/api/admin/support/tickets/<int:ticket_id>/reply', methods=['POST'])
+def api_admin_support_reply(ticket_id):
+    if not session.get('admin'):
+        return jsonify({'error': 'Forbidden'}), 403
+    ticket = get_support_ticket(ticket_id)
+    if not ticket:
+        return jsonify({'error': 'Тикет не найден'}), 404
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    if not message:
+        return jsonify({'error': 'Введите сообщение'}), 400
+    add_support_reply(ticket_id, from_admin=True, message=message,
+                      attachments=data.get('attachments') or [])
+    # Уведомляем пользователя в системный чат @sputnik
+    try:
+        user = get_user_by_id(ticket['user_id'])
+        sys_chat, sys_id = ensure_system_chat(ticket['user_id'])
+        if sys_chat and sys_id:
+            send_message(chat_id=sys_chat, sender_id=sys_id,
+                         content='💬 Ответ техподдержки по тикету #%s:\n\n%s' % (ticket_id, message))
+    except Exception:
+        pass
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/support/tickets/<int:ticket_id>/status', methods=['POST'])
+def api_admin_support_status(ticket_id):
+    if not session.get('admin'):
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.get_json(silent=True) or {}
+    status = data.get('status', '')
+    if status not in ('open', 'answered', 'closed'):
+        return jsonify({'error': 'Неверный статус'}), 400
+    set_support_ticket_status(ticket_id, status)
+    if status == 'closed':
+        try:
+            sys_chat, sys_id = ensure_system_chat(ticket['user_id'])
+            if sys_chat and sys_id:
+                send_message(chat_id=sys_chat, sender_id=sys_id,
+                             content='✅ Тикет #%s закрыт. Если вопрос появится снова — создайте новый тикет.' % ticket_id)
+        except Exception:
+            pass
+    return jsonify({'success': True})
+
+
 def api_get_my_user():
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401

@@ -299,64 +299,54 @@ function loadAccountsManually() {
     const container = document.getElementById('burgerAccounts');
     if (!container) return;
 
-    // Сначала получаем текущего пользователя
     const currentId = currentUser.id;
+    // Непрочитанные по связанным аккаунтам — для бейджей.
+    const unread = (window.__unreadByAccount) || {};
 
-    // Получаем список привязанных аккаунтов
+    const itemHTML = (acc, isActive) => {
+        const letter = ((acc.display_name || acc.username) || '?').charAt(0).toUpperCase();
+        const avatarImg = acc.avatar
+            ? `<img src="/${acc.avatar}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+            : '';
+        const n = parseInt(unread[String(acc.id)] || '0', 10);
+        const badge = n > 0
+            ? `<span class="account-badge">${n > 99 ? '99+' : n}</span>`
+            : '';
+        return `
+            <div class="account-item${isActive ? ' active' : ''}" data-user-id="${acc.id}" onclick="switchToAccount(${acc.id})">
+                <div class="account-avatar" style="background: var(--primary-gradient);">
+                    ${avatarImg}
+                    <span style="display: ${acc.avatar ? 'none' : 'flex'};">${letter}</span>
+                    ${badge}
+                </div>
+                <div class="account-name">${acc.display_name || acc.username}</div>
+            </div>`;
+    };
+
     fetch('/api/auth/linked_accounts')
         .then(r => r.json())
         .then(accounts => {
-            let html = '';
-
-            // ВСЕГДА показываем текущий аккаунт первым (активным)
-            html += `
-                <div class="account-item active" data-user-id="${currentId}" onclick="switchToAccount(${currentId})">
-                    <div class="account-avatar" style="background: var(--primary-gradient);">
-                        <span>${currentUser.display_name[0].toUpperCase()}</span>
-                    </div>
-                    <div class="account-name">${currentUser.display_name}</div>
-                </div>
-            `;
-
-            // Добавляем привязанные аккаунты
+            // Текущий первым (активным), остальные — привязанные без дублей.
+            let html = itemHTML(currentUser, true);
+            const seen = new Set([currentId]);
             accounts.forEach(acc => {
-                // Если это не текущий аккаунт — показываем
-                if (acc.id !== currentId) {
-                    const letter = (acc.display_name || acc.username || '?')[0].toUpperCase();
-                    html += `
-                        <div class="account-item" onclick="switchToAccount(${acc.id})">
-                            <div class="account-avatar" style="background: var(--primary-gradient);">
-                                ${acc.avatar ? `<img src="/${acc.avatar}">` : `<span>${letter}</span>`}
-                            </div>
-                            <div class="account-name">${acc.display_name || acc.username}</div>
-                        </div>
-                    `;
+                if (acc.id !== currentId && !seen.has(acc.id)) {
+                    seen.add(acc.id);
+                    html += itemHTML(acc, false);
                 }
             });
-
-            // Кнопка добавления
             html += `
                 <div class="account-add" onclick="openAddAccountModal()">
                     <div class="account-add-icon"><i class="fas fa-plus"></i></div>
-                </div>
-            `;
-
+                </div>`;
             container.innerHTML = html;
         })
         .catch(err => {
             console.error('Ошибка загрузки аккаунтов:', err);
-            // Если ошибка, показываем только текущий
-            container.innerHTML = `
-                <div class="account-item active" data-user-id="${currentId}">
-                    <div class="account-avatar" style="background: var(--primary-gradient);">
-                        <span>${currentUser.display_name[0].toUpperCase()}</span>
-                    </div>
-                    <div class="account-name">${currentUser.display_name}</div>
-                </div>
+            container.innerHTML = itemHTML(currentUser, true) + `
                 <div class="account-add" onclick="openAddAccountModal()">
                     <div class="account-add-icon"><i class="fas fa-plus"></i></div>
-                </div>
-            `;
+                </div>`;
         });
 }
 

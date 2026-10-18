@@ -1050,6 +1050,31 @@ def init_db():
     ''')
     cur3.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS poll_id INTEGER')
 
+    # ===== Техподдержка (v1.1.0) =====
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            message TEXT NOT NULL,
+            attachments TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'open',
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            updated_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS support_replies (
+            id SERIAL PRIMARY KEY,
+            ticket_id INTEGER NOT NULL,
+            from_admin BOOLEAN DEFAULT FALSE,
+            message TEXT NOT NULL,
+            attachments TEXT DEFAULT '[]',
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
+
     # ===== Telegram-механики групп и каналов (v0.56.1) =====
 
     # Забаненные в группе (бан = удаление из участников + запись сюда)
@@ -1188,6 +1213,31 @@ def init_db():
     cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_lock_enabled BOOLEAN DEFAULT FALSE')
     cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_lock_autolock INTEGER DEFAULT 0')
     cur3.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS app_passcode_len INTEGER DEFAULT 4')
+
+    # Техподдержка (v1.1.0) — миграция для старых БД
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            message TEXT NOT NULL,
+            attachments TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'open',
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours')),
+            updated_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
+    cur3.execute('''
+        CREATE TABLE IF NOT EXISTS support_replies (
+            id SERIAL PRIMARY KEY,
+            ticket_id INTEGER NOT NULL,
+            from_admin BOOLEAN DEFAULT FALSE,
+            message TEXT NOT NULL,
+            attachments TEXT DEFAULT '[]',
+            created_at TIMESTAMPTZ DEFAULT ((NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours'))
+        )
+    ''')
 
     # Отложенные сообщения
     cur3.execute('''
@@ -4362,6 +4412,93 @@ def get_link_preview(url, force_refresh=False):
 
 
 # ----- ОПРОСЫ -----
+def create_support_ticket(user_id, category, subject, message, attachments=None):
+    """Создаёт тикет техподдержки от пользователя."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        INSERT INTO support_tickets (user_id, category, subject, message, attachments)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
+    ''', (user_id, category, subject, message, json.dumps(attachments or [], ensure_ascii=False)))
+    row = cur.fetchone()
+    conn.commit()
+    conn.close()
+    return row['id'] if row else None
+
+
+def get_support_tickets(user_id=None, status=None, limit=50):
+    """Список тикетов. user_id=None — все (для админки)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    sql = '''SELECT t.*, u.username, u.display_name, u.avatar
+             FROM support_tickets t
+             LEFT JOIN users u ON u.id = t.user_id'''
+    conds, params = [], []
+    if user_id is not None:
+        conds.append('t.user_id = %s')
+        params.append(user_id)
+    if status is not None:
+        conds.append('t.status = %s')
+        params.append(status)
+    if conds:
+        sql += ' WHERE ' + ' AND '.join(conds)
+    sql += ' ORDER BY t.created_at DESC LIMIT %s'
+    params.append(limit)
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def get_support_ticket(ticket_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''SELECT t.*, u.username, u.display_name, u.avatar
+                   FROM support_tickets t
+                   LEFT JOIN users u ON u.id = t.user_id
+                   WHERE t.id = %s''', (ticket_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def add_support_reply(ticket_id, from_admin, message, attachments=None):
+    """Ответ на тикет (True — от админа)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('''
+        INSERT INTO support_replies (ticket_id, from_admin, message, attachments)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+    ''', (ticket_id, from_admin, message, json.dumps(attachments or [], ensure_ascii=False)))
+    row = cur.fetchone()
+    if from_admin:
+        cur.execute("UPDATE support_tickets SET status = 'answered', updated_at = NOW() WHERE id = %s", (ticket_id,))
+    else:
+        cur.execute("UPDATE support_tickets SET status = 'open', updated_at = NOW() WHERE id = %s", (ticket_id,))
+    conn.commit()
+    conn.close()
+    return row['id'] if row else None
+
+
+def get_support_replies(ticket_id):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT * FROM support_replies WHERE ticket_id = %s ORDER BY created_at ASC', (ticket_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def set_support_ticket_status(ticket_id, status):
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute("UPDATE support_tickets SET status = %s, updated_at = NOW() WHERE id = %s", (status, ticket_id))
+    conn.commit()
+    conn.close()
+
+
 def create_poll(chat_id, group_id, channel_id, question, options, is_anonymous, created_by):
     conn = get_db()
     cur = dict_cursor(conn)
@@ -5789,6 +5926,39 @@ def get_master_account(user_id):
     except Exception as e:
         print(f"❌ Error getting master account: {e}")
         return user_id
+
+
+def get_linked_account_unread(user_id):
+    """Непрочитанные по всем связанным аккаунтам: {account_id: unread}.
+
+    Нужно для бейджей у аватарок в списке аккаунтов бургер-меню.
+    Учитывает только личные чаты (счётчик unread_count из get_user_chats).
+    """
+    out = {}
+    try:
+        master_id = get_master_account(user_id)
+        ids = [int(acc['id']) for acc in get_linked_accounts(master_id)]
+        ids.append(int(master_id))
+        seen = set()
+        acc_ids = []
+        for i in ids:
+            if i not in seen and i != int(user_id):
+                seen.add(i)
+                acc_ids.append(i)
+        for aid in acc_ids:
+            chats = get_user_chats(aid) or []
+            total = 0
+            for ch in chats:
+                if str(ch.get('chat_type')) == 'personal':
+                    try:
+                        total += int(ch.get('unread_count') or 0)
+                    except (TypeError, ValueError):
+                        pass
+            if total:
+                out[str(aid)] = total
+    except Exception:
+        pass
+    return out
 
 
 # ===== ПАПКИ ЧАТОВ =====

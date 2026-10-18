@@ -36,8 +36,9 @@
     display: block;
 }
 
-/* --- Шапка с профилем --- */
+/* --- Шапка с профилем (баннер = цвет/фото из профиля) --- */
 .burger-header {
+    position: relative;
     padding: 20px 16px;
     display: flex;
     align-items: center;
@@ -45,7 +46,40 @@
     cursor: pointer;
     border-bottom: 1px solid var(--border-color);
     transition: background 0.15s;
-    border-radius: 0 !important;
+    border-radius: 0 !important; /* 90° углы */
+    overflow: hidden;
+    isolation: isolate;
+}
+
+/* Подложка баннера: фото (absolute) или цвет (background). Текст/аватар
+   при этом поверх и остаются читаемыми за счёт затемнения. */
+.burger-header[style*="--banner-image"],
+.burger-header[style*="--banner-color"] {
+    color: #fff;
+}
+
+.burger-header > .burger-banner {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-size: cover;
+    background-position: center;
+}
+
+.burger-header > .burger-banner::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.burger-header > .burger-banner[data-kind="color"]::after {
+    background: rgba(0, 0, 0, 0.28);
+}
+
+/* Без баннера — обычный фон */
+.burger-header:not([style*="--banner-image"]):not([style*="--banner-color"]) {
+    background: transparent;
 }
 
 .burger-header:hover {
@@ -163,6 +197,27 @@
     color: white;
     overflow: hidden;
     border-radius: 0 !important;
+    position: relative;
+}
+
+/* Бейдж уведомлений в правом верхнем углу аватарки аккаунта */
+.account-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 17px;
+    text-align: center;
+    border: 2px solid var(--bg-secondary);
+    box-sizing: content-box;
+    z-index: 2;
 }
 
 .account-avatar img {

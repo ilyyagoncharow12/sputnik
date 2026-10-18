@@ -292,6 +292,7 @@ table.data tbody tr.clickable:hover { background: #1e1e21; }
             <button class="t" data-tab="logins" onclick="switchTab('logins')"><i class="fas fa-sign-in-alt"></i> Входы</button>
             <button class="t" data-tab="premium" onclick="switchTab('premium')"><i class="fas fa-crown"></i> Premium</button>
             <button class="t" data-tab="viewer" onclick="switchTab('viewer')"><i class="fas fa-eye"></i> Просмотр аккаунта</button>
+            <button class="t" data-tab="support" onclick="switchTab('support')"><i class="fas fa-life-ring"></i> Техподдержка</button>
         </div>
         <button id="refreshBtn" class="tbtn" style="margin-left:auto;" onclick="refreshCurrentTab()"><i class="fas fa-sync-alt"></i> Обновить</button>
     </div>
@@ -308,6 +309,19 @@ table.data tbody tr.clickable:hover { background: #1e1e21; }
         <div id="tabChannels" style="display:none;"><div id="channelsTable"></div></div>
         <div id="tabStats" style="display:none;"><div id="statsContainer"></div></div>
         <div id="tabJournal" style="display:none;"><div id="journalTable"></div></div>
+        <div id="tabSupport" style="display:none;">
+            <div class="vf-card">
+                <div class="section-h"><i class="fas fa-life-ring"></i> Обращения в техподдержку</div>
+                <div class="vf-hint">Новые тикеты от пользователей. Откройте тикет, чтобы ответить или сменить статус.</div>
+                <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;">
+                    <button class="tbtn" onclick="SupportAdmin.filter('open')" data-f="open">Ожидают</button>
+                    <button class="tbtn" onclick="SupportAdmin.filter('answered')" data-f="answered">Есть ответ</button>
+                    <button class="tbtn" onclick="SupportAdmin.filter('closed')" data-f="closed">Закрытые</button>
+                    <button class="tbtn" onclick="SupportAdmin.filter('')" data-f="">Все</button>
+                </div>
+                <div id="supportTickets"></div>
+            </div>
+        </div>
         <div id="tabLogins" style="display:none;">
             <div class="vf-card">
                 <div class="section-h"><i class="fas fa-sign-in-alt"></i> Журнал входов в панель</div>
@@ -467,7 +481,7 @@ function switchTab(tab) {
     document.querySelectorAll('.tabs .t').forEach(b => {
         b.classList.toggle('active', b.dataset.tab === tab);
     });
-    ['users', 'groups', 'channels', 'stats', 'journal', 'logins', 'premium', 'viewer'].forEach(t => {
+    ['users', 'groups', 'channels', 'stats', 'journal', 'logins', 'premium', 'viewer', 'support'].forEach(t => {
         document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = (t === tab) ? 'block' : 'none';
     });
     if (tab === 'users') loadUsers();
@@ -477,6 +491,8 @@ function switchTab(tab) {
     if (tab === 'journal') loadJournal();
     if (tab === 'logins') loadLoginLog();
     if (tab === 'premium') loadPremium();
+    if (tab === 'viewer') loadViewer();
+    if (tab === 'support') SupportAdmin.load();
 }
 
 function refreshCurrentTab() {
@@ -1532,6 +1548,131 @@ fetch(U.status, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' 
     .then(d => {
         if (d.is_admin) enterDash();
     });
+
+/* ===== ТЕХПОДДЕРЖКА (админка) ===== */
+const SupportAdmin = {
+    filterStatus: '',
+    templates: [
+        { id: 'greet', name: 'Приветствие', text: 'Здравствуйте! Спасибо за обращение в техподдержку Спутника. Мы уже изучаем вашу проблему и ответим в ближайшее время.' },
+        { id: 'wait', name: 'Ожидание', text: 'Ваш запрос принят в работу. Среднее время ответа — до 24 часов. Пожалуйста, не дублируйте обращение.' },
+        { id: 'need_info', name: 'Нужны детали', text: 'Спасибо за обращение! Чтобы помочь быстрее, уточните, пожалуйста:\n1. Версию приложения\n2. Устройство и ОС\n3. Скриншот ошибки (если есть)' },
+        { id: 'fixed', name: 'Решено', text: 'Проблема решена! Если что-то ещё понадобится — пишите, мы всегда на связи.' },
+        { id: 'close', name: 'Закрытие', text: 'Обращение закрыто. Если вопрос появится снова — создайте новый тикет. Хорошего дня!' }
+    ],
+
+    filter(s) {
+        this.filterStatus = s;
+        this.load();
+    },
+
+    async load() {
+        const el = document.getElementById('supportTickets');
+        if (!el) return;
+        el.innerHTML = '<div class="vf-hint">Загрузка…</div>';
+        const q = this.filterStatus ? '?status=' + this.filterStatus : '';
+        const r = await fetch('/api/admin/support/tickets' + q, { headers: { 'X-CSRF-Token': CSRF } });
+        const tickets = await r.json();
+        if (!tickets.length) {
+            el.innerHTML = '<div class="vf-hint">Обращений нет.</div>';
+            return;
+        }
+        el.innerHTML = tickets.map(t => {
+            const st = { open: ['Ожидает', '#ff9500'], answered: ['Есть ответ', '#34c759'], closed: ['Закрыт', '#8e8e93'] }[t.status] || [t.status, '#8e8e93'];
+            return `
+                <div class="vf-card" style="margin-bottom:10px;cursor:pointer;" onclick="SupportAdmin.open(${t.id})">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <img src="/${t.avatar || 'static/avatar-swg/avatar1.jpg'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;">${esc(t.subject)}</div>
+                            <div style="font-size:12px;color:#8e8e93;">${esc(t.display_name || t.username)} · ${esc(t.category)} · ${new Date(t.created_at).toLocaleString('ru-RU')}</div>
+                        </div>
+                        <span style="color:${st[1]};font-size:12px;font-weight:600;">${st[0]}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    async open(id) {
+        const r = await fetch('/api/admin/support/tickets/' + id, { headers: { 'X-CSRF-Token': CSRF } });
+        const t = await r.json();
+        if (t.error) { alert(t.error); return; }
+        const st = { open: 'Ожидает', answered: 'Есть ответ', closed: 'Закрыт' }[t.status] || t.status;
+        const replies = (t.replies || []).map(r => `
+            <div style="padding:10px 12px;border-radius:12px;margin-bottom:6px;background:${r.from_admin ? '#0a84ff' : '#1c1c1e'};${r.from_admin ? 'color:#fff;' : ''}">
+                <div style="font-size:12px;opacity:0.7;">${r.from_admin ? 'Вы (техподдержка)' : esc(t.display_name || t.username)} · ${new Date(r.created_at).toLocaleString('ru-RU')}</div>
+                <div style="margin-top:4px;white-space:pre-wrap;">${esc(r.message)}</div>
+            </div>
+        `).join('');
+
+        const w = document.createElement('div');
+        w.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;';
+        w.innerHTML = `
+            <div style="background:#0f0f0f;border-radius:24px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:24px;color:#fff;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;color:#8e8e93;font-size:18px;cursor:pointer;"><i class="fas fa-times"></i></button>
+                    <div style="font-weight:600;">Тикет #${t.id} · ${st}</div>
+                </div>
+                <div style="font-size:13px;color:#8e8e93;margin-bottom:8px;">${esc(t.display_name || t.username)} (@${esc(t.username)}) · ${esc(t.category)} · ${new Date(t.created_at).toLocaleString('ru-RU')}</div>
+                <div style="font-weight:600;margin-bottom:6px;">${esc(t.subject)}</div>
+                <div style="background:#1c1c1e;border-radius:12px;padding:12px;white-space:pre-wrap;margin-bottom:14px;">${esc(t.message)}</div>
+                <div style="font-size:13px;color:#8e8e93;margin-bottom:8px;">Переписка</div>
+                <div style="max-height:180px;overflow-y:auto;margin-bottom:12px;">${replies || '<div style="color:#8e8e93;">Переписки пока нет.</div>'}</div>
+                <div style="font-size:13px;color:#8e8e93;margin-bottom:8px;">Шаблоны ответа</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                    ${this.templates.map(tp => `<button class="tbtn" onclick="SupportAdmin.useTemplate(${t.id}, '${tp.id}')">${tp.name}</button>`).join('')}
+                </div>
+                <textarea id="adminReply" class="tg-textarea" placeholder="Ваш ответ пользователю…" style="background:#1c1c1e;border:1px solid #2c2c2e;border-radius:12px;color:#fff;padding:12px;width:100%;min-height:80px;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="btn primary" style="flex:1;" onclick="SupportAdmin.send(${t.id})">Отправить ответ</button>
+                    <select onchange="SupportAdmin.setStatus(${t.id}, this.value)" style="background:#1c1c1e;color:#fff;border:1px solid #2c2c2e;border-radius:12px;padding:10px;">
+                        <option value="open" ${t.status==='open'?'selected':''}>Ожидает</option>
+                        <option value="answered" ${t.status==='answered'?'selected':''}>Есть ответ</option>
+                        <option value="closed" ${t.status==='closed'?'selected':''}>Закрыт</option>
+                    </select>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(w);
+    },
+
+    useTemplate(ticketId, tplId) {
+        const tp = this.templates.find(x => x.id === tplId);
+        if (!tp) return;
+        const el = document.getElementById('adminReply');
+        if (el) el.value = tp.text;
+    },
+
+    async send(ticketId) {
+        const el = document.getElementById('adminReply');
+        const message = el ? el.value.trim() : '';
+        if (!message) { alert('Введите ответ'); return; }
+        const r = await fetch('/api/admin/support/tickets/' + ticketId + '/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+            body: JSON.stringify({ message })
+        });
+        const d = await r.json();
+        if (d.success) {
+            const w = document.querySelector('div[style*="z-index:200"]');
+            if (w) w.remove();
+            this.load();
+        } else alert(d.error || 'Ошибка');
+    },
+
+    async setStatus(ticketId, status) {
+        await fetch('/api/admin/support/tickets/' + ticketId + '/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+            body: JSON.stringify({ status })
+        });
+        this.load();
+    }
+};
+
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 </script>
 </body>
 </html>

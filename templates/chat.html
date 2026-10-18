@@ -376,7 +376,13 @@
 <div class="burger-overlay" id="burgerOverlay" onclick="closeBurgerMenu()"></div>
 <div class="burger-menu" id="burgerMenu">
     <!-- Шапка с профилем (данные подставляются через Jinja) -->
-    <div class="burger-header" onclick="openMyProfile()">
+        <script>window.__unreadByAccount = {{ unread | tojson }}; window.CSRF_TOKEN = "{{ csrf_token }}";</script>
+        <div class="burger-header" id="burgerHeader"
+         style="{% if banner_image %}--banner-image: url('/static/{{ banner_image }}');{% elif banner_color %}--banner-color: {{ banner_color }};{% endif %}"
+         onclick="openMyProfile()">
+        <div class="burger-banner"
+             data-kind="{% if banner_image %}image{% elif banner_color %}color{% endif %}"
+             style="{% if banner_image %}background-image: var(--banner-image);{% elif banner_color %}background: var(--banner-color);{% endif %}"></div>
         <div class="burger-avatar" id="burgerAvatar">
             <!-- Картинка или буква будут подставлены динамически -->
             <img src="{{ user['avatar'] or '/static/avatar-swg/avatar1.jpg' }}"
@@ -402,9 +408,13 @@
     <div class="burger-accounts" id="burgerAccounts">
         <!-- Активный аккаунт (данные будут подставляться через JS) -->
         <!-- Пример структуры без данных -->
-        <div class="account-item active" data-user-id="{{ user['id'] }}">
+        <div class="account-item active" data-user-id="{{ user['id'] }}" data-unread="{{ unread.get(user['id'] | string, 0) }}">
             <div class="account-avatar" style="background: var(--primary-gradient);">
-                <span>{{ user['display_name'][0].upper() if user['display_name'] else user['username'][0].upper() }}</span>
+                {% if user['avatar'] %}
+                <img src="/static/{{ user['avatar'] }}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                {% endif %}
+                <span style="display: {% if user['avatar'] %}none{% else %}{% endif %};">{{ user['display_name'][0].upper() if user['display_name'] else user['username'][0].upper() }}</span>
+                <span class="account-badge" style="display: none;"></span>
             </div>
             <div class="account-name">{{ user['display_name'] or user['username'] }}</div>
         </div>
@@ -616,6 +626,7 @@
 <script src="/cdn/js/community.js"></script>
 <script src="/cdn/js/music-extra.js"></script>
 <script src="/cdn/js/accounts.js"></script>
+<script src="/cdn/js/support.js"></script>
 <script src="/cdn/js/drafts.js"></script>
 <script src="/cdn/js/presence.js"></script>
 <script src="/cdn/js/profile-media.js"></script>
