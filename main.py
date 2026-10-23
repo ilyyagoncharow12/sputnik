@@ -5638,8 +5638,16 @@ def maybe_start_https():
     https_port = int(os.environ.get('HTTPS_PORT', '5443'))
 
     def run_https():
-        socketio.run(app, host='0.0.0.0', port=https_port,
-                     ssl_context=(cert, key), debug=False)
+        # eventlet-режим не принимает ssl_context — ему нужны keyfile/certfile
+        # (flask_socketio сам обернёт сокет через eventlet.wrap_ssl);
+        # werkzeug-режим (threading) работает с ssl_context.
+        run_kw = {'host': '0.0.0.0', 'port': https_port, 'debug': False}
+        if getattr(socketio, 'async_mode', None) == 'eventlet':
+            run_kw['certfile'] = cert
+            run_kw['keyfile'] = key
+        else:
+            run_kw['ssl_context'] = (cert, key)
+        socketio.run(app, **run_kw)
 
     thread = threading.Thread(target=run_https, daemon=True)
     thread.start()
@@ -6437,6 +6445,12 @@ if __name__ == '__main__':
     schedule_story_cleanup()
     schedule_worker()
     maybe_start_https()
-    # В проде (debug=False) Werkzeug требует явного allow_unsafe_werkzeug.
-    socketio.run(app, host=APP_HOST, port=APP_PORT, debug=APP_DEBUG,
-                 allow_unsafe_werkzeug=not APP_DEBUG)
+    # allow_unsafe_werkzeug понимает только werkzeug-режим (threading):
+    # там flask_socketio снимает ключ сам (см. SocketIO.run, ветка threading).
+    # eventlet-ветка пробрасывает kwargs в eventlet.wsgi.server(), который не
+    # знает этот аргумент — сервер падал с TypeError при старте.
+    run_kw = {'host': APP_HOST, 'port': APP_PORT, 'debug': APP_DEBUG}
+    if getattr(socketio, 'async_mode', 'threading') == 'threading':
+        # В проде (debug=False) Werkzeug требует явного allow_unsafe_werkzeug.
+        run_kw['allow_unsafe_werkzeug'] = not APP_DEBUG
+    socketio.run(app, **run_kw)

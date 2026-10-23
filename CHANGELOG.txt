@@ -2,10 +2,10 @@
   СПУТНИК (Sputnik) — Мессенджер
   ЖУРНАЛ ИЗМЕНЕНИЙ / РЕКОМЕНДАЦИИ
 ========================================================
-Последнее обновление: 11.10.2026
+Последнее обновление: 23.10.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v1.1.1
+ТЕКУЩАЯ ВЕРСИЯ: v0.62.6
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -158,13 +158,12 @@
     приватности (в /api/get_user_profile, /api/get_chat и списке чатов
     оно обнулялось). Теперь last_seen = None, если настройка запрещает.
     Покрыто тестом tools/_check_presence.py (34/34).
-[v] Живая сессия удалённого аккаунта продолжала работать: пока вкладка
-    открыта, запросы от удалённого пользователя проходили (например,
-    открытие чата с @sputnik_system снова вызывало get_or_create_chat,
-    и в chats появлялась «сирота»). ИСПРАВЛЕНО v0.63.0: before_request
-    (ban_check) проверяет is_deleted через get_account_flags, сбрасывает
-    сессию и отдаёт 403/редирект. Заодно сессия с несуществующим
-    user_id больше не считается авторизованной.
+[!] Живая сессия удалённого аккаунта продолжает работать: пока вкладка
+    открыта, запросы от удалённого пользователя проходят (например,
+    открытие чата с @sputnik_system снова вызывает get_or_create_chat,
+    и в chats появляется «сирота»). При входе удалённый аккаунт
+    блокируется, окно есть только у уже открытых вкладок. Возможно,
+    стоит проверять is_deleted в before_request.
 [v] Персональные права админов групп не были реализованы (права задавались
     на РОЛЬ admin целиком) — ИСПРАВЛЕНО v0.60.5: перекрытия
     group_member_permissions, кнопка «Права» у каждого участника.
@@ -175,22 +174,16 @@
     (повторная заявка после отказа тоже работает, v0.61.0).
 
 Безопасность (важно):
-[v] Пароли SHA-256 без соли — ИСПРАВЛЕНО: обычные пароли входа уже
-    хешируются bcrypt с солью (verify_user мигрирует старые на лету).
-    В v0.63.0 на bcrypt переведены и СЕКРЕТЫ 2FA/блокировки приложения
-    (_hash_secret, раньше несолёный SHA-256) — 4-значный код больше
-    нельзя вскрыть перебором, одинаковая подсказка не даёт общий хэш.
+[!] Пароли SHA-256 без соли — перейти на bcrypt/argon2.
 [v] SECRET_KEY захардкожен в main.py — ИСПРАВЛЕНО v0.62.0: ключ
     генерируется и пишется в .env при первом запуске (см. ниже).
 [v] Нет CSRF-защиты — ИСПРАВЛЕНО: before_request на все не-GET запросы
     к /api (main.py, csrf_protect), токен в сессии, заголовок
     X-CSRF-Token. В разделе 2 пункт был устаревшим.
-[v] CORS открыт для всех (*) — ИСПРАВЛЕНО v0.62.0 (белый список origin).
-[v] Нет ограничения по аккаунту — ИСПРАВЛЕНО v0.63.0: помимо общего
-    rate_limit по паре endpoint+IP, добавлен анти-перебор ПО АККАУНТУ
-    (5 неудач → блок на 5 минут) для входа по паролю, по коду входа,
-    облачного пароля (2FA) и кода блокировки приложения. Смена IP
-    обход больше не даёт.
+[!] CORS открыт для всех (*).
+[!] Нет ограничения запросов (rate-limiting) на /api/auth.
+    (Уже есть: общий rate_limit по паре endpoint+IP — см. раздел 3,
+     28.09.2026. Ограничение по аккаунту, не по IP, не сделано.)
 [!] /api/premium/users отдаёт все id с непустым premium_until (до 5000
     строк) и фильтрует их уже в Python. На большой базе лучше отсекать
     по дате прямо в SQL.
@@ -204,243 +197,53 @@
      при следующем старте приложения). Для параноиков — держать
      sputnik.db на флешке только в своём распоряжении.
 [?] В базе остался тестовый промокод ILXZ-12 (3 дня, 1 активация,
-     активаций 0) — он снова доступен. Удалить или оставить как
-     «приветственный»?
-[?] get_system_user() на ПУСТОЙ PG-базе: INSERT sputnik проходит (строка
-    id=2 создаётся), но fetchone() после commit возвращает None — первый
-    smoke дал FAIL, повторный 19/19. Подозрение на fetch-RETURNING после
-    commit в _PgCursor. Воспроизвести и починить (см. v1.0.0 выше).
+    активаций 0) — он снова доступен. Удалить или оставить как
+    «приветственный»?
 
 
 ========================================================
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
 
-[18.10.2026] — v1.1.1: Ответ техподдержки → системный чат @sputnik
-  Файлы: main.py, CHANGELOG.txt
-  - api_admin_support_reply: после записи ответа отправляет системное
-    сообщение в чат @sputnik пользователя («💬 Ответ техподдержки по тикету
-    #N: ...»).
-  - api_admin_support_status: при закрытии тикета шлёт уведомление
-    «✅ Тикет #N закрыт...».
+[23.10.2026] — v0.62.6: сброс пароля служебной панели
+  Файлы: .env (только ADMIN_PASSWORD_HASH), CHANGELOG.txt
 
-[18.10.2026] — v1.1.0: Баннер в бургере, аватарки+бейджи аккаунтов, техподдержка
-  Файлы: main.py, database.py, templates/chat.html, templates/_u.html,
-         cdn/css/burger.css, cdn/js/accounts.js, cdn/js/support.js (новый),
-         tools/_check_support.py (новый), CHANGELOG.txt
+  - По просьбе пользователя пароль админ-панели сброшен на
+    `sputnik`: в .env записан новый bcrypt-хэш ($2b$12$,
+    12 раундов), checkpw = True, config.env() читает значение
+    корректно (с пробелами вокруг «=»).
+  - Доступ в панель: http://localhost:5000/8ec3313e92353110
+    (PANEL = HMAC-SHA256(SECRET_KEY)[:16], не изменился),
+    телефон +777203374, пароль sputnik, 2FA-код 20309.
+  - ВАЖНО: _svc.py читает ADMIN_* при импорте модуля
+    (модульный уровень) — после правки .env нужен ПОЛНЫЙ
+    перезапуск `python main.py`, auto-reload не подхватит.
+  - Дополнительно: пользователь получил «Неверный пароль»,
+    т.к. сервер (запущен 20:59) пережил правку .env (21:05).
+    Сервер перезапущен через touch main.py (reloader), вход
+    проверен по HTTP: POST /login → success:true, статус
+    is_admin:true.
 
-  1) БАННЕР В БУРГЕР-МЕНЮ: шапка теперь показывает баннер профиля
-     (banner_image → фото с затемнением, banner_color → цвет). Данные
-     передаются в шаблон из get_user_settings; CSS — .burger-banner.
-  2) АККАУНТЫ В БУРГЕРЕ: аватарка показывает фото профиля (было — только
-     буква), в правом верхнем углу — красный бейдж непрочитанных
-     (get_linked_account_unread: сумма unread_count по личным чатам всех
-     связанных аккаунтов, кроме текущего).
-  3) ТЕХПОДДЕРЖКА (бот):
-     - БД: support_tickets (user_id, category, subject, message, attachments,
-       status) + support_replies (ticket_id, from_admin, message, attachments).
-       DDL в init_db + миграция для старых БД.
-     - API: /api/support/categories (6 категорий с шаблонами), POST/GET
-       /api/support/tickets, GET /api/support/tickets/<id>, POST .../reply;
-       админка: /api/admin/support/tickets[/<id>], .../reply, .../status.
-       Проверка админа — session['admin'] (как в _svc).
-     - UI: кнопка «Техподдержка» в бургере, модалка с категориями → шаблон
-       (тема + описание по пунктам + прикрепить фото/видео) → отправка;
-       список «Мои тикеты» с перепиской.
-     - Админка: вкладка «Техподдержка» — список тикетов с фильтром по
-       статусу, карточка тикета с перепиской, 5 шаблонов ответа, смена
-       статуса (open/answered/closed).
-  ПРОВЕРЕНО: tools/_check_support.py 10/10; в браузере — баннер, категории,
-  шаблон, отправка тикета (id=4, open), список тикетов. py_compile + node
-  --check — OK.
+[23.10.2026] — v0.62.5: починка запуска (AttributeError: jwt.encode)
+  Файлы: CHANGELOG.txt (без правок кода — только окружение)
 
-[11.10.2026] — v1.0.0: ПРОД-ДЕПЛОЙ (PostgreSQL, сервер, nginx 606)
-  Файлы: database.py, main.py, .env.example, requirements.txt (уже был
-  psycopg2), tools/_check_postgres.py (новый), CHANGELOG.txt. На сервере:
-  /opt/sputnik, systemd-юнит sputnik, nginx-сайт sputnik (:606 ssl).
+  ПРОБЛЕМА: при старте сервер падал с 500 на
+  `AttributeError: module 'jwt' has no attribute 'encode'`
+  в jwt_session.py (save_session) — сессии не сохранялись.
 
-  1) АДАПТЕР POSTGRES (DB_BACKEND=sqlite|postgres, дефолт sqlite —
-     локально ничего не поменялось). При postgres: коннект через
-  psycopg2 + RealDictCursor (DATABASE_URL), _translate_sql отключается
-  (SQL в коде изначально PG-диалект), гарды защищённых — plpgsql-триггеры,
-  db_health — через information_schema/pg_database_size, бэкап — pg_dump
-  в backups/*.sql. except sqlite3.IntegrityError → DBIntegrityError.
-  2) ПРОД-РЕЖИМ: DEBUG/APP_HOST/APP_PORT из env (дефолты как было);
-  при debug=False — allow_unsafe_werkzeug=True (иначе Flask-SocketIO
-  отказывается стартовать); ProxyFix за nginx; COOKIE_SECURE=1 ставит
-  Secure на JWT-cookie за TLS-прокси.
-  3) СЕРВЕР root@opencode.kiselgram.ru (Ubuntu 22.04): PG в docker
-  kiselgram-db-1:5433 (созданы роль+БД sputnik, пароль только на сервере),
-  код в /opt/sputnik (юзер sputnik), venv, postgresql-client, прод-.env
-  собран НА сервере (свежий SECRET_KEY; ADMIN/VAPID не заданы — панель
-  и push выключены; локальные .env/sputnik.db/certs на прод не копировались,
-  БД прод — пустая, тестовые данные не переливались).
-  4) NGINX: сайт sputnik — listen 606 ssl (сертификат
-  opencode.kiselgram.ru), прокси на 127.0.0.1:5000 + websocket-upgrade,
-  client_max_body_size 550m.
-  ПРОВЕРЕНО: PG-smoke на сервере 19/19 (init, регистрация/вход,
-  сообщения, опросы, сессии/отзыв, bcrypt, гарды DELETE/UPDATE, health);
-  снаружи https://opencode.kiselgram.ru:606/auth → 200 + sputnik_session
-  с Secure;HttpOnly;SameSite=Lax. Откат: systemctl stop sputnik (+
-  rm /etc/nginx/sites-enabled/sputnik при нужде).
-  ИЗВЕСТНО: первая smoke-проверка get_system_user на пустой БД дала FAIL
-  (строка создалась, fetch вернул None) — повторный прогон 19/19;
-  разобраться при случае (см. раздел 2).
+  ПРИЧНА: в окружении стоял чужой пакет `jwt` 1.4.0
+  (Kohei YoshIDA, gevhirn) вместо PyJWT — у него нет
+  jwt.encode/jwt.decode.
 
-[11.10.2026] — AGENTS.md приведён к реальности (без смены версии):
-  Файлы: AGENTS.md, CHANGELOG.txt
-  - Актуальные размеры: main.py ~6300 строк, database.py ~7000,
-    chat.html ~630 (были занижены в 1.5 раза).
-  - «Юнит-тестов нет» — неправда: есть 18 скриптов tools/_check_*.py
-    (перечислены), 6 из них требуют set PYTHONPATH=.
-  - Тестового knopa (user_id=1) в БД НЕТ — для UI-тестов использовать
-    admin (user_id=4); HttpOnly-cookie ставится только через
-    context.addCookies().
-  - Добавлены разделы: авторизация/JWT-сессии и правила безопасности,
-    эталон модалок (TG-стиль), прод и деплой (сервер, ключ, что не
-    копировать). Пример версии обновлён до v0.65.x.
-
-[11.10.2026] — v0.65.0: Все модалки приведены к единому TG-стилю
-  Файлы: cdn/css/modals.css, cdn/css/modal-universal.css,
-         cdn/js/core.js, cdn/js/profiles.js, cdn/js/message-features.js,
-         templates/chat.html, templates/_u.html, CHANGELOG.txt
-
-  РЕВИЗИЯ: посмотрели все модалки в браузере (скриншоты) и распределили:
-  - ЭТАЛОН (как в TG): профиль пользователя, базовая showModal() с
-    tg-action-btn, Premium, настройки/цвета — тёмная карточка #0f0f0f,
-    radius 24, стрелка-назад + заголовок по центру, кнопки #1c1c1e.
-  - ХУДШИЕ (выбивались): filePreviewModal (градиентный заголовок и
-    кнопки — другой язык), опрос (инлайн-стили), выбор аватара (свои
-    классы шапки), редактирование профиля (вообще без карточки — поля
-    висели в воздухе), banModal в админке.
-
-  ЧТО СДЕЛАНО (все — под эталон):
-  1) .modal/.modal-content/.modal-header/.modal-btn/.modal-input
-     (modals.css) переведены на TG-токены: карточка #0f0f0f + radius 24,
-     белый заголовок по центру, синяя primary (#007aff), вторичная
-     и danger в стиле iOS. filePreviewModal и все modal-btn/input
-     стали едиными БЕЗ правок разметки.
-  2) Шапка filePreviewModal: стрелка слева + заголовок по центру
-     (chat.html).
-  3) showModal()/showModalWithRoute() (core.js) строят разметку классами
-     tg-modal-wrapper/header/body вместо инлайн-стилей — все десятки
-     модалок на showModal теперь буквально одинаковые.
-  4) В modal-universal.css дописан канон: .tg-btn (primary/secondary/
-     danger/block), .tg-textarea, .tg-dashed-btn, .tg-modal-footer,
-     .tg-row. Убран дубль .tg-input (уже есть в contacts-app.css).
-  5) Опрос: инпуты/кнопки → tg-input/tg-dashed-btn/tg-btn-primary.
-  6) Выбор аватара: шапка и кнопка загрузки → tg-классы.
-  7) contact-action-item → tg-action-item (были 1-в-1, оставлен один).
-  8) Редактирование профиля обёрнуто в tg-modal-wrapper (было без фона).
-  9) banModal админки (_u.html): карточка и поля под TG-токены.
-  ПРОВЕРЕНО в браузере (скриншоты): предпросмотр, опрос, редактирование
-  профиля — в эталоне; node --check core/message-features/profiles — OK.
-
-[11.10.2026] — v0.64.0: JWT-сессии в HttpOnly-cookie + отзыв, path traversal закрыт
-  Файлы: jwt_session.py (новый), main.py, database.py, requirements.txt,
-         tools/_check_jwt.py (новый), tools/_check_pathtraversal.py (новый),
-         CHANGELOG.txt
-
-  ГЛАВНОЕ:
-  1) СЕССИИ — JWT В HttpOnly-COOKIE (вместо cookie-сеанса itsdangerous).
-     Новый jwt_session.py подменяет app.session_interface: весь
-     существующий код с session[...] работает без изменений, а в cookie
-     лежит подписанный JWT (HS256, SECRET_KEY, claims user_id/exp/jti/sid).
-     Cookie — HttpOnly + SameSite, Secure включается под USE_HTTPS=1.
-  2) ОТЗЫВ ТОКЕНОВ ПО-НАСТОЯЩЕМУ.
-     В JWT кладётся sid — серверный session_token из user_sessions, и он
-     сверяется с БД на каждом запросе. Поэтому:
-       - logout убивает токен сразу (повтор с тем же cookie → 401);
-       - «Завершить сессию» / «все, кроме текущей» реально разлогинивают
-         устройства (РАНЬШЕ это только удаляло строку из списка, а cookie
-         продолжала работать!);
-       - поддельный/просроченный токен и токен с чужим sid → 401.
-     Чисто stateless-JWT сознательно не делали — иначе украденный токен
-     нельзя было бы отозвать.
-  3) ПЕРЕКЛЮЧЕНИЕ АККАУНТОВ теперь создаёт новую серверную сессию под
-     целевой аккаунт (api_switch_account) — отзыв корректен и там.
-  4) PATH TRAVERSAL В download_file ЗАКРЫТ.
-     /api/download_file/<path> и добавление трека из сообщения склеивали
-     пользовательский путь со static/ без проверки `..` — можно было
-     скачать main.py, .env, sputnik.db. Теперь _resolve_media_path()
-     держит путь строго внутри static/ (любой выход → 404).
-
-  ПРОВЕРЕНО:
-  - tools/_check_jwt.py — 28/28 (JWT в cookie, HttpOnly/SameSite,
-    подделка/просрочка/мусор/без-cookie → 401, отзыв через terminate
-    с другого устройства, отзыв через logout, CSRF жив, Socket.IO
-    подключается и видит user_id из JWT).
-  - tools/_check_pathtraversal.py — 19/19 (10 traversal-вариантов
-    отклонены, легитимные файлы отдаются).
-  - Без регрессий: security 37/37, preview_ttl 29/29, presence 34/34,
-    privacy 23/23, secretkey 14/14, perms 44/44, maint 26/26, cors 22/22,
-    ssrf 37/37, profile_media 47/47, join 47/47, trash 21/21, views 13/13,
-    edits/ticks — ВСЁ ОК.
-  - python -m py_compile — OK.
-
-  ЗАМЕТКА: после обновления все пользователи разлогинятся один раз
-  (имя cookie сменилось с `session` на `sputnik_session`). Зависимость
-  PyJWT==2.8.0 добавлена в requirements.txt (python -m pip install -r
-  requirements.txt). Socket.IO-авторизация идёт через тот же JWT.
-
-[11.10.2026] — v0.63.0: Безопасность — bcrypt для секретов, анти-перебор, сессии удалённых
-  Файлы: database.py, main.py, tools/_check_security.py (новый),
-         tools/_check_preview_ttl.py, CHANGELOG.txt
-
-  ГЛАВНОЕ:
-  1) СЕКРЕТЫ 2FA И БЛОКИРОВКИ ПРИЛОЖЕНИЯ ХЕШИРУЮТСЯ bcrypt.
-     Облачный пароль (2FA) и код блокировки приложения хранились как
-     несолёный SHA-256: одинаковые коды у разных людей давали один и
-     тот же хэш, а 4-значный код (всего 10000 комбинаций) вскрывался
-     перебором мгновенно. Теперь _hash_secret — bcrypt с солью.
-     Старые хэши продолжают проверяться и при первом успешном вводе
-     автоматически переписываются (check_cloud_password,
-     check_app_passcode → _rehash_secret_if_legacy).
-
-  2) АНТИ-ПЕРЕБОР ПО АККАУНТУ (не по IP).
-     Раньше был только общий rate_limit по паре endpoint+IP — атакующий
-     обходил его сменой адреса. Теперь счётчик неудач привязан к
-     конкретному телефону/пользователю (AUTH_FAILURES): 5 неудач —
-     блокировка на 5 минут (429 + Retry-After). Защищены:
-       - вход по паролю и по коду (/auth);
-       - облачный пароль 2FA (/api/2fa/verify);
-       - код блокировки приложения (/api/app_lock/verify).
-     Успешный ввод сбрасывает счётчик. Проверка стоит ДО сверки
-     секрета, поэтому даже верный пароль не пройдёт, пока аккаунт
-     заперт.
-
-  3) СЕССИЯ УДАЛЁННОГО АККАУНТА БОЛЬШЕ НЕ РАБОТАЕТ.
-     before_request (ban_check) теперь проверяет и is_deleted
-     (get_account_flags — один запрос на бан+удаление): сессия
-     сбрасывается, API отдаёт 403 {"deleted": true}, страницы уводят
-     на вход. Сессия с несуществующим user_id тоже отклоняется
-     (раньше проходила как валидная).
-
-  НОВОЕ В database.py: get_account_flags(), is_user_deleted(),
-  _is_bcrypt_secret(), _legacy_secret_hash(), _rehash_secret_if_legacy();
-  _hash_secret/_verify_secret переведены на bcrypt.
-  НОВОЕ В main.py: AUTH_FAILURES, auth_failure_key(), auth_lock_remaining(),
-  auth_locked_response(), note_auth_failure(), clear_auth_failures().
-
-  ПРОВЕРЕНО:
-  - tools/_check_security.py — 37/37 (bcrypt и соль, приём legacy-хэшей,
-    миграция на лету, 5 неудач → 429, верный пароль при блокировке
-    тоже 429 (значит лимит по аккаунту, не по IP), сброс счётчика
-    успехом, 2FA- и passcode-блокировки, 403/сброс сессии удалённого).
-  - Без регрессий: presence 34/34, privacy 23/23, secretkey 14/14,
-    trash 21/21, views 13/13, perms 44/44, maint 26/26,
-    preview_ttl 29/29, cors 22/22, ssrf 37/37, profile_media 47/47,
-    join 47/47, edits/ticks — ВСЁ ОК.
-  - tools/_check_preview_ttl.py поправлен: он открывал сессию с
-    несуществующим user_id=1; теперь берёт реальный id из БД (иначе
-    новая проверка честно отдаёт 403).
-  - python -m py_compile main.py database.py — OK.
-  - Тестовый пользователь удалён, БД: users 2/4/7/88, integrity ok,
-    foreign_key_check 0.
-
-  ОСТАЛОСЬ: rate-limit по-прежнему хранится в памяти (сбрасывается при
-  перезапуске) — при желании можно вынести в БД/Redis; пароли админов
-  сервисной панели (_svc) задаются через .env отдельным хэшем.
+  ИСПРАВЛЕНИЕ (окружение, не код):
+  - python -m pip uninstall -y jwt
+  - python -m pip install PyJWT==2.8.0 (как в requirements.txt)
+  - проверено: import jwt → encode работает, py_compile
+    jwt_session.py/main.py без ошибок.
+  Требование PyJWT уже есть в requirements.txt —
+  при переезде/переносе проекта ставить именно его
+  (`python -m pip install -r requirements.txt`),
+  НЕ пакет `jwt` с PyPI.
 
 [03.10.2026] — v0.62.4: раздел «Медиа» в профиле
   Файлы: database.py, main.py, cdn/js/profile-media.js (новый),

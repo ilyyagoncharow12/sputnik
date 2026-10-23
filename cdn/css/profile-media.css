@@ -52,16 +52,39 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.media-head .back-btn {
+/* Свои классы кнопок: у глобального .back-btn на ПК display:none !important */
+.media-head .media-back,
+.media-head .media-close {
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: #fff;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
     border-radius: 50%;
     cursor: pointer;
     font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.media-head .media-back:hover,
+.media-head .media-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.media-head .media-back:active,
+.media-head .media-close:active {
+    transform: scale(0.92);
+}
+
+.media-title {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
 }
 
 .media-title .media-name {

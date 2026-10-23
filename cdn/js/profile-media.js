@@ -92,14 +92,20 @@
     }
 
     // ---- отрисовка ----
+    // ВАЖНО: у .back-btn на ПК глобально выставлен display:none !important
+    // (contacts-app.css, медиазапрос min-width:769px), поэтому для галереи
+    // используется свой класс .media-back + явный крестик закрытия.
     function shell(inner) {
         return `<div class="media-view">
                     <div class="media-head">
-                        <button class="back-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                        <button type="button" class="media-back" onclick="mediaGalleryBack()"
+                                title="Назад к профилю"><i class="fas fa-arrow-left"></i></button>
                         <div class="media-title">
                             <div class="media-name">Медиа</div>
                             <div class="media-sub">${esc(state.name)}</div>
                         </div>
+                        <button type="button" class="media-close" onclick="closeMediaGallery()"
+                                title="Закрыть"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="media-filters">
                         ${KINDS.map(k => {
@@ -208,10 +214,10 @@
         el.id = 'mediaViewerOverlay';
         el.className = 'media-viewer-overlay';
         el.onclick = (e) => {
-            if (e.target === el || e.target.closest('.media-viewer-close')) closeMediaViewer();
+            if (e.target === el || e.target.closest('.media-viewer-close')) closeProfileMediaViewer();
         };
         el.innerHTML = `
-            <button class="media-viewer-close" onclick="closeMediaViewer()"><i class="fas fa-times"></i></button>
+            <button class="media-viewer-close" onclick="closeProfileMediaViewer()"><i class="fas fa-times"></i></button>
             ${nav}
             ${media}
             <div class="media-viewer-caption">
@@ -221,7 +227,7 @@
         document.body.appendChild(el);
     }
 
-    function closeMediaViewer() {
+    function closeProfileMediaViewer() {
         const el = document.getElementById('mediaViewerOverlay');
         if (el) {
             const v = el.querySelector('video');
@@ -231,12 +237,63 @@
         state.viewerIndex = -1;
     }
 
-    // Переключение фото стрелками (в том числе с клавиатуры)
+    // Переключение фото стрелками (в том числе с клавиатуры).
+    // Обработка Esc вынесена ниже — рядом с закрытием самой галереи.
     document.addEventListener('keydown', (e) => {
         if (state.viewerIndex < 0) return;
-        if (e.key === 'Escape') closeMediaViewer();
-        else if (e.key === 'ArrowLeft') window.mediaGalleryStep(-1);
+        if (e.key === 'ArrowLeft') window.mediaGalleryStep(-1);
         else if (e.key === 'ArrowRight') window.mediaGalleryStep(1);
+    });
+
+    // Закрытие самой галереи: просмотрщик, состояние, модалка профиля
+    function closeMediaGallery() {
+        closeProfileMediaViewer();
+        state.userId = null;
+        state.items = [];
+        state.loading = false;
+        // Очищаем разметку, чтобы скрытая модалка не держала старую галерею в DOM
+        const body = document.getElementById('tempModalBody');
+        if (body) body.innerHTML = '';
+        if (typeof closeModal === 'function') closeModal('tempModal');
+    }
+
+    // Стрелка «назад» — вернуться к профилю (модалка остаётся открытой)
+    function backToProfile() {
+        const id = state.userId;
+        const isMine = !!(id && typeof currentUser !== 'undefined' && currentUser && currentUser.id === id);
+        closeProfileMediaViewer();
+        state.userId = null;
+        state.items = [];
+        state.loading = false;
+        if (isMine && typeof openMyProfile === 'function') {
+            openMyProfile();
+            return;
+        }
+        if (id && typeof openUserProfileModal === 'function') {
+            openUserProfileModal(id);
+            return;
+        }
+        if (typeof closeModal === 'function') closeModal('tempModal');
+    }
+
+    // Клик по затемнённому фону вокруг галереи — закрыть
+    const modal = document.getElementById('tempModal');
+    if (modal) {
+        modal.addEventListener('mousedown', (e) => {
+            if (e.target !== modal) return;
+            if (!state.userId) return; // галерея не открыта — не мешаем другим модалкам
+            closeMediaGallery();
+        });
+    }
+
+    // Esc: сначала закрываем просмотрщик, потом модалку галереи
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !state.userId) return;
+        if (state.viewerIndex >= 0) {
+            closeProfileMediaViewer();
+            return;
+        }
+        closeMediaGallery();
     });
 
     // ---- публичные действия (вызываются из разметки) ----
@@ -248,14 +305,14 @@
         state.counts = {};
         state.total = 0;
         state.hasMore = false;
-        closeMediaViewer();
+        closeProfileMediaViewer();
         paintSkeleton();
         if (typeof openModal === 'function') openModal('tempModal');
         load('all', false);
     }
 
     function filter(type) {
-        closeMediaViewer();
+        closeProfileMediaViewer();
         state.items = [];
         load(type, false);
     }
@@ -289,9 +346,13 @@
     }
 
     window.openUserMedia = openUserMedia;
+    window.closeMediaGallery = closeMediaGallery;
+    window.mediaGalleryBack = backToProfile;
     window.mediaGalleryFilter = filter;
     window.mediaGalleryMore = more;
     window.mediaGalleryOpen = openItem;
     window.mediaGalleryStep = step;
-    window.closeMediaViewer = closeMediaViewer;
+    window.closeProfileMediaViewer = closeProfileMediaViewer;
+    // НИКОГДА не назначать window.closeMediaViewer — такая функция есть
+    // в messages.js (просмотрщик фото чата) и её нельзя затирать.
 })();
