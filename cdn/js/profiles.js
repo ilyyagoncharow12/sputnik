@@ -11,20 +11,11 @@ function mediaRowHTML(userId, displayName) {
                 <span class="value">смотреть <i class="fas fa-chevron-right"></i></span>
             </div>`;
 }
-
 function openUserProfileModal(userId) {
-
-// Запоминаем, откуда пришли — из чата или из контактов
-    const returnTo = currentChat ? 'openChatInfo' : 'openContacts';
-    modalReturnTo = returnTo;
-
-
     // Сначала получаем кастомное имя контакта (если есть)
     fetch(`/api/check_contact/${userId}`)
         .then(r => r.json())
-        .then(contactInfo => {
-            // Запоминаем кастомное имя
-            const customName = contactInfo.contact_name || null;
+        .then(contactInfo => {            const customName = contactInfo.contact_name || null;
 
             // Теперь загружаем профиль пользователя
             fetch(`/api/get_user_profile/${userId}`)
@@ -68,17 +59,17 @@ function openUserProfileModal(userId) {
                             // СБОРКА HTML
                             let html = `
                                 <div class="other-profile">
-                                    <div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">
+                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
                                         <div class="banner" style="${bannerStyle}">
                                             <div class="overlay"></div>
                                             <div class="top-bar">
-                                                <button class="back-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                                                <button class="back-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                                                 
                                             </div>
                                         </div>
 
                                         <div class="avatar-wrap">
-                                            ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: #2c2c2e;"><i class="fas fa-user-slash" style="color: #8e8e93; font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
+                                            ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: var(--modal-border);"><i class="fas fa-user-slash" style="color: var(--modal-fg-muted); font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
                                             ${user.is_online ? `<span class="online-dot"></span>` : ''}
                                         </div>
 
@@ -92,7 +83,7 @@ function openUserProfileModal(userId) {
                                         ${songHtml}
 
                                         <div class="body">
-                                            ${user.bio ? `<div class="bio-box"><div class="bio-text">${escapeHtml(user.bio)}</div></div>` : ''}
+                                            ${user.bio ? `<div class="bio-box"><div class="bio-text">${linkifyPlain(user.bio)}</div></div>` : ''}
 
                                             <div class="actions">
                                                 <button class="action-btn" onclick="openChat(${user.id}, 'personal'); closeModal('tempModal');">
@@ -129,7 +120,7 @@ function openUserProfileModal(userId) {
 
                                             <div class="about-box">
                                                 <div class="about-label">о себе</div>
-                                                <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
+                                                <div class="about-text">${user.bio ? linkifyPlain(user.bio) : 'Нет информации о себе'}</div>
                                             </div>
 
                                             ${mediaRowHTML(user.id, displayName)}
@@ -158,17 +149,17 @@ function openUserProfileModal(userId) {
                             // Если плейлист не загрузился — показываем профиль без него
                             let html = `
                                 <div class="other-profile">
-                                    <div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">
+                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
                                         <div class="banner" style="${bannerStyle}">
                                             <div class="overlay"></div>
                                             <div class="top-bar">
-                                                <button class="back-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                                                <button class="back-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                                                 
                                             </div>
                                         </div>
 
                                         <div class="avatar-wrap">
-                                            ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: #2c2c2e;"><i class="fas fa-user-slash" style="color: #8e8e93; font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
+                                            ${hasBlockedMe ? `<div class="avatar-placeholder" style="background: var(--modal-border);"><i class="fas fa-user-slash" style="color: var(--modal-fg-muted); font-size: 32px;"></i></div>` : (user.is_banned ? `<div class="avatar-placeholder" style="background: linear-gradient(135deg, #4fc3f7, #0288d1);"><span style="font-size: 32px;">❄</span></div>` : (user.avatar ? `<img src="/${user.avatar}" class="avatar">` : `<div class="avatar-placeholder">${displayName[0].toUpperCase()}</div>`))}
                                             ${user.is_online ? `<span class="online-dot"></span>` : ''}
                                         </div>
 
@@ -180,7 +171,7 @@ function openUserProfileModal(userId) {
                                         </div>
 
                                         <div class="body">
-                                            ${user.bio ? `<div class="bio-box"><div class="bio-text">${escapeHtml(user.bio)}</div></div>` : ''}
+                                            ${user.bio ? `<div class="bio-box"><div class="bio-text">${linkifyPlain(user.bio)}</div></div>` : ''}
 
                                             <div class="actions">
                                                 <button class="action-btn" onclick="openChat(${user.id}, 'personal'); closeModal('tempModal');">
@@ -217,7 +208,7 @@ function openUserProfileModal(userId) {
 
                                             <div class="about-box">
                                                 <div class="about-label">о себе</div>
-                                                <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
+                                                <div class="about-text">${user.bio ? linkifyPlain(user.bio) : 'Нет информации о себе'}</div>
                                             </div>
 
                                             ${mediaRowHTML(user.id, displayName)}
@@ -282,11 +273,11 @@ function openUserProfileModalFallback(user) {
 
     const html = `
         <div class="other-profile">
-            <div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">
+            <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
                 <div class="banner" style="${bannerStyle}">
                     <div class="overlay"></div>
                     <div class="top-bar">
-                        <button class="back-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                        <button class="back-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                     </div>
                 </div>
 
@@ -303,7 +294,7 @@ function openUserProfileModalFallback(user) {
                 </div>
 
                 <div class="body">
-                    ${user.bio ? `<div class="bio-box"><div class="bio-text">${escapeHtml(user.bio)}</div></div>` : ''}
+                    ${user.bio ? `<div class="bio-box"><div class="bio-text">${linkifyPlain(user.bio)}</div></div>` : ''}
 
                     <div class="actions">
                         <button class="action-btn" onclick="openChat(${user.id}, 'personal'); closeModal('tempModal');">
@@ -340,7 +331,7 @@ function openUserProfileModalFallback(user) {
 
                     <div class="about-box">
                         <div class="about-label">о себе</div>
-                        <div class="about-text">${user.bio ? escapeHtml(user.bio) : 'Нет информации о себе'}</div>
+                        <div class="about-text">${user.bio ? linkifyPlain(user.bio) : 'Нет информации о себе'}</div>
                     </div>
 
                     ${mediaRowHTML(user.id, displayName)}
@@ -357,42 +348,30 @@ function showUserMenu(userId) {
     fetch('/api/check_contact/' + userId)
         .then(r => r.json())
         .then(data => {
-            let html = `
-                <div class="contact-action-menu">
-            `;
+            let items = '';
 
             if (data.is_contact) {
-                html += `
-                    <button class="tg-action-item" onclick="renameContactDialog(${userId}); closeModal('tempModal');">
+                items += `
+                    <button class="tg-action-item" onclick="renameContactDialog(${userId});">
                         <i class="fas fa-edit"></i>
                         <span>Переименовать контакт</span>
                     </button>
-                    <div class="contact-action-divider"></div>
+                    <div class="tg-action-divider"></div>
                     <button class="tg-action-item danger" onclick="removeContactById(${userId}); closeModal('tempModal');">
                         <i class="fas fa-user-minus"></i>
                         <span>Удалить из контактов</span>
                     </button>
                 `;
             } else {
-                html += `
-                    <button class="tg-action-item" onclick="addContactDialog(${userId}); closeModal('tempModal');">
+                items += `
+                    <button class="tg-action-item" onclick="addContactDialog(${userId});">
                         <i class="fas fa-user-plus"></i>
                         <span>Добавить в контакты</span>
                     </button>
                 `;
             }
 
-            html += `
-                <div class="contact-action-divider"></div>
-                <button class="tg-action-item" onclick="closeModal('tempModal');">
-                    <i class="fas fa-times"></i>
-                    <span>Закрыть</span>
-                </button>
-            </div>
-            `;
-
-            document.getElementById('tempModalBody').innerHTML = html;
-            openModal('tempModal');
+            showModal('Действия', `<div class="tg-action-menu">${items}</div>`);
         })
         .catch(err => console.error('Error loading user menu:', err));
 }
@@ -406,7 +385,7 @@ function addContactDialog(userId) {
             let html = `
                 <div class="tg-modal-content">
                     <div class="tg-modal-header">
-                        <button class="cancel-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                        <button class="cancel-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                         
                         <span class="title">Новый контакт</span>
                         <button class="done-btn" onclick="saveNewContact(${userId})">Готово</button>
@@ -459,16 +438,16 @@ function renameContactDialog(uid) {
             let cur = data.contact_name || user.display_name || '';
             let parts = cur.split(' ');
             let html = '';
-            html += '<div style="background:#0f0f0f;border-radius:20px;color:white;">';
-            html += '<div style="display:flex;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #2c2c2e;">';
-            html += '<button onclick="closeModal(\'tempModal\')" style="background:none;border:none;color:#8e8e93;font-size:18px;cursor:pointer;padding:4px;"><i class="fas fa-arrow-left"></i></button>';
+            html += '<div style="background:var(--modal-bg);border-radius:20px;color:var(--modal-fg);">';
+            html += '<div style="display:flex;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--modal-border);">';
+            html += '<button onclick="closeModal(\'tempModal\')" style="background:none;border:none;color:var(--modal-fg-muted);font-size:18px;cursor:pointer;padding:4px;"><i class="fas fa-arrow-left"></i></button>';
             
             html += '<div style="font-size:18px;font-weight:600;">Изменить</div>';
-            html += '<button onclick="saveRename(' + uid + ')" style="background:none;border:none;color:#007aff;font-weight:600;">Готово</button>';
+            html += '<button onclick="saveRename(' + uid + ')" style="background:none;border:none;color:var(--modal-accent);font-weight:600;">Готово</button>';
             html += '</div><div style="padding:20px;">';
-            html += '<div style="text-align:center;margin-bottom:20px;"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:inline-flex;align-items:center;justify-content:center;font-size:36px;color:white;">' + cur[0].toUpperCase() + '</div></div>';
-            html += '<div style="margin-bottom:16px;"><div style="font-size:13px;color:#8e8e93;">Имя</div><input id="cfname" value="' + (parts[0]||'') + '" style="background:#1c1c1e;border:1px solid #2c2c2e;border-radius:12px;padding:12px;width:100%;color:white;font-size:16px;"></div>';
-            html += '<div style="margin-bottom:16px;"><div style="font-size:13px;color:#8e8e93;">Фамилия</div><input id="clname" value="' + (parts.slice(1).join(' ')||'') + '" style="background:#1c1c1e;border:1px solid #2c2c2e;border-radius:12px;padding:12px;width:100%;color:white;font-size:16px;"></div>';
+            html += '<div style="text-align:center;margin-bottom:20px;"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:inline-flex;align-items:center;justify-content:center;font-size:36px;color:var(--modal-fg);">' + cur[0].toUpperCase() + '</div></div>';
+            html += '<div style="margin-bottom:16px;"><div style="font-size:13px;color:var(--modal-fg-muted);">Имя</div><input id="cfname" value="' + (parts[0]||'') + '" style="background:var(--modal-input-bg);border:1px solid var(--modal-input-border);border-radius:12px;padding:12px;width:100%;color:var(--modal-fg);font-size:16px;"></div>';
+            html += '<div style="margin-bottom:16px;"><div style="font-size:13px;color:var(--modal-fg-muted);">Фамилия</div><input id="clname" value="' + (parts.slice(1).join(' ')||'') + '" style="background:var(--modal-input-bg);border:1px solid var(--modal-input-border);border-radius:12px;padding:12px;width:100%;color:var(--modal-fg);font-size:16px;"></div>';
             html += '</div></div>';
 
             document.getElementById('tempModalBody').innerHTML = html;
@@ -522,11 +501,7 @@ function loadContactsList() {
 
     // ===== МОЙ ПРОФИЛЬ =====
 function openMyProfile() {
-    closeBurgerMenu();
-    // Запоминаем, что пришли из бургер-меню
-    modalReturnTo = 'openBurgerMenu';
-
-    fetch('/api/get_my_user')
+    closeBurgerMenu();    fetch('/api/get_my_user')
         .then(r => r.json())
         .then(u => {
             fetch('/api/get_settings')
@@ -559,7 +534,7 @@ function openMyProfile() {
                             }
 
                             let html = '<div class="other-profile">';
-                            html += '<div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">';
+                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">';
 
                             // БАННЕР (ИСПРАВЛЕНО - кавычки на месте)
                             html += `<div class="banner" id="profileBanner" style="${bannerStyle}">`;
@@ -602,7 +577,7 @@ function openMyProfile() {
 
                             html += '<div class="about-box">';
                             html += '<div class="about-label">о себе</div>';
-                            html += `<div class="about-text">${u.bio ? escapeHtml(u.bio) : 'Нет информации о себе'}</div>`;
+                            html += `<div class="about-text">${u.bio ? linkifyPlain(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
 
                             html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
@@ -614,7 +589,7 @@ function openMyProfile() {
                         })
                         .catch(() => {
                             let html = '<div class="other-profile">';
-                            html += '<div class="modal-content" style="background: #0f0f0f; border-radius: 24px; overflow: hidden; color: white; max-width: 420px;">';
+                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">';
                             html += `<div class="banner" id="profileBanner" style="${bannerStyle}">`;
                             html += '<div class="overlay"></div>';
                             html += '<div class="top-bar">';
@@ -648,7 +623,7 @@ function openMyProfile() {
                             html += '</div>';
                             html += '<div class="about-box">';
                             html += '<div class="about-label">о себе</div>';
-                            html += `<div class="about-text">${u.bio ? escapeHtml(u.bio) : 'Нет информации о себе'}</div>`;
+                            html += `<div class="about-text">${u.bio ? linkifyPlain(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
                             html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
                             html += '</div>';
@@ -669,7 +644,7 @@ function openEditProfile() {
                 <div class="tg-modal-wrapper">
                 <div class="edit-profile-modal">
                     <div class="edit-header">
-                        <button class="cancel-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                        <button class="cancel-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                         
                         <div class="title">Редактировать</div>
                         <button class="done-btn" onclick="saveProfileEdit()">Готово</button>
@@ -737,7 +712,7 @@ function openPersonalColors() {
             let html = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModal('tempModal')">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         
@@ -754,7 +729,7 @@ function openPersonalColors() {
 
                         <div class="tg-section-title">Предложенные цвета</div>
                         <div class="tg-color-grid">
-                            <div class="tg-color-circle" data-color="#007aff" style="background: #007aff;" onclick="updateBannerColor('#007aff')"></div>
+                            <div class="tg-color-circle" data-color="#007aff" style="background: var(--modal-accent);" onclick="updateBannerColor('#007aff')"></div>
                             <div class="tg-color-circle" data-color="#34c759" style="background: #34c759;" onclick="updateBannerColor('#34c759')"></div>
                             <div class="tg-color-circle" data-color="#ff9500" style="background: #ff9500;" onclick="updateBannerColor('#ff9500')"></div>
                             <div class="tg-color-circle" data-color="#ff3b30" style="background: #ff3b30;" onclick="updateBannerColor('#ff3b30')"></div>
@@ -962,18 +937,14 @@ function resetBannerColor() {
 function openPlaylistManager(targetUserId) {
     const userId = targetUserId || currentUser.id;
     const isMyPlaylist = userId == currentUser.id;
-    const returnTo = targetUserId === currentUser.id ? 'openMyProfile' : 'openUserProfileModal';
-    modalReturnTo = returnTo;
-
-
     fetch(`/api/playlist/list?user_id=${userId}`)
         .then(r => r.json())
         .then(songs => {
             let html = `
-                <div style="background: #0f0f0f; border-radius: 20px; overflow: hidden; color: white;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #2c2c2e;">
+                <div style="background: var(--modal-bg); border-radius: 20px; overflow: hidden; color: var(--modal-fg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--modal-border);">
                         <div style="display: flex; align-items: center; gap: 6px; margin-left: -8px;">
-                            <button onclick="closeModal('tempModal')" style="background: none; border: none; color: #8e8e93; font-size: 20px; cursor: pointer; padding: 4px;">
+                            <button onclick="navBack()" style="background: none; border: none; color: var(--modal-fg-muted); font-size: 20px; cursor: pointer; padding: 4px;">
                                 <i class="fas fa-arrow-left"></i>
                             </button>
                             
@@ -986,7 +957,7 @@ function openPlaylistManager(targetUserId) {
 
             if (!songs || songs.length === 0) {
                 html += `
-                    <div style="text-align: center; padding: 60px 20px; color: #8e8e93;">
+                    <div style="text-align: center; padding: 60px 20px; color: var(--modal-fg-muted);">
                         <i class="fas fa-music" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;"></i>
                         <p style="font-size: 16px;">Плейлист пуст</p>
                         ${isMyPlaylist ? '<p style="font-size: 13px; margin-top: 8px; opacity: 0.7;">Добавьте песни, нажав на кнопку ниже</p>' : ''}
@@ -995,20 +966,20 @@ function openPlaylistManager(targetUserId) {
             } else {
                 songs.forEach((song, index) => {
                     html += `
-                        <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #1c1c1e; cursor: pointer; transition: background 0.2s;"
+                        <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--modal-border); cursor: pointer; transition: background 0.2s;"
                              onclick="playSongFromList('${escapeHtml(song.file_path)}', '${escapeHtml(song.title)}', '${escapeHtml(song.artist || 'Неизвестен')}', ${index})"
-                             onmouseover="this.style.background='#1c1c1e'"
+                             onmouseover="this.style.background='var(--modal-btn-bg)'"
                              onmouseout="this.style.background='transparent'">
-                            <div style="width: 44px; height: 44px; border-radius: 8px; background: #2d2d2d; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
-                                <i class="fas fa-music" style="color: #8e8e93; font-size: 18px;"></i>
+                            <div style="width: 44px; height: 44px; border-radius: 8px; background: var(--modal-btn-bg); display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
+                                <i class="fas fa-music" style="color: var(--modal-fg-muted); font-size: 18px;"></i>
                             </div>
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(song.title)}</div>
-                                <div style="font-size: 12px; color: #8e8e93;">${escapeHtml(song.artist || 'Неизвестен')}</div>
+                                <div style="font-size: 12px; color: var(--modal-fg-muted);">${escapeHtml(song.artist || 'Неизвестен')}</div>
                             </div>
-                            <div style="font-size: 12px; color: #8e8e93; margin-left: 8px;">${song.duration ? formatDuration(song.duration) : ''}</div>
+                            <div style="font-size: 12px; color: var(--modal-fg-muted); margin-left: 8px;">${song.duration ? formatDuration(song.duration) : ''}</div>
                             ${isMyPlaylist ? `
-                            <button onclick="event.stopPropagation(); deleteSongFromPlaylist(${song.id})" style="background: none; border: none; color: #ff3b30; margin-left: 8px; cursor: pointer; font-size: 16px;">
+                            <button onclick="event.stopPropagation(); deleteSongFromPlaylist(${song.id})" style="background: none; border: none; color: var(--modal-danger); margin-left: 8px; cursor: pointer; font-size: 16px;">
                                 <i class="fas fa-trash"></i>
                             </button>` : ''}
                         </div>
@@ -1030,22 +1001,22 @@ function openPlaylistManager(targetUserId) {
 
             if (songs && songs.length > 0) {
                 html += `
-                    <div id="playerBar" style="display: none; align-items: center; padding: 12px 16px; background: #1c1c1e; border-top: 1px solid #2c2c2e;">
+                    <div id="playerBar" style="display: none; align-items: center; padding: 12px 16px; background: var(--modal-btn-bg); border-top: 1px solid var(--modal-border);">
                         <div style="width: 40px; height: 40px; border-radius: 6px; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                            <i class="fas fa-music" style="color: white; font-size: 16px;"></i>
+                            <i class="fas fa-music" style="color: var(--modal-fg); font-size: 16px;"></i>
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div id="playerTrackName" style="font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Не выбрано</div>
-                            <div id="playerTrackArtist" style="font-size: 11px; color: #8e8e93;">-</div>
+                            <div id="playerTrackArtist" style="font-size: 11px; color: var(--modal-fg-muted);">-</div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <button onclick="prevTrack()" style="background: none; border: none; color: #8e8e93; cursor: pointer; font-size: 16px;">
+                            <button onclick="prevTrack()" style="background: none; border: none; color: var(--modal-fg-muted); cursor: pointer; font-size: 16px;">
                                 <i class="fas fa-step-backward"></i>
                             </button>
                             <button id="playPauseBtn" onclick="togglePlayPause()" style="background: none; border: none; cursor: pointer;">
-                                <i class="fas fa-play-circle" style="font-size: 32px; color: #007aff;"></i>
+                                <i class="fas fa-play-circle" style="font-size: 32px; color: var(--modal-accent);"></i>
                             </button>
-                            <button onclick="nextTrack()" style="background: none; border: none; color: #8e8e93; cursor: pointer; font-size: 16px;">
+                            <button onclick="nextTrack()" style="background: none; border: none; color: var(--modal-fg-muted); cursor: pointer; font-size: 16px;">
                                 <i class="fas fa-step-forward"></i>
                             </button>
                         </div>
@@ -1065,7 +1036,7 @@ function openPlaylistManager(targetUserId) {
         .catch(err => {
             console.error('Error loading playlist:', err);
             document.getElementById('tempModalBody').innerHTML = `
-                <div style="text-align: center; padding: 60px 20px; color: #8e8e93;">
+                <div style="text-align: center; padding: 60px 20px; color: var(--modal-fg-muted);">
                     <i class="fas fa-exclamation-triangle" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;"></i>
                     <p>Ошибка загрузки плейлиста</p>
                 </div>
@@ -1076,18 +1047,13 @@ function openPlaylistManager(targetUserId) {
 
 
 // ===== ФУНКЦИЯ ИЗМЕНЕНИЯ АВАТАРКИ =====
-function changeAvatar() {
-
-// Запоминаем, что нужно вернуться в профиль
-    modalReturnTo = 'openMyProfile';
-
-    fetch('/api/preloaded_avatars')
+function changeAvatar() {    fetch('/api/preloaded_avatars')
         .then(r => r.json())
         .then(avatars => {
             let html = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModal('tempModal')">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         <div class="title">Изменить фотографию</div>
@@ -1100,7 +1066,7 @@ function changeAvatar() {
                             </button>
                         </div>
 
-                        <div style="font-size: 13px; color: #8e8e93; margin-bottom: 12px; text-align: center;">или выберите из предложенных</div>
+                        <div style="font-size: 13px; color: var(--modal-fg-muted); margin-bottom: 12px; text-align: center;">или выберите из предложенных</div>
 
                         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-height: 400px; overflow-y: auto; padding: 4px;">
             `;
@@ -1128,7 +1094,7 @@ function changeAvatar() {
             let html = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModal('tempModal')">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         <div class="title">Изменить фотографию</div>
@@ -1324,15 +1290,13 @@ function openUserProfileModalFromStory(userId) {
     // ===== БУРГЕР-МЕНЮ ФУНКЦИИ =====
     function openContacts() {
     closeBurgerMenu();
-    modalReturnTo = 'openBurgerMenu';
-
     fetch('/api/get_contacts')
         .then(r => r.json())
         .then(contacts => {
             let html = `
                 <div class="tg-modal-content">
                     <div class="tg-modal-header">
-                        <button class="cancel-btn" onclick="closeModal('tempModal')">
+                        <button class="cancel-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left" style="font-size: 18px;"></i>
                         </button>
                         
@@ -1345,7 +1309,7 @@ function openUserProfileModalFromStory(userId) {
 
             if (!contacts || contacts.length === 0) {
                 html += `
-                    <div style="padding: 40px 20px; text-align: center; color: #8e8e93;">
+                    <div style="padding: 40px 20px; text-align: center; color: var(--modal-fg-muted);">
                         <i class="fas fa-address-book" style="font-size: 48px; opacity: 0.3; margin-bottom: 16px;"></i>
                         <p>Нет контактов</p>
                     </div>
@@ -1384,7 +1348,7 @@ function openUserProfileModalFromStory(userId) {
         })
         .catch(err => {
             console.error('Error loading contacts:', err);
-            showModal('Контакты', '<div style="padding: 40px; text-align: center; color: #8e8e93;">Ошибка загрузки</div>');
+            showModal('Контакты', '<div style="padding: 40px; text-align: center; color: var(--modal-fg-muted);">Ошибка загрузки</div>');
         });
 }
 
@@ -1486,7 +1450,7 @@ function renameContactDialog(userId) {
                     let html = `
                         <div class="tg-modal-content">
                             <div class="tg-modal-header">
-                                <button class="cancel-btn" onclick="closeModal('tempModal')"><i class="fas fa-arrow-left"></i></button>
+                                <button class="cancel-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
                         
                                 <span class="title">Переименовать</span>
                                 <button class="done-btn" onclick="saveRenameContact(${userId})">Готово</button>
@@ -1626,31 +1590,31 @@ function removeContactById(userId) {
         fetch('/api/get_blocked_users')
             .then(r => r.json())
             .then(users => {
-                let h = '<div class="members-list">';
+                let h = '';
                 if (!users || !users.length) {
-                    h += '<div class="member-item">Нет заблокированных пользователей</div>';
+                    h += `<div style="text-align:center;padding:32px 16px;color:var(--modal-fg-muted);">
+                        <i class="fas fa-ban" style="font-size:36px;opacity:.35;display:block;margin-bottom:12px;"></i>
+                        Нет заблокированных пользователей
+                    </div>`;
                 } else {
                     users.forEach(u => {
                         h += `
-                            <div class="member-item" style="display: flex; align-items: center; justify-content: space-between;">
-                                <div style="display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer;" onclick="openUserProfileModal(${u.id})">
-                                    <div class="member-avatar">
-                                        ${u.avatar ? `<img src="/${u.avatar}">` : `<span>${(u.display_name || u.username || '?')[0].toUpperCase()}</span>`}
-                                    </div>
-                                    <div class="member-info">
-                                        <div class="member-name">${escapeHtml(u.display_name || u.username)}</div>
-                                        <div class="member-role">@${escapeHtml(u.username || '')}</div>
-                                    </div>
+                            <div class="tg-row" style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--modal-border);">
+                                <div style="width:44px;height:44px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;overflow:hidden;flex-shrink:0;cursor:pointer;" onclick="openUserProfileModal(${u.id})">
+                                    ${u.avatar ? `<img src="/${u.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `${escapeHtml((u.display_name || u.username || '?')[0].toUpperCase())}`}
                                 </div>
-                                <button class="user-profile-btn user-profile-btn-primary" onclick="event.stopPropagation(); unblockUserAction(${u.id}); closeModal('tempModal');" style="padding: 6px 12px; font-size: 12px;">
-                                    <i class="fas fa-unlock"></i> Разблокировать
+                                <div style="flex:1;min-width:0;cursor:pointer;" onclick="openUserProfileModal(${u.id})">
+                                    <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(u.display_name || u.username)}</div>
+                                    <div style="font-size:12px;color:var(--modal-fg-muted);">@${escapeHtml(u.username || '')}</div>
+                                </div>
+                                <button class="tg-btn tg-btn-secondary" onclick="event.stopPropagation(); unblockUserAction(${u.id}); navBack();" style="padding:7px 14px;font-size:13px;border-radius:10px;flex-shrink:0;">
+                                    Разблокировать
                                 </button>
                             </div>
                         `;
                     });
                 }
-                h += '</div>';
-                showModal('Заблокированные пользователи', h);
+                showModal('Заблокированные', h);
             });
     }
 

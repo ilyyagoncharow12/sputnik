@@ -382,8 +382,6 @@ function refreshFolderChats() {
 // ===== ОТКРЫТИЕ МЕНЕДЖЕРА ПАПОК =====
 function openFolderManager() {
     closeBurgerMenu();
-    modalReturnTo = 'openBurgerMenu';
-
     fetch('/api/folders/get')
         .then(r => r.json())
         .then(data => {

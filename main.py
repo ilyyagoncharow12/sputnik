@@ -3737,7 +3737,7 @@ def api_update_bubble_radius():
         return jsonify({'error': 'Unauthorized'}), 401
 
     data = request.get_json()
-    update_user_settings(session['user_id'], bubble_radius=data.get('bubble_radius', 18))
+    update_user_settings(session['user_id'], bubble_radius=data.get('bubble_radius', 12))
     return jsonify({'success': True})
 
 

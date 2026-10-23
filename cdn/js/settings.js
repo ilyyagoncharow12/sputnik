@@ -64,15 +64,13 @@
     // ===== НАСТРОЙКИ КОНФИДЕНЦИАЛЬНОСТИ =====
 function openPrivacy() {
     closeBurgerMenu();
-    modalReturnTo = 'openBurgerMenu';
-
     fetch('/api/get_privacy')
         .then(r => r.json())
         .then(settings => {
             let html = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModal('tempModal')">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         
@@ -111,10 +109,10 @@ function openPrivacy() {
                         </select>
 
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="tg-action-btn" onclick="savePrivacySettings()" style="flex: 1; background: #007aff; color: white;">
+                            <button class="tg-action-btn" onclick="savePrivacySettings()" style="flex: 1; background: var(--modal-accent); color: var(--modal-fg);">
                                 <i class="fas fa-save"></i> Сохранить
                             </button>
-                            <button class="tg-action-btn" onclick="closeModal('tempModal')" style="flex: 1; background: #1c1c1e; color: #8e8e93;">
+                            <button class="tg-action-btn" onclick="navBack()" style="flex: 1; background: var(--modal-btn-bg); color: var(--modal-fg-muted);">
                                 <i class="fas fa-times"></i> Отмена
                             </button>
                         </div>
@@ -161,15 +159,13 @@ function savePrivacySettings() {
 
     function openAppearance() {
     closeBurgerMenu();
-    modalReturnTo = 'openBurgerMenu';
-
     fetch('/api/get_settings')
         .then(r => r.json())
         .then(s => {
             // Получаем текущие настройки
-            const myColor = s.my_message_color || '#667eea';
-            const theirColor = s.their_message_color || '#f3f4f6';
-            const radius = s.bubble_radius || 18;
+            const myColor = s.my_message_color || '#eeffde';
+            const theirColor = s.their_message_color || '#ffffff';
+            const radius = s.bubble_radius || 12;
             const fontSize = s.font_size || 14;
             const fontFamily = s.font_family || "'Unbounded', cursive";
             const wallpaper = s.wallpaper_image || '';
@@ -178,7 +174,7 @@ function savePrivacySettings() {
             let html = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModal('tempModal')">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         
@@ -188,11 +184,11 @@ function savePrivacySettings() {
                     <div class="tg-modal-body">
                         <!-- ПРЕДПРОСМОТР -->
                         <div class="appearance-preview" id="appearancePreview">
-                            <div class="preview-msg theirs" style="background: ${theirColor}; color: ${theirColor === '#f3f4f6' ? '#1e293b' : 'white'}; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
+                            <div class="preview-msg theirs" style="background: ${theirColor}; color: ${['#f3f4f6', '#ffffff'].includes(theirColor) ? '#17212b' : 'white'}; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
                                 <span>Привет! Как дела?</span>
                                 <span class="label">Собеседник</span>
                             </div>
-                            <div class="preview-msg mine" style="background: ${myColor}; color: white; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
+                            <div class="preview-msg mine" style="background: ${myColor}; color: var(--modal-fg); border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
                                 <span>Всё отлично! 👍</span>
                                 <span class="label">Вы</span>
                             </div>
@@ -206,13 +202,14 @@ function savePrivacySettings() {
                         <input type="color" id="theirMessageColor" value="${theirColor}" onchange="updateAppearancePreview()" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #2c2c2e; cursor: pointer; padding: 0;">
 
                         <div class="tg-section-title">Радиус пузырей: <span id="radiusValue">${radius}px</span></div>
-                        <input type="range" id="bubbleRadius" min="0" max="30" value="${radius}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: #007aff;">
+                        <input type="range" id="bubbleRadius" min="0" max="30" value="${radius}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: var(--modal-accent);">
 
                         <div class="tg-section-title">Размер шрифта: <span id="fontSizeValue">${fontSize}px</span></div>
-                        <input type="range" id="fontSize" min="12" max="20" value="${fontSize}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: #007aff;">
+                        <input type="range" id="fontSize" min="12" max="20" value="${fontSize}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: var(--modal-accent);">
 
                         <div class="tg-section-title">Шрифт</div>
-                        <select id="fontFamily" onchange="updateAppearancePreview()" style="width: 100%; padding: 12px; background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 12px; color: white; font-size: 15px; font-family: var(--font-family);">
+                        <select id="fontFamily" onchange="updateAppearancePreview()" style="width: 100%; padding: 12px; background: var(--modal-btn-bg); border: 1px solid var(--modal-border); border-radius: 12px; color: var(--modal-fg); font-size: 15px; font-family: var(--font-family);">
+                            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" ${fontFamily.startsWith('-apple-system') ? 'selected' : ''}>Системный (как в Telegram)</option>
                             <option value="'Unbounded', cursive" ${fontFamily.includes('Unbounded') ? 'selected' : ''}>Unbounded</option>
                             <option value="'Roboto', sans-serif" ${fontFamily.includes('Roboto') ? 'selected' : ''}>Roboto</option>
                             <option value="'Inter', sans-serif" ${fontFamily.includes('Inter') ? 'selected' : ''}>Inter</option>
@@ -233,7 +230,7 @@ function savePrivacySettings() {
                         ` : ''}
 
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="tg-action-btn" onclick="saveAppearanceSettings()" style="flex: 1; background: #007aff; color: white;">
+                            <button class="tg-action-btn" onclick="saveAppearanceSettings()" style="flex: 1; background: var(--modal-accent); color: var(--modal-fg);">
                                 <i class="fas fa-save"></i> Сохранить
                             </button>
                             <button class="tg-reset-btn" onclick="resetAllAppearance()" style="flex: 1;">
@@ -333,20 +330,20 @@ function saveAppearanceSettings() {
     });
 
     // Применяем изменения
-    document.documentElement.style.setProperty('--primary-color', myColor);
+    sputnikApplyBubbleColor(myColor);
     document.documentElement.style.setProperty('--bubble-radius', radius + 'px');
     document.body.style.fontSize = fontSize + 'px';
     document.body.style.fontFamily = fontFamily;
 
-    // Обновляем стиль сообщений в чате
+    // Обновляем стиль сообщений в чате (убираем инлайн — рулят CSS-переменные)
     document.querySelectorAll('.message.outgoing .message-bubble').forEach(el => {
-        el.style.background = myColor;
-        el.style.color = 'white';
+        el.style.background = '';
+        el.style.color = '';
     });
 
     document.querySelectorAll('.message.incoming .message-bubble').forEach(el => {
-        el.style.background = theirColor;
-        el.style.color = theirColor === '#f3f4f6' ? '#1e293b' : 'white';
+        el.style.background = '';
+        el.style.color = '';
     });
 
     closeModal('tempModal');
@@ -383,7 +380,7 @@ function openSessions() {
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                                 <span style="font-weight:600;font-size:15px;color:var(--text-primary);">${device}</span>
-                                ${isCurrent ? '<span style="font-size:11px;background:var(--primary-gradient, linear-gradient(135deg,#667eea,#764ba2));color:white;padding:2px 8px;border-radius:6px;font-weight:600;">Текущая</span>' : ''}
+                                ${isCurrent ? '<span style="font-size:11px;background:var(--primary-gradient, linear-gradient(135deg,#667eea,#764ba2));color:var(--modal-fg);padding:2px 8px;border-radius:6px;font-weight:600;">Текущая</span>' : ''}
                             </div>
                             <div style="font-size:13px;color:var(--text-muted);line-height:1.6;">
                                 <div>IP: ${ip}${location ? ' · ' + location : ''}</div>
@@ -495,9 +492,9 @@ function resetAllAppearance() {
     if (!confirm('Сбросить все настройки оформления до стандартных?')) return;
 
     const defaults = {
-        my_message_color: '#667eea',
-        their_message_color: '#f3f4f6',
-        bubble_radius: 18,
+        my_message_color: '#eeffde',
+        their_message_color: '#ffffff',
+        bubble_radius: 12,
         font_size: 14,
         font_family: "'Unbounded', cursive",
         wallpaper: ''
@@ -539,7 +536,7 @@ function resetAllAppearance() {
     });
 
     // Применяем
-    document.documentElement.style.setProperty('--primary-color', defaults.my_message_color);
+    sputnikApplyBubbleColor(defaults.my_message_color);
     document.documentElement.style.setProperty('--bubble-radius', defaults.bubble_radius + 'px');
     document.body.style.fontSize = defaults.font_size + 'px';
     document.body.style.fontFamily = defaults.font_family;
@@ -732,6 +729,7 @@ function resetAllAppearance() {
     // ===== ТЕМНАЯ ТЕМА =====
     function toggleNightMode() {
         const isDark = document.body.classList.toggle('dark');
+        sputnikApplyBubbleColor(window.__myBubbleColor || '');
         const icon = document.getElementById('nightModeIcon');
         const text = document.getElementById('nightModeText');
         const toggle = document.getElementById('nightModeToggle');

@@ -213,41 +213,74 @@
         }
 
         :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --primary-color: #667eea;
-            --primary-dark: #5a67d8;
+            /* ===== ПАЛИТРА TELEGRAM DAY (светлая тема) ===== */
+            --tg-accent: #3390ec;            /* акцент TG: ссылки, фокус, typing */
+            --tg-sel: #3390ec;               /* выделенный (активный) чат */
+            --primary-gradient: #3390ec;     /* сплошной TG-синий (кнопки, табы) */
+            --primary-color: #eeffde;        /* «мои» сообщения = TG-зелёный Day */
+            --out-fg: #17212b;               /* текст на исходящем пузыре */
+            --primary-dark: #2b7fd0;
             --success-color: #10b981;
             --danger-color: #ef4444;
             --warning-color: #f59e0b;
-            --info-color: #3b82f6;
+            --info-color: #3390ec;
             --bg-primary: #ffffff;
-            --bg-secondary: #f8fafc;
-            --bg-tertiary: #f1f5f9;
-            --bg-hover: #e2e8f0;
-            --text-primary: #1e293b;
-            --text-secondary: #64748b;
-            --text-muted: #94a3b8;
-            --border-color: #e2e8f0;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f4f4f5;
+            --bg-hover: #f1f1f4;
+            --text-primary: #000000;
+            --text-secondary: #707579;
+            --text-muted: #a2acb4;
+            --border-color: #e4e7ea;
             --sidebar-width: 380px;
             --font-family: 'Unbounded', cursive;
-            --bubble-radius: 18px;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --bubble-radius: 12px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.06);
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.12);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.16);
             --transition-fast: 0.15s ease;
             --transition-normal: 0.25s ease;
+            /* Модалки: Day — белые карточки */
+            --modal-bg: #ffffff;
+            --modal-fg: #17212b;
+            --modal-fg-muted: #707579;
+            --modal-border: #e4e7ea;
+            --modal-btn-bg: #f1f1f4;
+            --modal-btn-hover: #e4e7ea;
+            --modal-input-bg: #ffffff;
+            --modal-input-border: #e2e8f0;
+            --modal-accent: #3390ec;
+            --modal-danger: #e53935;
         }
 
+        /* ===== ПАЛИТРА TELEGRAM NIGHT (тёмная тема) ===== */
         body.dark {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-tertiary: #334155;
-            --bg-hover: #475569;
-            --text-primary: #f1f5f9;
-            --text-secondary: #cbd5e1;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
+            --tg-accent: #62a8e8;
+            --tg-sel: #2b5278;
+            --primary-gradient: #5288c1;
+            --primary-color: #2b5278;        /* «мои» сообщения = TG-синий Night */
+            --out-fg: #ffffff;
+            --primary-dark: #4174a8;
+            --bg-primary: #17212b;
+            --bg-secondary: #17212b;
+            --bg-tertiary: #242f3d;
+            --bg-hover: #202b36;
+            --text-primary: #ffffff;
+            --text-secondary: #708499;
+            --text-muted: #5b6a79;
+            --border-color: #101921;
+            /* Модалки: Night — тёмные карточки (как раньше) */
+            --modal-bg: #0f0f0f;
+            --modal-fg: #ffffff;
+            --modal-fg-muted: #8e8e93;
+            --modal-border: #2c2c2e;
+            --modal-btn-bg: #1c1c1e;
+            --modal-btn-hover: #2c2c2e;
+            --modal-input-bg: #1c1c1e;
+            --modal-input-border: #2c2c2e;
+            --modal-accent: #62a8e8;
+            --modal-danger: #ff3b30;
         }
 
         body {

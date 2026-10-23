@@ -6,7 +6,7 @@
    ===================================================================== */
 
 :root {
-    --comp-accent: var(--primary-color, #667eea);
+    --comp-accent: var(--primary-color, #3390ec);
     --comp-glass: rgba(255, 255, 255, 0.82);
     --comp-glass-dark: rgba(28, 28, 30, 0.86);
     --comp-sheet: var(--bg-secondary, #fff);
@@ -1340,21 +1340,28 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
 .pbc-note i { color: #ffc43d; margin-top: 2px; }
 .pbc-note b { color: var(--text-primary); }
 
-/* Базовые размеры модалки (вне свои стили, чтобы inline не перебивали) */
+/* Базовые размеры модалок — единый размер (v0.64.0):
+   как в Telegram Desktop — узкая колонка ~400px и почти вся высота. */
 #tempModalBody {
-    width: 90%;
-    max-width: 420px;
-    max-height: 85vh;
+    width: 92%;
+    max-width: 400px;
+    max-height: 88vh;
     overflow-y: auto;
     border-radius: 24px;
     animation: modalSlideIn 0.3s ease;
 }
 
 /* =====================================================================
-   8b. МОДАЛКА «ДОБАВИТЬ АККАУНТ» — простая форма (ПК и телефон)
+   8b. МОДАЛКА «ДОБАВИТЬ АККАУНТ» — карточка как на странице входа
    ===================================================================== */
 
-.addacct { color: #fff; }
+/* Белая «auth-карточка» внутри тёмной tg-модалки. */
+.addacct {
+    background: #ffffff;
+    color: #1e293b;
+    border-radius: 20px;
+    padding: 20px 18px 18px;
+}
 
 /* Окно добавления аккаунта на телефоне чуть выше обычного — иначе
    форма не помещается и приходится прокручивать до кнопки. */
@@ -1363,92 +1370,105 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
 .addacct-hint {
     font-size: 13px;
     line-height: 1.45;
-    color: #8a8a92;
-    margin-bottom: 18px;
+    color: #64748b;
+    margin-bottom: 16px;
 }
 
-.addacct .profile-field { margin-bottom: 16px; }
+.addacct .profile-field { margin-bottom: 14px; }
 .addacct .profile-field label {
     display: block;
-    font-size: 12px;
-    color: #8a8a92;
-    margin-bottom: 7px;
+    font-size: 13px;
+    color: #1e293b;
+    margin-bottom: 6px;
     font-weight: 600;
 }
 
-/* --- Страна: нативный select, не рисуем свой выпадающий список --- */
+/* Поля — как на странице входа: белый фон, рамка 2px, radius 16. */
+.addacct .modal-input {
+    width: 100%;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #1e293b;
+    transition: border-color .2s, box-shadow .2s;
+}
+
+.addacct .modal-input::placeholder { color: #94a3b8; }
+
+.addacct .modal-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
+}
+
+/* --- Страна: нативный select --- */
 .addacct select#addCountrySel {
     appearance: none;
     -webkit-appearance: none;
-    background: #232323;
-    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%238a8a92' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background: #fff;
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     background-size: 11px;
-    padding: 0 38px 0 14px;
+    padding: 12px 38px 12px 14px;
     max-height: 220px;
+    cursor: pointer;
 }
 
 .addacct select#addCountrySel option {
-    background: #232323;
-    color: #fff;
+    background: #fff;
+    color: #1e293b;
 }
 
 .addacct select#addCountrySel:focus {
-    border-color: #0a84ff;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
 }
 
-/* --- Полный номер --- */
-.aa-full-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 9px;
-    font-size: 12.5px;
-}
-
-.aa-full-label { color: #8a8a92; }
-
-.aa-full-num {
-    color: #fff;
-    font-weight: 600;
-    letter-spacing: .2px;
-    word-break: break-all;
-}
-
+/* --- Подсказка под номером --- */
 .aa-hint {
     margin-top: 6px;
     font-size: 12px;
     line-height: 1.4;
 }
 
-/* --- Переключатель пароль / код --- */
+/* --- Переключатель пароль / код — как .login-modes на странице входа --- */
 .aa-seg {
     display: flex;
     gap: 6px;
-    background: #1c1c1e;
-    border-radius: 11px;
+    background: #eef1f8;
+    border-radius: 14px;
     padding: 4px;
+    margin-bottom: 16px;
 }
 
 .aa-seg-btn {
     flex: 1;
-    padding: 9px 8px;
+    padding: 11px 6px;
     border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: #8a8a92;
+    border-radius: 11px;
+    background: none;
+    color: #64748b;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background .15s, color .15s;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    -webkit-appearance: none;
+    touch-action: manipulation;
 }
 
 .aa-seg-btn.on {
-    background: #2f2f33;
-    color: #fff;
+    background: #fff;
+    color: #6d28d9;
+    box-shadow: 0 4px 14px rgba(51, 65, 85, 0.14);
+    transform: scale(1.02);
 }
 
+.aa-seg-btn:active { transform: scale(0.96); }
+
+/* --- Код: строка с кнопкой (как .code-row / .btn-code на входе) --- */
 .aa-code-row {
     display: flex;
     gap: 8px;
@@ -1459,90 +1479,98 @@ body.dark .vm-ring { box-shadow: 0 0 0 3px rgba(255, 255, 255, .2); }
     flex: 1;
     min-width: 0;
     text-align: center;
-    letter-spacing: 3px;
-    font-size: 17px;
+    letter-spacing: 6px;
+    font-size: 18px;
+    font-weight: 700;
 }
 
 .aa-code-send {
     flex: 0 0 auto;
     padding: 0 14px;
-    border: 1.5px solid #2f2f33;
-    border-radius: 12px;
-    background: #232323;
-    color: #0a84ff;
+    min-height: 48px;
+    border: none;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
+    transition: all 0.2s;
 }
 
-.aa-code-send:disabled { opacity: .55; cursor: default; }
+.aa-code-send:active { opacity: 0.85; transform: scale(0.98); }
+.aa-code-send:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .aa-code-status {
     margin-top: 7px;
     font-size: 12px;
     line-height: 1.4;
+    color: #64748b;
 }
 
-/* --- Кнопки --- */
+/* --- Кнопки (как .btn на странице входа) --- */
 .addacct-actions {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
 .aa-btn {
     flex: 1;
+    min-height: 48px;
     padding: 13px 14px;
-    border-radius: 12px;
+    border-radius: 16px;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     border: none;
-    transition: filter .15s, background .15s;
+    transition: all 0.2s;
+    -webkit-appearance: none;
+    touch-action: manipulation;
 }
 
-.aa-btn:active { filter: brightness(.9); }
+.aa-btn:active { opacity: 0.85; transform: scale(0.98); }
 
 .aa-btn-ghost {
-    background: #232323;
-    color: #fff;
+    background: #f1f5f9;
+    color: #1e293b;
 }
 
 .aa-btn-primary {
-    background: #0a84ff;
+    background: linear-gradient(135deg, #667eea, #764ba2);
     color: #fff;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 /* На телефоне поля идут компактнее, чтобы вся форма помещалась
    без прокрутки на маленьком экране. */
 @media (max-width: 768px) {
-    .addacct-hint { margin-bottom: 14px; }
-    .addacct .profile-field { margin-bottom: 13px; }
-    .addacct-actions { margin-top: 16px; }
+    .addacct { padding: 16px 14px 14px; border-radius: 16px; }
+    .addacct-hint { margin-bottom: 12px; }
+    .addacct .profile-field { margin-bottom: 12px; }
+    .addacct-actions { margin-top: 14px; }
     .aa-code-send { padding: 0 10px; font-size: 12.5px; }
-    .aa-code { letter-spacing: 1px; font-size: 16px; }
+    .aa-code { letter-spacing: 4px; font-size: 17px; }
 }
 
 @media (max-width: 420px) {
     .addacct-hint { display: none; }
     .aa-code-status { display: none; }
-    .addacct .profile-field { margin-bottom: 11px; }
+    .addacct .profile-field { margin-bottom: 10px; }
     .addacct .modal-input,
-    .addacct select#addCountrySel { padding: 9px 14px; font-size: 15px; }
+    .addacct select#addCountrySel { padding: 10px 14px; font-size: 15px; }
     .addacct select#addCountrySel { background-position: right 12px center; }
     .addacct-actions { margin-top: 12px; }
     .aa-btn { padding: 12px 14px; }
-    .aa-seg-btn { padding: 8px 6px; }
-    .aa-full-row { margin-top: 6px; }
-    .aa-hint { margin-top: 4px; }
+    .aa-seg-btn { padding: 9px 6px; }
 }
 
 @media (max-width: 360px) {
-    .addacct .profile-field { margin-bottom: 9px; }
+    .addacct .profile-field { margin-bottom: 8px; }
     .addacct .modal-input,
-    .addacct select#addCountrySel { padding: 8px 12px; }
-    .aa-seg-btn { padding: 7px 4px; font-size: 12.5px; }
+    .addacct select#addCountrySel { padding: 9px 12px; }
+    .aa-seg-btn { padding: 8px 4px; font-size: 12.5px; }
     .addacct-actions { margin-top: 10px; }
 }
 

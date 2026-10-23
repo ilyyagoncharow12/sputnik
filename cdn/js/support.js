@@ -47,7 +47,7 @@ Support.pick = function (categoryId) {
     if (!el) return;
     el.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-            <button onclick="renderSupportHome()" style="background:none;border:none;color:#8e8e93;font-size:18px;cursor:pointer;">
+            <button onclick="renderSupportHome()" style="background:none;border:none;color:var(--modal-fg-muted);font-size:18px;cursor:pointer;">
                 <i class="fas fa-arrow-left"></i>
             </button>
             <div style="font-weight:600;">${cat.name}</div>
@@ -81,10 +81,10 @@ Support.renderAttach = function () {
     const el = document.getElementById('supportAttachList');
     if (!el) return;
     el.innerHTML = Support.draft.attachments.map((a, i) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:#1c1c1e;border-radius:10px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--modal-btn-bg);border-radius:10px;margin-bottom:6px;">
             <img src="${a.url}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;">
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.name)}</span>
-            <button onclick="Support.draft.attachments.splice(${i},1);Support.renderAttach()" style="background:none;border:none;color:#ff3b30;cursor:pointer;"><i class="fas fa-times"></i></button>
+            <button onclick="Support.draft.attachments.splice(${i},1);Support.renderAttach()" style="background:none;border:none;color:var(--modal-danger);cursor:pointer;"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
 };
@@ -138,10 +138,10 @@ async function loadSupportTickets() {
         const statusLabel = { open: 'Ожидает', answered: 'Есть ответ', closed: 'Закрыт' }[t.status] || t.status;
         const statusColor = { open: '#ff9500', answered: '#34c759', closed: '#8e8e93' }[t.status] || '#8e8e93';
         return `
-            <div onclick="openSupportTicket(${t.id})" class="tg-row" style="border-bottom:1px solid #2c2c2e;">
+            <div onclick="openSupportTicket(${t.id})" class="tg-row" style="border-bottom:1px solid var(--modal-border);">
                 <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;">${escapeHtml(t.subject)}</div>
-                    <div style="font-size:12px;color:#8e8e93;">${escapeHtml(t.category)} · ${new Date(t.created_at).toLocaleString('ru-RU')}</div>
+                    <div style="font-size:12px;color:var(--modal-fg-muted);">${escapeHtml(t.category)} · ${new Date(t.created_at).toLocaleString('ru-RU')}</div>
                 </div>
                 <span style="color:${statusColor};font-size:12px;font-weight:600;">${statusLabel}</span>
             </div>

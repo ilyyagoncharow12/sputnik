@@ -690,9 +690,9 @@ function openShareStoryModal(story) {
     const chats = typeof chatsData !== 'undefined' ? chatsData : [];
 
     let listHtml = '';
-    listHtml += '<div style="font-size:12px; color:#8e8e93; margin: 12px 0 8px; font-weight:600;">ЧАТЫ</div>';
+    listHtml += '<div style="font-size:12px; color:var(--modal-fg-muted); margin: 12px 0 8px; font-weight:600;">ЧАТЫ</div>';
     if (chats.length === 0 && groups.length === 0 && channels.length === 0) {
-        listHtml += '<div style="padding:16px; text-align:center; color:#8e8e93; font-size:13px;">Нет доступных получателей</div>';
+        listHtml += '<div style="padding:16px; text-align:center; color:var(--modal-fg-muted); font-size:13px;">Нет доступных получателей</div>';
     }
 
     chats.forEach(chat => {
@@ -700,8 +700,8 @@ function openShareStoryModal(story) {
             listHtml += `
                 <div style="display:flex; align-items:center; gap:12px; padding:10px; cursor:pointer; border-radius:12px;"
                      onclick="shareStoryTo(${story.id}, ${chat.other_user_id}, 'chat')"
-                     onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:16px;overflow:hidden;">
+                     onmouseover="this.style.background='var(--modal-btn-bg)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:var(--modal-fg);font-weight:600;font-size:16px;overflow:hidden;">
                         ${chat.avatar ? `<img src="/${chat.avatar}" style="width:100%;height:100%;object-fit:cover;">` : (chat.name || '?')[0].toUpperCase()}
                     </div>
                     <div style="flex:1;font-size:14px;font-weight:500;">${escapeHtml(chat.name)}</div>
@@ -710,13 +710,13 @@ function openShareStoryModal(story) {
     });
 
     if (groups.length > 0) {
-        listHtml += '<div style="font-size:12px; color:#8e8e93; margin:12px 0 8px; font-weight:600;">ГРУППЫ</div>';
+        listHtml += '<div style="font-size:12px; color:var(--modal-fg-muted); margin:12px 0 8px; font-weight:600;">ГРУППЫ</div>';
         groups.forEach(g => {
             listHtml += `
                 <div style="display:flex; align-items:center; gap:12px; padding:10px; cursor:pointer; border-radius:12px;"
                      onclick="shareStoryTo(${story.id}, ${g.id}, 'group')"
-                     onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:white;font-weight:600;">
+                     onmouseover="this.style.background='var(--modal-btn-bg)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:var(--modal-fg);font-weight:600;">
                         ${(g.name || '?')[0].toUpperCase()}
                     </div>
                     <div style="flex:1;font-size:14px;font-weight:500;">${escapeHtml(g.name)}</div>
@@ -725,13 +725,13 @@ function openShareStoryModal(story) {
     }
 
     if (channels.length > 0) {
-        listHtml += '<div style="font-size:12px; color:#8e8e93; margin:12px 0 8px; font-weight:600;">КАНАЛЫ</div>';
+        listHtml += '<div style="font-size:12px; color:var(--modal-fg-muted); margin:12px 0 8px; font-weight:600;">КАНАЛЫ</div>';
         channels.forEach(ch => {
             listHtml += `
                 <div style="display:flex; align-items:center; gap:12px; padding:10px; cursor:pointer; border-radius:12px;"
                      onclick="shareStoryTo(${story.id}, ${ch.id}, 'channel')"
-                     onmouseover="this.style.background='#1c1c1e'" onmouseout="this.style.background='transparent'">
-                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:white;font-weight:600;">
+                     onmouseover="this.style.background='var(--modal-btn-bg)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:var(--modal-fg);font-weight:600;">
                         ${(ch.name || '?')[0].toUpperCase()}
                     </div>
                     <div style="flex:1;font-size:14px;font-weight:500;">${escapeHtml(ch.name)}</div>
@@ -814,7 +814,7 @@ function shareStoryTo(storyId, targetId, targetType) {
 
                     <div class="story-stats-cards">
                         <div class="story-stats-card">
-                            <div class="num" style="color: #007aff;">${stats.total_views || 0}</div>
+                            <div class="num" style="color: var(--modal-accent);">${stats.total_views || 0}</div>
                             <div class="lbl">👁️ Просмотры</div>
                         </div>
                         <div class="story-stats-card">
@@ -834,7 +834,7 @@ function shareStoryTo(storyId, targetId, targetType) {
 
             // Просмотры
             html += `<div class="story-stats-section">
-                <div class="story-stats-section-title" style="color: #007aff;">
+                <div class="story-stats-section-title" style="color: var(--modal-accent);">
                     <i class="fas fa-eye"></i> Просмотры (${stats.total_views || 0})
                 </div>`;
 

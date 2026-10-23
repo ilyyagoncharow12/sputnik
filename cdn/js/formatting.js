@@ -40,13 +40,26 @@ function fmtEsc(s) {
                     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/* Автоссылки: только http/https, кавычки и пробелы не внутри */
+/* Автоссылки: http/https и bare www. */
 function fmtLinkify(escaped) {
-    return escaped.replace(/(^|[\s(])(https?:\/\/[^\s<>"')\]]+)/g, (m, pre, url) => {
-        const clean = url.replace(/[.,;:!?]+$/, '');
-        const tail = url.slice(clean.length);
-        return pre + `<a href="${clean}" target="_blank" rel="noopener noreferrer nofollow">${clean}</a>` + tail;
-    });
+    return escaped
+        .replace(/(^|[\s(])(https?:\/\/[^\s<>"')\]]+)/g, (m, pre, url) => {
+            const clean = url.replace(/[.,;:!?]+$/, '');
+            const tail = url.slice(clean.length);
+            return pre + `<a href="${clean}" target="_blank" rel="noopener noreferrer nofollow">${clean}</a>` + tail;
+        })
+        .replace(/(^|[\s(])(www\.[^\s<>"')\]]+)/g, (m, pre, url) => {
+            const clean = url.replace(/[.,;:!?]+$/, '');
+            const tail = url.slice(clean.length);
+            return pre + `<a href="https://${clean}" target="_blank" rel="noopener noreferrer nofollow">${clean}</a>` + tail;
+        });
+}
+
+/* Экранированный plain-текст → HTML с кликабельными ссылками
+   (для bio/описаний, где нет собственной разметки) */
+function linkifyPlain(raw) {
+    if (raw === null || raw === undefined) return '';
+    return fmtLinkify(fmtEsc(String(raw)));
 }
 
 /* Ручные markdown-маркеры -> теги (в уже экранированной строке) */

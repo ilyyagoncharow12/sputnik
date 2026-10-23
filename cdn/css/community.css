@@ -63,7 +63,7 @@
     font-family: inherit;
 }
 .comm-field:focus {
-    border-color: #667eea;
+    border-color: var(--tg-accent);
 }
 .comm-label {
     display: block;
@@ -138,7 +138,7 @@
     opacity: .85;
 }
 .comm-btn.primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--primary-gradient);
 }
 .comm-btn.success {
     background: rgba(16,185,129,.2);
@@ -197,7 +197,7 @@
     transition: .2s;
 }
 .comm-switch input:checked + .slider {
-    background: #667eea;
+    background: var(--tg-accent);
 }
 .comm-switch input:checked + .slider:before {
     transform: translateX(18px);

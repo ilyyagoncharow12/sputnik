@@ -44,128 +44,92 @@
     const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
 
-    // ===== СИСТЕМА МАРШРУТИЗАЦИИ МОДАЛЬНЫХ ОКОН =====
+    // ===== СИСТЕМА ИСТОРИИ НАВИГАЦИИ МОДАЛЬНЫХ ОКОН (v0.64.0) =====
+    // Стек экранов: каждая новая модалка кладёт предыдущий экран в стек,
+    // кнопка «назад» (стрелка в шапке) возвращает на шаг назад, а не
+    // закрывает всё. Полное закрытие (крестик/оверлей/«Закрыть») чистит стек.
 
-let modalHistory = [];
-let modalReturnTo = null;
+    let navStack = [];        // [{html}] — предыдущие экраны tempModal
+    let navSkipNext = null;   // html, который восстанавливаем — не пушить его
 
-// Обертка для открытия модального окна с запоминанием маршрута
-function openModalWithRoute(modalId, returnTo) {
-    // Запоминаем, откуда пришли
-    modalReturnTo = returnTo || null;
-    // Запоминаем в историю
-    if (returnTo) {
-        modalHistory.push(returnTo);
-    }
-    openModal(modalId);
-}
-
-// Обертка для закрытия с возвратом по маршруту
-function closeModalWithRoute() {
-    closeModal('tempModal');
-
-    // Если есть returnTo — открываем его
-    if (modalReturnTo) {
-        setTimeout(() => {
-            const func = modalReturnTo;
-            modalReturnTo = null;
-
-            // Если это строка с именем функции — вызываем
-            if (typeof func === 'function') {
-                func();
-            } else if (typeof func === 'string') {
-                // По имени функции в глобальном объекте window
-                if (window[func] && typeof window[func] === 'function') {
-                    window[func]();
+    // Автосохранение: ловим ЛЮБУЮ замену содержимого #tempModalBody
+    // (showModal, прямые innerHTML=... в profiles.js и т.д.)
+    (function installNavObserver() {
+        const boot = () => {
+            const body = document.getElementById('tempModalBody');
+            if (!body || body.__navObserved) return;
+            body.__navObserved = true;
+            let prev = body.innerHTML;
+            new MutationObserver(() => {
+                const now = body.innerHTML;
+                if (now === prev) return;
+                const modal = document.getElementById('tempModal');
+                const isOpen = modal && modal.classList.contains('active');
+                if (isOpen && prev && prev.trim()) {
+                    if (navSkipNext !== null && prev === navSkipNext) {
+                        // это восстановление из стека — не пушим
+                    } else {
+                        navStack.push(prev);
+                        if (navStack.length > 20) navStack.shift();
+                    }
                 }
-            }
-        }, 300);
-    } else if (modalHistory.length > 0) {
-        // Если есть история — извлекаем последний
-        const lastRoute = modalHistory.pop();
-        setTimeout(() => {
-            if (typeof lastRoute === 'function') {
-                lastRoute();
-            } else if (typeof lastRoute === 'string') {
-                if (window[lastRoute] && typeof window[lastRoute] === 'function') {
-                    window[lastRoute]();
-                }
-            }
-        }, 300);
-    }
-}
+                if (navSkipNext !== null && now === navSkipNext) navSkipNext = null;
+                prev = now;
+            }).observe(body, { childList: true, subtree: true });
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+        else boot();
+    })();
 
-// Модифицированная функция showModal для поддержки маршрутизации
-function showModalWithRoute(title, content, returnTo) {
-    modalReturnTo = returnTo || null;
-    if (returnTo) {
-        modalHistory.push(returnTo);
-    }
-
-    // Оригинальная showModal (единый TG-стиль через классы)
-    const modalBody = document.getElementById('tempModalBody');
-    if (modalBody) {
-        modalBody.innerHTML = `
-            <div class="tg-modal-wrapper">
-                <div class="tg-modal-header">
-                    <button class="close-btn" onclick="closeModalWithRoute()">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <div class="title">${title || ''}</div>
-                    <div style="width: 24px;"></div>
-                </div>
-                <div class="tg-modal-body">
-                    ${content}
-                </div>
-            </div>
-        `;
-    }
-    openModal('tempModal');
-}
-
-// Замена стандартной closeModal на маршрутизированную
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
+    // Кнопка «назад» в шапке модалки
+    function navBack() {
+        const modal = document.getElementById('tempModal');
+        const body = document.getElementById('tempModalBody');
+        if (!modal || !body) return;
+        if (navStack.length > 0) {
+            const html = navStack.pop();
+            navSkipNext = html;
+            body.innerHTML = html;
+            modal.classList.add('active');
+        } else {
+            navStack = [];
+            modal.classList.remove('active');
+        }
     }
 
-    // Если это tempModal и есть returnTo — возвращаемся
-    if (modalId === 'tempModal' && modalReturnTo) {
-        setTimeout(() => {
-            const func = modalReturnTo;
-            modalReturnTo = null;
-            if (typeof func === 'function') {
-                func();
-            } else if (typeof func === 'string') {
-                if (window[func] && typeof window[func] === 'function') {
-                    window[func]();
-                }
-            }
-        }, 300);
+    // Полное закрытие модалки (с очисткой истории)
+    function closeTempModal() {
+        navStack = [];
+        navSkipNext = null;
+        const modal = document.getElementById('tempModal');
+        if (modal) modal.classList.remove('active');
     }
-}
+
+    // Совместимость: старое имя = «назад»
+    function closeModalWithRoute() {
+        navBack();
+    }
+
+    function openModalWithRoute(modalId, returnTo) {
+        openModal(modalId);
+    }
 
 
-// ===== БУРГЕР-МЕНЮ =====
-function openBurgerMenu() {
-    document.getElementById('burgerMenu').classList.add('active');
-    document.getElementById('burgerOverlay').classList.add('active');
-    modalReturnTo = null; // Сбрасываем, так как это корневой элемент
-}
+    // ===== БУРГЕР-МЕНЮ =====
+    function openBurgerMenu() {
+        document.getElementById('burgerMenu').classList.add('active');
+        document.getElementById('burgerOverlay').classList.add('active');
+    }
 
-function closeBurgerMenu() {
-    document.getElementById('burgerMenu').classList.remove('active');
-    document.getElementById('burgerOverlay').classList.remove('active');
-}
+    function closeBurgerMenu() {
+        document.getElementById('burgerMenu').classList.remove('active');
+        document.getElementById('burgerOverlay').classList.remove('active');
+    }
 
-// В обработчике клика по overlay — возврат в корень
-document.getElementById('burgerOverlay').onclick = function() {
-    closeBurgerMenu();
-    // Если есть история — очищаем
-    modalHistory = [];
-    modalReturnTo = null;
-};
+    // В обработчике клика по overlay — закрыть меню
+    document.getElementById('burgerOverlay').onclick = function () {
+        closeBurgerMenu();
+    };
 
 
 
@@ -183,9 +147,14 @@ document.getElementById('burgerOverlay').onclick = function() {
         if (modal) modal.classList.add('active');
     }
 
+    // Полное закрытие модалки (крестик/оверлей) — чистит историю навигации
     function closeModal(id) {
         const modal = document.getElementById(id);
         if (modal) modal.classList.remove('active');
+        if (id === 'tempModal') {
+            navStack = [];
+            navSkipNext = null;
+        }
     }
 
     function isMobile() {
@@ -203,11 +172,6 @@ document.getElementById('burgerOverlay').onclick = function() {
     function toggleBurgerMenu() {
         document.getElementById('burgerMenu').classList.toggle('active');
         document.getElementById('burgerOverlay').classList.toggle('active');
-    }
-
-    function closeBurgerMenu() {
-        document.getElementById('burgerMenu').classList.remove('active');
-        document.getElementById('burgerOverlay').classList.remove('active');
     }
 
     function logout() {
@@ -277,11 +241,13 @@ document.getElementById('burgerOverlay').onclick = function() {
             modalBody.innerHTML = `
                 <div class="tg-modal-wrapper">
                     <div class="tg-modal-header">
-                        <button class="close-btn" onclick="closeModalWithRoute()">
+                        <button class="close-btn" onclick="navBack()">
                             <i class="fas fa-arrow-left"></i>
                         </button>
                         <div class="title">${title || ''}</div>
-                        <div style="width: 24px;"></div>
+                        <button class="close-btn" onclick="closeModal('tempModal')" style="margin-right:-4px;">
+                            <i class="fas fa-xmark"></i>
+                        </button>
                     </div>
                     <div class="tg-modal-body">
                         ${content}
@@ -355,3 +321,21 @@ document.getElementById('burgerOverlay').onclick = function() {
     }
 
 
+
+    // ===== ���� ����ջ ��������� (��� � Telegram: ���� ���� �� �������/����� ����) =====
+    function sputnikApplyBubbleColor(raw) {
+        const BUILTIN = ['#eeffde', '#2b5278', '#3390ec', '#667eea'];
+        window.__myBubbleColor = raw || '';
+        const dark = document.body.classList.contains('dark');
+        const isBuiltin = !raw || BUILTIN.indexOf(String(raw).toLowerCase()) !== -1;
+        const c = isBuiltin ? (dark ? '#2b5278' : '#eeffde') : raw;
+        document.documentElement.style.setProperty('--primary-color', c);
+        let fg = '#ffffff';
+        const m = /^#?([0-9a-f]{6})$/i.exec(c);
+        if (m) {
+            const v = parseInt(m[1], 16);
+            const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+            if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62) fg = '#17212b';
+        }
+        document.documentElement.style.setProperty('--out-fg', fg);
+    }

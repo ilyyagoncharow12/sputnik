@@ -348,6 +348,11 @@
 function continueOpenChat(id, type) {
     currentChat = { id: parseInt(id), type: type };
     currentChatType = type;
+    // подсветка активного чата в списке (класс ставился только при рендере)
+    document.querySelectorAll('.chat-item').forEach(el => {
+        el.classList.toggle('active',
+            parseInt(el.dataset.chatId) === parseInt(id) && el.dataset.chatType === type);
+    });
     currentPinnedMessage = null;
     const pinnedBannerEl = document.getElementById('pinnedBanner');
     if (pinnedBannerEl) pinnedBannerEl.style.display = 'none';

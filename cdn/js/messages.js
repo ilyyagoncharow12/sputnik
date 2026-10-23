@@ -30,7 +30,7 @@ function openForwardModal() {
     if (!currentContextMessage) return;
 
     let html = `
-        <div style="padding: 20px; color: white;">
+        <div style="padding: 20px; color: var(--modal-fg);">
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 16px; text-align: center;">Переслать сообщение</div>
             <div style="max-height: 350px; overflow-y: auto;">
     `;
@@ -42,13 +42,13 @@ function openForwardModal() {
             const bFav = b.name === 'Избранное' ? 0 : 1;
             return aFav - bFav;
         });
-        html += '<div style="font-size: 12px; color: #8e8e93; margin: 12px 0 8px; font-weight: 600;">ЧАТЫ</div>';
+        html += '<div style="font-size: 12px; color: var(--modal-fg-muted); margin: 12px 0 8px; font-weight: 600;">ЧАТЫ</div>';
         sortedChats.forEach(chat => {
             if (chat.other_user_id) {
                 html += `
                     <div style="display: flex; align-items: center; gap: 12px; padding: 10px; cursor: pointer; border-radius: 12px; transition: background 0.2s;"
                          onclick="forwardMessageTo(${currentContextMessage.id}, ${chat.other_user_id}, 'chat'); closeModal('tempModal');"
-                         onmouseover="this.style.background='#1c1c1e'"
+                         onmouseover="this.style.background='var(--modal-btn-bg)'"
                          onmouseout="this.style.background='transparent'">
                         <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; overflow: hidden;">
                             ${chat.avatar ? `<img src="/${chat.avatar}" style="width:100%;height:100%;object-fit:cover;">` : (chat.name || '?')[0].toUpperCase()}
@@ -64,12 +64,12 @@ function openForwardModal() {
 
     // Группы
     if (groupsData && groupsData.length > 0) {
-        html += '<div style="font-size: 12px; color: #8e8e93; margin: 12px 0 8px; font-weight: 600;">ГРУППЫ</div>';
+        html += '<div style="font-size: 12px; color: var(--modal-fg-muted); margin: 12px 0 8px; font-weight: 600;">ГРУППЫ</div>';
         groupsData.forEach(group => {
             html += `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px; cursor: pointer; border-radius: 12px; transition: background 0.2s;"
                      onclick="forwardMessageTo(${currentContextMessage.id}, ${group.id}, 'group'); closeModal('tempModal');"
-                     onmouseover="this.style.background='#1c1c1e'"
+                     onmouseover="this.style.background='var(--modal-btn-bg)'"
                      onmouseout="this.style.background='transparent'">
                     <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">👥</div>
                     <div style="flex: 1;">
@@ -82,12 +82,12 @@ function openForwardModal() {
 
     // Каналы
     if (channelsData && channelsData.length > 0) {
-        html += '<div style="font-size: 12px; color: #8e8e93; margin: 12px 0 8px; font-weight: 600;">КАНАЛЫ</div>';
+        html += '<div style="font-size: 12px; color: var(--modal-fg-muted); margin: 12px 0 8px; font-weight: 600;">КАНАЛЫ</div>';
         channelsData.forEach(channel => {
             html += `
                 <div style="display: flex; align-items: center; gap: 12px; padding: 10px; cursor: pointer; border-radius: 12px; transition: background 0.2s;"
                      onclick="forwardMessageTo(${currentContextMessage.id}, ${channel.id}, 'channel'); closeModal('tempModal');"
-                     onmouseover="this.style.background='#1c1c1e'"
+                     onmouseover="this.style.background='var(--modal-btn-bg)'"
                      onmouseout="this.style.background='transparent'">
                     <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">📢</div>
                     <div style="flex: 1;">
@@ -538,7 +538,7 @@ document.addEventListener('keydown', (e) => {
                     document.documentElement.style.setProperty('--bubble-radius', s.bubble_radius + 'px');
                 }
                 if (s.my_message_color) {
-                    document.documentElement.style.setProperty('--primary-color', s.my_message_color);
+                    sputnikApplyBubbleColor(s.my_message_color);
                 }
                 if (s.wallpaper_image) {
                     document.getElementById('messagesArea').style.backgroundImage = `url('/${s.wallpaper_image}')`;

@@ -189,7 +189,7 @@ function openPasscodeSettings() {
                 </select>
             </div>
             <div style="display:flex;gap:10px;">
-                <button class="tg-action-btn" style="flex:1;background:#007aff;color:#fff;" onclick="savePasscode()">
+                <button class="tg-action-btn" style="flex:1;background:var(--modal-accent);color:#fff;" onclick="savePasscode()">
                     <i class="fas fa-check"></i> Включить
                 </button>
                 <button class="tg-action-btn" style="flex:1;background:rgba(255,59,48,.2);color:#ff6b61;" onclick="disablePasscode()">
@@ -272,7 +272,7 @@ async function loadTwoFA() {
                 <input id="faPw2" type="password" class="tg-input" placeholder="Повторите пароль" autocomplete="new-password">
                 <input id="faHint" type="text" class="tg-input" placeholder="Подсказка (необязательно)" maxlength="80">
                 <input id="faEmail" type="email" class="tg-input" placeholder="Email для восстановления" autocomplete="email">
-                <button class="tg-action-btn" style="background:#007aff;color:#fff;" onclick="saveTwoFA()">
+                <button class="tg-action-btn" style="background:var(--modal-accent);color:#fff;" onclick="saveTwoFA()">
                     <i class="fas fa-shield-halved"></i> Включить
                 </button>
             </div>`;
@@ -467,7 +467,7 @@ function openManualContactImport() {
             </div>
             <textarea id="manualContacts" class="tg-input" rows="10"
                       placeholder="Иван +7 999 123-45-67&#10;Мария +7 916 555-11-22"></textarea>
-            <button class="tg-action-btn" style="background:#007aff;color:#fff;" onclick="sendManualContactImport()">
+            <button class="tg-action-btn" style="background:var(--modal-accent);color:#fff;" onclick="sendManualContactImport()">
                 <i class="fas fa-address-book"></i> Найти и добавить
             </button>
         </div>
@@ -539,7 +539,7 @@ function injectSecurityRows(attempt) {
         const btn = document.createElement('button');
         btn.id = 'importContactsBtn';
         btn.className = 'tg-action-btn';
-        btn.style.cssText = 'margin:12px 16px;background:#007aff;color:#fff;width:calc(100% - 32px);';
+        btn.style.cssText = 'margin:12px 16px;background:var(--modal-accent);color:#fff;width:calc(100% - 32px);';
         btn.innerHTML = '<i class="fas fa-address-book"></i> Импортировать контакты';
         btn.onclick = () => { modalReturnTo = 'openContacts'; openContactImport(); };
         list.appendChild(btn);
@@ -562,9 +562,9 @@ function injectSecurityRows(attempt) {
                 </div>
                 <div style="flex:1;">
                     <div style="font-size:15px;">Код приложения</div>
-                    <div style="font-size:12px;color:#8e8e93;" id="passcodeStatus">Блокировка экрана кодом</div>
+                    <div style="font-size:12px;color:var(--modal-fg-muted);" id="passcodeStatus">Блокировка экрана кодом</div>
                 </div>
-                <i class="fas fa-chevron-right" style="color:#8e8e93;font-size:12px;"></i>
+                <i class="fas fa-chevron-right" style="color:var(--modal-fg-muted);font-size:12px;"></i>
             </div>
 
             <div class="tg-setting-row" onclick="openTwoFASettings()"
@@ -576,9 +576,9 @@ function injectSecurityRows(attempt) {
                 </div>
                 <div style="flex:1;">
                     <div style="font-size:15px;">Двухэтапная проверка</div>
-                    <div style="font-size:12px;color:#8e8e93;" id="twofaStatus">Облачный пароль поверх кода входа</div>
+                    <div style="font-size:12px;color:var(--modal-fg-muted);" id="twofaStatus">Облачный пароль поверх кода входа</div>
                 </div>
-                <i class="fas fa-chevron-right" style="color:#8e8e93;font-size:12px;"></i>
+                <i class="fas fa-chevron-right" style="color:var(--modal-fg-muted);font-size:12px;"></i>
             </div>`;
 
         const actions = body.querySelector('.tg-action-btn')?.parentElement;

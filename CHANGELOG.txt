@@ -5,7 +5,7 @@
 Последнее обновление: 23.10.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v0.62.6
+ТЕКУЩАЯ ВЕРСИЯ: v0.64.0
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -204,6 +204,201 @@
 ========================================================
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
+
+[23.10.2026] — v0.63.5: ФИКС НЕ ТЕМИЗИРОВАННЫХ МОДАЛОК
+  Файлы: cdn/css/tg-design.css, cdn/js/message-features.js,
+         cdn/js/profiles.js, cdn/js/messages.js, cdn/js/support.js,
+         cdn/js/stories.js, cdn/js/settings.js, cdn/js/security.js
+
+  В тёмной теме часть модалок оставалась светлой/рассинхронной —
+  хардкод #fff/#0f0f0f/#1c1c1e/#2c2c2e/#8e8e93/#007aff/#ff3b30
+  в CSS и в инлайн-стилях JS перекрывал переменные --modal-*.
+
+  CSS (tg-design.css, новые слои 11c–11f):
+  - 11c modals.css: .modal-header/.modal-close/.modal-body/
+    .modal-footer/.modal-btn-primary|secondary|danger,
+    .add-country-item (выбор страны), .story-stats-* (статистика
+    историй), .story-reply-*.
+  - 11d profile.css: .profile-modal/.edit-profile-modal/
+    .other-profile, .profile-banner, .change-photo-btn/
+    .my-profile-btn/.personal-colors-btn/.banner-action-btn/
+    .apply-color-btn/.reset-color-btn, .colors-modal/.color-circle,
+    .banner-preview, .personal-colors-section, .modal-header-block/
+    .modal-body-content, .song-mini-row, .add-account-card,
+    .channel-attachment-row.
+  - 11e contacts-app.css: .tg-modal-content/.tg-modal-header/
+    .tg-input/.tg-label/.tg-info-row/.tg-action-menu|item|divider/
+    .tg-btn-primary|secondary|danger/.tg-contacts-list/
+    .tg-contact-item|name|username|more-btn и .contact-modal-* —
+    сняты !important-хардкоды тёмной темы.
+  - 11f community.css: .comm-tabs/.comm-tab/.comm-field/
+    .comm-badge/.comm-btn/.comm-switch/.comm-avatar;
+    profile-media.css: .pm-modal/.pm-viewer/.pm-toolbar/.pm-header.
+
+  JS (инлайн-стили → var(--modal-*)):
+  - message-features.js: меню «Таймер исчезновения» (burnMenu).
+  - profiles.js: модалка переименования, плейлист/плеер, карточки
+    профилей, статусы контактов, пустые состояния.
+  - messages.js: модалка «Переслать сообщение».
+  - support.js: чат поддержки (вложения, тикеты, ответы).
+  - stories.js: модалка отправки истории, статистика.
+  - settings.js: приватность/внешний вид/активные сессии.
+  - security.js: статусы 2FA/паскода, кнопки сохранения.
+  Свотчи цветов (.tg-color-circle data-color) и акцентные
+  иконки плеера НЕ тронуты — остаются фактическими цветами.
+
+  Проверено: node --check всех 8 JS, баланс скобок tg-design.css.
+
+  ОТКАТ: git checkout HEAD -- cdn/css/tg-design.css cdn/js/
+
+[23.10.2026] — v0.63.4: МОДАЛКИ ПОД ТЕМУ (Day — белые, Night — тёмные)
+  Файлы: cdn/css/base.css, cdn/css/tg-design.css
+
+  - В base.css добавлены переменные --modal-* для двух тем:
+    Day — фон #ffffff, текст #17212b, рамки #e4e7ea, кнопки
+    #f1f1f4, акцент #3390ec; Night — фон #0f0f0f, текст #ffffff,
+    рамки #2c2c2e, кнопки #1c1c1e, акцент #62a8e8.
+  - В tg-design.css (грузится последним) добавлен слой 11,
+    который перекрашивает все модалки по переменным:
+    .tg-modal-wrapper/.tg-modal-content/.modal-content,
+    .tg-modal-header, .tg-hint, .tg-section-title,
+    .tg-action-btn/.tg-btn-*, .tg-input/.tg-textarea/.modal-input,
+    .tg-row, .tg-action-menu/.tg-action-item, .tg-modal-footer,
+    .tg-info-row, .tg-dashed-btn, .tg-color-circle и др.
+    (жёсткие #0f0f0f/#1c1c1e/#2c2c2e заменены на var(--modal-*)).
+  - Модалка «Добавить аккаунт» (.addacct) тоже темизируется:
+    днём белая карточка, ночью #1c1c1e; переключатель пароль/код
+    днём #eef1f8 с белой пилюлей, ночём #232326 с #2f2f33.
+  - Тень модалок смягчена (0.35 вместо 0.8) — на светлой теме
+    чёрная жирная тень выглядела грязно.
+
+  Проверено в Playwright: открывалась модалка «Добавить аккаунт»
+  в обеих темах — Day белая (#ffffff/#17212b), Night тёмная
+  (#0f0f0f/#ffffff), карточка внутри #1c1c1e. Скриншоты удалены.
+
+  ОТКАТ: git checkout HEAD -- cdn/css/base.css cdn/css/tg-design.css
+
+[23.10.2026] — v0.63.3: МОДАЛКА «ДОБАВИТЬ АККАУНТ» КАК СТРАНИЦА ВХОДА
+  Файлы: cdn/js/accounts.js, cdn/css/composer.css
+
+  - Модалка добавления аккаунта переподчинена стилю страницы
+    входа (auth.html): белая карточка radius 20 внутри тёмной
+    tg-модалки, поля с рамкой 2px #e2e8f0 и radius 16, фокус
+    с фиолетовым ореолом.
+  - Переключатель 🔑 Пароль / 🔢 Код — как .login-modes на
+    входе: серый фон #eef1f8, активная белая пилюля с фиолетовым
+    текстом и тенью, анимация scale.
+  - Порядок полей как на входе: переключатель → страна → номер →
+    пароль/код → кнопка. Убрано превью «Получится: +7…».
+  - Кнопка «Войти» — градиент #667eea→#764ba2 как .btn на входе;
+    «Получить код» — такая же градиентная мини-кнопка.
+  - Код: letter-spacing 6px, жирный, центрированный.
+
+  Проверено в Playwright: обе вкладки (пароль/код) рендерятся
+  корректно.
+
+  ОТКАТ: git checkout HEAD -- cdn/js/accounts.js cdn/css/composer.css
+
+[23.10.2026] — v0.63.2: БУРГЕР-МЕНЮ В СТИЛЕ TELEGRAM
+  Файлы: cdn/css/burger.css (полная переработка)
+
+  - Убраны «90° углы» (border-radius: 0 !important) — раньше
+    аватарки/кнопки/пункты были квадратными, выглядело плохо.
+  - Шапка профиля: скруглённый баннер снизу (radius 16),
+    круглый аватар 54px, белый текст поверх цвета/фото,
+    блюр-оверлей для читаемости.
+  - Пункты меню: radius 10, hover-подсветка как в TG
+    (var(--bg-hover)), gap 14, иконки 17px серого цвета.
+  - Бейджи (контакты/premium): radius 10, акцентный фон.
+  - Аккаунты вверху: круглые аватарки 42, подсветка активного,
+    кнопка «+» пунктирная с hover-эффектом.
+  - Ночная тема/Выйти: без квадратов, аккуратные hover-пилюли.
+  - Проверено в Playwright: светлая и тёмная темы — меню
+    выглядит как TG-сайдбар (скриншоты удалены).
+
+  ОТКАТ: git checkout HEAD -- cdn/css/burger.css (вернуть
+  предыдущую версию файла).
+
+[23.10.2026] — v0.63.1: ОФОРМЛЕНИЕ КАК В TELEGRAM (2-я итерация,
+зелёные исходящие + метрики TG + возврат Unbounded)
+  Файлы: cdn/css/tg-design.css, cdn/css/base.css,
+         cdn/js/core.js, cdn/js/messages.js, cdn/js/settings.js,
+         cdn/js/chats.js, database.py, models.py, main.py,
+         sputnik.db (шрифт/цвета у 4 пользователей)
+
+  - Шрифт возвращён на 'Unbounded' (пользователь попросил
+    откатить системный стек): base.css, settings.js (фолбэк/
+    дефолты), database.py, models.py, main.py:3750, значения
+    в БД у 4 пользователей.
+  - Исходящий пузырь — зелёный как в Telegram Day (#eeffde,
+    тёмный текст, автоконтраст --out-fg), Night — #2b5278.
+    Добавлен хелпер sputnikApplyBubbleColor() в core.js
+    (темо-зависимый цвет + автоконтраст), вызывается из
+    messages.js при загрузке настроек и из settings.js
+    (save/reset/переключение темы).
+  - Метрики TG в tg-design.css: пузырь padding 8/12, текст
+    15px, --bubble-radius:12px, gap сообщений 3px, аватар
+    чата 54, шапочный аватар 42, бейдж 20px/radius 10,
+    поиск 42px/радиус 22, композер-пилюля 46px/радиус 22.
+  - chats.js continueOpenChat: подсветка активного чата
+    (класс .chat-item.active) теперь ставится и при открытии
+    чата, а не только при рендере списка.
+  - Проверено в Playwright: светлая (зелёный #eeffde исходящий)
+    и тёмная (#2b5278) темы — обе как в TG. Тест-аккаунт
+    tgtest (id 137) и тестовые сообщения удалены, скриншоты
+    из корня проекта удалены.
+
+  ОТКАТ: git reset --hard dee7c25 (точка «до дизайна») или
+  вернуть предыдущий коммит v0.63.0.
+
+[23.10.2026] — v0.63.0: ОФОРМЛЕНИЕ КАК В TELEGRAM (цвета + блоки)
+  Файлы: cdn/css/base.css, cdn/css/tg-design.css (новый),
+         cdn/css/community.css, cdn/css/profile.css,
+         cdn/css/composer.css, templates/chat.html,
+         cdn/js/settings.js, main.py, database.py, models.py,
+         sputnik.db (цвета по умолчанию у 4 пользователей)
+
+  ПАЛИТРА (точные цвета Telegram Day/Night):
+  - Светлая: фон переписки #e5e9ee, панели #ffffff, акцент
+    #3390ec, текст #17212b/#707579, рамки #e4e7ea.
+  - Тёмная (Night): панели #17212b, фон переписки #0e1621,
+    входящий пузырь #182533, акцент #62a8e8, выделенный чат
+    #2b5278, вторичный текст #708499.
+  - Фиолетовый градиент #667eea→#764ba2 заменён везде на
+    сплошной TG-синий (--primary-gradient = акцент): кнопки,
+    табы, аватарки, кнопка отправки, бейджи.
+  - Шрифт: 'Unbounded' → системный стек
+    (-apple-system/Segoe UI/Roboto) — как в TG. В настройках
+    оформления появилась опция «Системный (как в Telegram)».
+
+  БЛОКИ (новый слой cdn/css/tg-design.css, подключён в chat.html
+  ПОСЛЕДНИМ — один файл, легко откатить/править):
+  - Активный чат — сплошная акцентная заливка с белым текстом
+    (как в TG), без сдвига 3px (border-left всегда прозрачный).
+  - Бейдж непрочитанных — акцентный; на активном чате — белый
+    с синим текстом (инверсия, как в TG).
+  - Дата-пилюля «Сегодня» — синяя с белым текстом.
+  - Входящий пузырь: белый (light) / #182533 (dark), без тени.
+  - Композер: белая пилюля с рамкой (light), #242f3d (dark).
+  - Кольцо историй — голубое TG-градиентное вместо инстаграмного.
+  - Reply-полоска и статус «печатает…» — акцент TG.
+  - Скроллбары — тонкие акцентные.
+
+  ДАННЫЕ: у всех 4 пользователей my_message_color #667eea →
+  #3390ec, their #f3f4f6 → #ffffff, font_family сброшен на
+  системный; дефолты в database.py/models.py/settings.js/main.py
+  обновлены (для новых аккаунтов).
+
+  ПРОВЕРЕНО в Playwright: ПК 1440x900 и моб. 390x844, светлая
+  и тёмная темы — 4 скриншота, всё рендерится как в TG, консоль
+  без новых ошибок (есть старые 404 на static/video-sput/intro1
+  (mp4/webm) — видео онбординга отсутствует на диске, не связано
+  с дизайном). Тестовый аккаунт tgtest удалён вместе с чатом
+  и сессией, скриншоты из корня проекта удалены.
+
+  ОТКАТ: git reset --hard dee7c25 (точка «до дизайна») или
+  просто удалить ссылку на tg-design.css и вернуть палитру
+  в base.css.
 
 [23.10.2026] — v0.62.6: сброс пароля служебной панели
   Файлы: .env (только ADMIN_PASSWORD_HASH), CHANGELOG.txt

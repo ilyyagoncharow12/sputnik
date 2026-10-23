@@ -110,7 +110,7 @@
         const rect = btn.getBoundingClientRect();
         const menu = document.createElement('div');
         menu.id = 'burnMenu';
-        menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid var(--border-color);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:6px;font-family:inherit;';
+        menu.style.cssText = 'position:fixed;z-index:9999;background:var(--modal-bg);border:1px solid var(--modal-border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:6px;font-family:inherit;';
         menu.style.top = (rect.top - 200) + 'px';
         menu.style.right = (window.innerWidth - rect.left) + 'px';
         const options = [
@@ -296,30 +296,10 @@
             .catch(restore);
     }
 
-    // Кнопка «Показать превью» под текстом со ссылкой.
-    // container — элемент с текстом сообщения (.message-text), само сообщение
-    // (.message) либо контейнер со списком сообщений.
+    // Кнопки превью ссылок отключены (v0.64.0): ссылки в тексте
+    // сообщения сами являются кликабельными <a> (fmtLinkify).
     function attachLinkPreviewButton(container, url) {
-        if (!container) return;
-        const text = container.classList.contains('message-text')
-            ? container
-            : (container.classList.contains('message')
-                ? container.querySelector('.message-text')
-                : container.querySelector('.message-text'));
-        if (!text) return;
-        const msg = container.closest('.message') || container;
-        if (msg.querySelector('.link-preview')) return;
-        if (msg.querySelector('.link-preview-btn')) return;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'link-preview-btn';
-        btn.innerHTML = '<i class="fas fa-eye"></i> Показать превью ссылки';
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            btn.remove();
-            injectLinkPreview(text, url);
-        };
-        text.insertAdjacentElement('afterend', btn);
+        return;
     }
 
     function removeLinkPreviewButton(container, url) {
@@ -327,22 +307,8 @@
         msg.querySelectorAll('.link-preview-btn').forEach(b => b.remove());
     }
 
-    // Навешивает кнопки превью на все сообщения внутри контейнера.
-    // Раньше кнопка всегда попадала в первое сообщение списка, а не в то,
-    // где реально лежит ссылка.
     function loadLinkPreviews(container) {
-        if (!container) return;
-        const msgs = [];
-        if (container.classList && container.classList.contains('message')) msgs.push(container);
-        container.querySelectorAll('.message').forEach(m => msgs.push(m));
-        msgs.forEach(msg => {
-            const tx = msg.querySelector('.message-text');
-            if (!tx || msg.querySelector('.link-preview')) return;
-            const urls = extractUrls(tx.textContent);
-            if (!urls.length) return;
-            // как в Telegram — превью только для первой ссылки
-            attachLinkPreviewButton(tx, urls[0]);
-        });
+        return;
     }
 
     function escapeAttr(value) {
@@ -459,8 +425,8 @@
                 <div id="pollOptionsList" style="display:flex;flex-direction:column;gap:8px;">
                 </div>
                 <button class="tg-dashed-btn" onclick="addPollOption()">+ Добавить вариант</button>
-                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8e8e93;">
-                    <input type="checkbox" id="pollAnonymous" style="accent-color:#007aff;"> Анонимный опрос
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--modal-fg-muted);">
+                    <input type="checkbox" id="pollAnonymous" style="accent-color:var(--modal-accent);"> Анонимный опрос
                 </label>
                 <button class="tg-btn tg-btn-primary tg-btn-block" onclick="createPollFromModal()">Создать опрос</button>
             </div>

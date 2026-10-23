@@ -102,15 +102,11 @@ function addParsePhone(raw) {
 }
 
 
-/* Перерисовывает превью полного номера и счётчик цифр. */
+/* Перерисовывает подсказку под номером. */
 function addPaint() {
     const c = window._addCountry || COUNTRIES[0];
     const d = window._addDigits || '';
-    const full = document.getElementById('addPhoneFull');
     const hint = document.getElementById('addPhoneHint');
-    // Полный номер показываем слитно, иначе форматирование по тройкам
-    // склеивало код и номер вроде «+79 991 234 567».
-    if (full) full.textContent = d ? (c.dial + d) : c.dial;
     if (!hint) return;
 
     if (!d) {
@@ -148,34 +144,33 @@ function addPhoneBlock() {
         </div>
         <div class="profile-field">
             <label>Номер телефона</label>
-            <input type="text" id="addPhone" class="modal-input" placeholder="000 000 00 00"
+            <input type="text" id="addPhone" class="modal-input" placeholder="+7 999 123 45 67"
                    inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false">
-            <div class="aa-full-row">
-                <span class="aa-full-label">Получится:</span>
-                <span class="aa-full-num" id="addPhoneFull">${def.dial}</span>
-            </div>
             <div class="aa-hint" id="addPhoneHint"></div>
         </div>`;
 }
 
-// Общая часть: переключатель способа входа + поля
+// Переключатель способа входа (как login-modes на странице входа)
+function addSegBlock() {
+    return `
+        <div class="aa-seg">
+            <button type="button" id="addModePwd" class="aa-seg-btn on" onclick="setAddMode('password')">🔑 Пароль</button>
+            <button type="button" id="addModeCode" class="aa-seg-btn" onclick="setAddMode('code')">🔢 Код</button>
+        </div>`;
+}
+
+// Поля пароля / кода
 function addAuthBlock() {
     return `
-        <div class="profile-field">
-            <label>Способ входа</label>
-            <div class="aa-seg">
-                <button type="button" id="addModePwd" class="aa-seg-btn" onclick="setAddMode('password')">🔑 Пароль</button>
-                <button type="button" id="addModeCode" class="aa-seg-btn" onclick="setAddMode('code')">🔢 Код</button>
-            </div>
-        </div>
         <div id="addPanePwd" class="profile-field">
-            <label>Пароль от аккаунта</label>
+            <label>Пароль</label>
             <input type="password" id="addPassword" class="modal-input" placeholder="••••••••" autocomplete="new-password">
         </div>
         <div id="addPaneCode" class="profile-field" style="display:none">
             <label>Код входа</label>
             <div class="aa-code-row">
                 <input type="text" id="addCode" class="modal-input aa-code" placeholder="•••••" maxlength="5" inputmode="numeric"
+                       autocomplete="one-time-code"
                        oninput="this.value=this.value.replace(/\D/g,'').slice(0,5)">
                 <button type="button" id="addSendCodeBtn" class="aa-code-send" onclick="sendAddCode()">Получить код</button>
             </div>
@@ -198,6 +193,7 @@ function openAddAccountModal() {
     showModal('Добавить аккаунт', `
         <div class="addacct">
             <div class="addacct-hint">Второй номер в Спутнике — переключайтесь без входа заново</div>
+            ${addSegBlock()}
             ${addPhoneBlock()}
             ${addAuthBlock()}
             <div class="addacct-actions">
