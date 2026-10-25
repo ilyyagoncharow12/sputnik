@@ -333,9 +333,39 @@
         let fg = '#ffffff';
         const m = /^#?([0-9a-f]{6})$/i.exec(c);
         if (m) {
-            const v = parseInt(m[1], 16);
-            const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
-            if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62) fg = '#17212b';
+        const v = parseInt(m[1], 16);
+        const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+        if ((0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62) fg = '#17212b';
+        document.documentElement.style.setProperty('--out-fg', fg);
+    }
+
+    // ===== ИСПРАВЛЕНИЕ: размытие фона после выхода из полноэкранного режима (F11) =====
+    // В некоторых браузерах backdrop-filter: blur у модалок «залипает» на всём
+    // экране после выхода из полноэкранного режима. Чистим стили при выходе.
+    (function fixFullscreenBlur() {
+        function clearBlur() {
+            // Убираем backdrop-filter/filter с body, html и всех модалок
+            const targets = [document.documentElement, document.body]
+                .concat(Array.from(document.querySelectorAll('.modal')));
+            targets.forEach(el => {
+                if (!el || !el.style) return;
+                el.style.backdropFilter = '';
+                el.style.webkitBackdropFilter = '';
+                el.style.filter = el.style.filter
+                    .replace(/blur\([^)]*\)\s*/gi, '')
+                    .trim();
+                if (!el.style.filter) el.style.filter = '';
+            });
+            // Закрываем все открытые модалки (чтобы не осталось «залипшего» оверлея)
+            document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
         }
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) clearBlur();
+        });
+        // Также при обычном изменении размера окна (выход из F11 иногда не триггерит fullscreenchange)
+        window.addEventListener('resize', () => {
+            if (!document.fullscreenElement) clearBlur();
+        });
+    })();
         document.documentElement.style.setProperty('--out-fg', fg);
     }
