@@ -418,7 +418,7 @@
 .profile-name-wrap .display-name {
     font-size: 24px;
     font-weight: 700;
-    color: white;
+    color: var(--modal-fg);
 }
 
 .profile-name-wrap .username {
@@ -899,7 +899,7 @@
 .other-profile .name-wrap .display-name {
     font-size: 24px;
     font-weight: 700;
-    color: white;
+    color: var(--modal-fg);
 }
 
 .other-profile .name-wrap .username {
@@ -952,7 +952,8 @@
 }
 
 .other-profile .body .bio-box {
-    background: #1c1c1e;
+    background: var(--modal-btn-bg);
+    border: 1px solid var(--modal-border);
     border-radius: 14px;
     padding: 12px 16px;
     margin-top: 8px;
@@ -960,8 +961,10 @@
 
 .other-profile .body .bio-box .bio-text {
     font-size: 14px;
-    color: white;
+    color: var(--modal-fg);
     line-height: 1.4;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 .other-profile .body .actions {
@@ -976,8 +979,8 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    background: #1c1c1e;
-    border: none;
+    background: var(--modal-btn-bg);
+    border: 1px solid var(--modal-border);
     border-radius: 14px;
     padding: 12px 8px;
     cursor: pointer;
@@ -985,17 +988,17 @@
 }
 
 .other-profile .body .actions .action-btn:hover {
-    background: #2c2c2e;
+    background: var(--modal-btn-hover);
 }
 
 .other-profile .body .actions .action-btn i {
     font-size: 20px;
-    color: #007aff;
+    color: var(--modal-accent);
 }
 
 .other-profile .body .actions .action-btn span {
     font-size: 10px;
-    color: #8e8e93;
+    color: var(--modal-fg-muted);
 }
 
 .other-profile .body .actions .more-btn {
@@ -1004,8 +1007,8 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    background: #1c1c1e;
-    border: none;
+    background: var(--modal-btn-bg);
+    border: 1px solid var(--modal-border);
     border-radius: 14px;
     padding: 12px 8px;
     cursor: pointer;
@@ -1013,21 +1016,22 @@
 }
 
 .other-profile .body .actions .more-btn:hover {
-    background: #2c2c2e;
+    background: var(--modal-btn-hover);
 }
 
 .other-profile .body .actions .more-btn i {
     font-size: 20px;
-    color: #8e8e93;
+    color: var(--modal-fg-muted);
 }
 
 .other-profile .body .actions .more-btn span {
     font-size: 10px;
-    color: #8e8e93;
+    color: var(--modal-fg-muted);
 }
 
 .other-profile .body .info-box {
-    background: #1c1c1e;
+    background: var(--modal-btn-bg);
+    border: 1px solid var(--modal-border);
     border-radius: 14px;
     margin-top: 12px;
     overflow: hidden;
@@ -1038,7 +1042,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px;
-    border-bottom: 0.5px solid #2c2c2e;
+    border-bottom: 0.5px solid var(--modal-border);
 }
 
 .other-profile .body .info-box .info-row:last-child {
@@ -1047,20 +1051,20 @@
 
 .other-profile .body .info-box .info-row .label {
     font-size: 13px;
-    color: #8e8e93;
+    color: var(--modal-fg-muted);
 }
 
 .other-profile .body .info-box .info-row .value {
     font-size: 15px;
-    color: white;
+    color: var(--modal-fg);
 }
 
 .other-profile .body .info-box .info-row .value.blue {
-    color: #007aff;
+    color: var(--modal-accent);
 }
 
 .other-profile .body .info-box .info-row .value.link {
-    color: #007aff;
+    color: var(--modal-accent);
     text-decoration: none;
     cursor: pointer;
 }
@@ -1075,18 +1079,20 @@
 
 .other-profile .body .about-box .about-label {
     font-size: 13px;
-    color: #8e8e93;
+    color: var(--modal-fg-muted);
     margin-bottom: 4px;
 }
 
 .other-profile .body .about-box .about-text {
     font-size: 15px;
-    color: white;
+    color: var(--modal-fg);
     line-height: 1.4;
+    word-break: break-all;
+    overflow-wrap: break-word;
 }
 
 .other-profile .body .about-box .about-text .link {
-    color: #007aff;
+    color: var(--modal-accent);
     cursor: pointer;
 }
 
@@ -2204,4 +2210,171 @@ body.call-active {
     color: white;
 }
 
+/* ===== БЕЗОПАСНАЯ СЕТКА ЦВЕТОВ ДЛЯ МОДАЛОК ПРОФИЛЯ (день/ночь) ===== */
+/* Перекрывает любые жёсткие тёмные цвета выше, чтобы в светлой теме
+   блоки были светлыми с тёмным текстом, а в тёмной — наоборот. */
+.other-profile .body,
+.other-profile .body .bio-box,
+.other-profile .body .about-box,
+.other-profile .body .info-box,
+.other-profile .body .actions,
+.other-profile .body .info-row {
+    background: transparent !important;
+}
 
+.other-profile .body .bio-box,
+.other-profile .body .about-box,
+.other-profile .body .info-box {
+    background: var(--modal-btn-bg) !important;
+    border: 1px solid var(--modal-border) !important;
+}
+
+.other-profile .body .bio-text,
+.other-profile .body .about-text,
+.other-profile .body .info-row .label,
+.other-profile .body .info-row .value,
+.other-profile .body .about-label {
+    color: var(--modal-fg) !important;
+}
+
+.other-profile .body .about-label,
+.other-profile .body .info-row .label {
+    color: var(--modal-fg-muted) !important;
+}
+
+.other-profile .body .info-row .value.blue,
+.other-profile .body .info-row .value.link,
+.other-profile .body .about-text .link {
+    color: var(--modal-accent) !important;
+}
+
+.other-profile .body .info-row {
+    border-bottom-color: var(--modal-border) !important;
+}
+
+.other-profile .body .action-btn,
+.other-profile .body .more-btn,
+.other-profile .body .actions .action-btn,
+.other-profile .body .actions .more-btn {
+    background: var(--modal-btn-bg) !important;
+    border: 1px solid var(--modal-border) !important;
+    color: var(--modal-accent) !important;
+}
+
+.other-profile .body .action-btn:hover,
+.other-profile .body .more-btn:hover,
+.other-profile .body .actions .action-btn:hover,
+.other-profile .body .actions .more-btn:hover {
+    background: var(--modal-btn-hover) !important;
+}
+
+.other-profile .body .action-btn i,
+.other-profile .body .more-btn i,
+.other-profile .body .actions .action-btn i,
+.other-profile .body .actions .more-btn i {
+    color: var(--modal-accent) !important;
+}
+
+.other-profile .body .action-btn span,
+.other-profile .body .more-btn span,
+.other-profile .body .actions .action-btn span,
+.other-profile .body .actions .more-btn span {
+    color: var(--modal-fg-muted) !important;
+}
+
+.other-profile .banner .top-bar .back-btn {
+    background: rgba(0, 0, 0, 0.3) !important;
+    color: var(--modal-fg) !important;
+}
+
+.other-profile .banner .top-bar .back-btn:hover {
+    background: rgba(0, 0, 0, 0.5) !important;
+}
+
+.other-profile .block-btn {
+    background: var(--modal-danger) !important;
+    color: #ffffff !important;
+}
+
+.other-profile .unblock-btn {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-accent) !important;
+    border: 1px solid var(--modal-border) !important;
+}
+
+/* ===== МОИ ИСТОРИИ — СЕТКА В ПРОФИЛЕ ===== */
+.other-profile .stories-section {
+    margin-top: 16px;
+}
+
+.other-profile .stories-section .about-label {
+    font-size: 13px;
+    color: var(--modal-fg-muted) !important;
+    margin-bottom: 8px;
+}
+
+.other-profile .stories-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.other-profile .story-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+
+.other-profile .story-grid-item:hover {
+    transform: scale(1.05);
+}
+
+.other-profile .story-grid-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--modal-btn-bg);
+    border: 1px solid var(--modal-border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.other-profile .story-grid-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.other-profile .story-grid-cover i {
+    font-size: 20px;
+    color: #888;
+}
+
+.other-profile .story-grid-cover .fa-film {
+    color: #ff4757;
+}
+
+.other-profile .story-grid-caption {
+    font-size: 11px;
+    color: var(--modal-fg);
+    line-height: 1.3;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    text-align: center;
+}
+
+@media (max-width: 560px) {
+    .other-profile .stories-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+}

@@ -545,9 +545,11 @@ function storyCoverCardHTML(story, title, sub) {
 }
 
 function storyCardFromContent(content) {
-    const m = content && content.match(/@@STORY:(\d+):([^:]+):([^@]+)@@/);
+    if (!content) return null;
+    // Поддерживаем форматы: @@STORY:id:type:path@@  и  @@STORY:id:type@@ (без пути)
+    const m = content.match(/@@STORY:(\d+):([^:@]+)(?::([^@]*))?@@/);
     if (!m) return null;
-    return { id: +m[1], file_type: m[2], file_path: m[3], offset: m[0].length };
+    return { id: +m[1], file_type: m[2] || 'photo', file_path: m[3] || '', offset: m[0].length };
 }
 
 function openSharedStory(storyId) {
@@ -992,5 +994,11 @@ document.addEventListener('click', function(e) {
         }
     }
 });
+
+// Экспортируем ключевые функции в глобальную область, чтобы они были
+// доступны из других модулей (context-menu.js formatMessage, profiles.js и т.д.)
+window.storyCardFromContent = storyCardFromContent;
+window.storyCoverCardHTML = storyCoverCardHTML;
+window.closeStoryViewer = closeStoryViewer;
 
 

@@ -59,7 +59,7 @@ function openUserProfileModal(userId) {
                             // СБОРКА HTML
                             let html = `
                                 <div class="other-profile">
-                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
+                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">
                                         <div class="banner" style="${bannerStyle}">
                                             <div class="overlay"></div>
                                             <div class="top-bar">
@@ -149,7 +149,7 @@ function openUserProfileModal(userId) {
                             // Если плейлист не загрузился — показываем профиль без него
                             let html = `
                                 <div class="other-profile">
-                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
+                                    <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">
                                         <div class="banner" style="${bannerStyle}">
                                             <div class="overlay"></div>
                                             <div class="top-bar">
@@ -273,7 +273,7 @@ function openUserProfileModalFallback(user) {
 
     const html = `
         <div class="other-profile">
-            <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">
+            <div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">
                 <div class="banner" style="${bannerStyle}">
                     <div class="overlay"></div>
                     <div class="top-bar">
@@ -534,7 +534,7 @@ function openMyProfile() {
                             }
 
                             let html = '<div class="other-profile">';
-                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">';
+                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">';
 
                             // БАННЕР (ИСПРАВЛЕНО - кавычки на месте)
                             html += `<div class="banner" id="profileBanner" style="${bannerStyle}">`;
@@ -580,16 +580,48 @@ function openMyProfile() {
                             html += `<div class="about-text">${u.bio ? linkifyPlain(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
 
-                            html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
+                            // Мои истории (сетка, новые сверху)
+                            html += '<div class="stories-section">';
+                            html += '<div class="about-label">мои истории</div>';
+                            html += '<div class="stories-grid" id="myStoriesGrid"></div>';
+                            html += '</div>';
+
                             html += '</div>'; // body
                             html += '</div>'; // modal-content
                             html += '</div>'; // other-profile
 
                             premiumMount(html);
+
+                            // Загружаем истории пользователя и заполняем сетку
+                            fetch('/api/get_stories')
+                                .then(r => r.json())
+                                .then(stories => {
+                                    const grid = document.getElementById('myStoriesGrid');
+                                    if (grid && stories && stories.length) {
+                                        grid.innerHTML = stories.map(s => {
+                                            const isVideo = s.file_type === 'video';
+                                            const cover = isVideo
+                                                ? `<i class="fas fa-film" style="font-size:24px;color:white;"></i>`
+                                                : (s.file_path ? `<img src="/${s.file_path}" loading="lazy">` : `<i class="fas fa-image" style="font-size:24px;color:#888;"></i>`);
+                                            return `
+                                                <div class="story-grid-item" onclick="openSharedStory(${s.id})" style="cursor:pointer;">
+                                                    <div class="story-grid-cover">${cover}</div>
+                                                    <div class="story-grid-caption">${escapeHtml(s.caption || '')}</div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    } else if (grid) {
+                                        grid.innerHTML = '<div style="text-align:center;color:var(--modal-fg-muted);padding:20px;">Нет историй</div>';
+                                    }
+                                })
+                                .catch(() => {
+                                    const grid = document.getElementById('myStoriesGrid');
+                                    if (grid) grid.innerHTML = '<div style="text-align:center;color:var(--modal-fg-muted);padding:20px;">Нет историй</div>';
+                                });
                         })
                         .catch(() => {
                             let html = '<div class="other-profile">';
-                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow: hidden; color: var(--modal-fg); max-width: 400px;">';
+                            html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">';
                             html += `<div class="banner" id="profileBanner" style="${bannerStyle}">`;
                             html += '<div class="overlay"></div>';
                             html += '<div class="top-bar">';
@@ -625,12 +657,45 @@ function openMyProfile() {
                             html += '<div class="about-label">о себе</div>';
                             html += `<div class="about-text">${u.bio ? linkifyPlain(u.bio) : 'Нет информации о себе'}</div>`;
                             html += '</div>';
-                            html += mediaRowHTML(u.id, u.display_name || u.username || 'Медиа');
+
+                            // Мои истории (сетка, новые сверху)
+                            html += '<div class="stories-section">';
+                            html += '<div class="about-label">мои истории</div>';
+                            html += '<div class="stories-grid" id="myStoriesGrid"></div>';
+                            html += '</div>';
+
                             html += '</div>';
                             html += '</div>';
                             html += '</div>';
 
                             premiumMount(html);
+
+                            // Загружаем истории пользователя и заполняем сетку
+                            fetch('/api/get_stories')
+                                .then(r => r.json())
+                                .then(stories => {
+                                    const grid = document.getElementById('myStoriesGrid');
+                                    if (grid && stories && stories.length) {
+                                        grid.innerHTML = stories.map(s => {
+                                            const isVideo = s.file_type === 'video';
+                                            const cover = isVideo
+                                                ? `<i class="fas fa-film" style="font-size:24px;color:white;"></i>`
+                                                : (s.file_path ? `<img src="/${s.file_path}" loading="lazy">` : `<i class="fas fa-image" style="font-size:24px;color:#888;"></i>`);
+                                            return `
+                                                <div class="story-grid-item" onclick="openSharedStory(${s.id})" style="cursor:pointer;">
+                                                    <div class="story-grid-cover">${cover}</div>
+                                                    <div class="story-grid-caption">${escapeHtml(s.caption || '')}</div>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    } else if (grid) {
+                                        grid.innerHTML = '<div style="text-align:center;color:var(--modal-fg-muted);padding:20px;">Нет историй</div>';
+                                    }
+                                })
+                                .catch(() => {
+                                    const grid = document.getElementById('myStoriesGrid');
+                                    if (grid) grid.innerHTML = '<div style="text-align:center;color:var(--modal-fg-muted);padding:20px;">Нет историй</div>';
+                                });
                         });
                 });
         });
@@ -1283,7 +1348,7 @@ function updateAllAvatars(avatarPath) {
 
     // ===== ПРОФИЛЬ ИЗ ИСТОРИИ =====
 function openUserProfileModalFromStory(userId) {
-    closeStoryViewer();
+    if (typeof closeStoryViewer === 'function') closeStoryViewer();
     openUserProfileModal(userId);
 }
 
@@ -1592,25 +1657,29 @@ function removeContactById(userId) {
             .then(users => {
                 let h = '';
                 if (!users || !users.length) {
-                    h += `<div style="text-align:center;padding:32px 16px;color:var(--modal-fg-muted);">
-                        <i class="fas fa-ban" style="font-size:36px;opacity:.35;display:block;margin-bottom:12px;"></i>
-                        Нет заблокированных пользователей
-                    </div>`;
+                    h += `
+                        <div class="tg-hint" style="text-align:center;">
+                            <i class="fas fa-ban" style="font-size:36px;opacity:.35;display:block;margin:0 auto 12px;"></i>
+                            Нет заблокированных пользователей
+                        </div>`;
                 } else {
+                    h += `<div class="tg-section-title" style="margin-top:0;margin-bottom:16px;">Заблокировано ${users.length}</div>`;
                     users.forEach(u => {
+                        const initial = (u.display_name || u.username || '?')[0].toUpperCase();
                         h += `
-                            <div class="tg-row" style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--modal-border);">
-                                <div style="width:44px;height:44px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;overflow:hidden;flex-shrink:0;cursor:pointer;" onclick="openUserProfileModal(${u.id})">
-                                    ${u.avatar ? `<img src="/${u.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `${escapeHtml((u.display_name || u.username || '?')[0].toUpperCase())}`}
+                            <div class="tg-row" style="gap:12px;align-items:center;">
+                                <div style="width:44px;height:44px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;overflow:hidden;flex-shrink:0;" onclick="openUserProfileModal(${u.id});">
+                                    ${u.avatar ? `<img src="/${u.avatar}" style="width:100%;height:100%;object-fit:cover;">` : escapeHtml(initial)}
                                 </div>
-                                <div style="flex:1;min-width:0;cursor:pointer;" onclick="openUserProfileModal(${u.id})">
+                                <div style="flex:1;min-width:0;cursor:pointer;" onclick="openUserProfileModal(${u.id});">
                                     <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(u.display_name || u.username)}</div>
                                     <div style="font-size:12px;color:var(--modal-fg-muted);">@${escapeHtml(u.username || '')}</div>
                                 </div>
-                                <button class="tg-btn tg-btn-secondary" onclick="event.stopPropagation(); unblockUserAction(${u.id}); navBack();" style="padding:7px 14px;font-size:13px;border-radius:10px;flex-shrink:0;">
+                                <button class="tg-btn tg-btn-secondary" onclick="event.stopPropagation(); unblockUserAction(${u.id}); navBack();" style="padding:8px 16px;font-size:13px;border-radius:10px;flex-shrink:0;white-space:nowrap;">
                                     Разблокировать
                                 </button>
                             </div>
+                            <div class="tg-action-divider"></div>
                         `;
                     });
                 }

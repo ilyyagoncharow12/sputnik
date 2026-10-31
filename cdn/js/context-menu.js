@@ -736,9 +736,9 @@ function addAudioViaFormData(filePath, title, artist, fileName) {
         if (sc) {
             content += storyCoverCardHTML(sc, 'История', 'Смотреть и ответить');
             const rest = m.content.slice(sc.offset).replace(/^\s*(\r?\n)+/, '').trim();
-            if (rest) content += `<div class="message-text">${escapeHtml(rest)}</div>`;
+            if (rest) content += `<div class="message-text">${renderFormattedText(rest)}</div>`;
         } else {
-            content += `<div class="message-text">${escapeHtml(m.content)}</div>`;
+            content += `<div class="message-text">${renderFormattedText(m.content)}</div>`;
         }
     }
 

@@ -89,11 +89,31 @@
         if (navStack.length > 0) {
             const html = navStack.pop();
             navSkipNext = html;
-            body.innerHTML = html;
-            modal.classList.add('active');
+            const content = modal.querySelector('.tg-modal-wrapper, .modal-content');
+            if (content) {
+                content.classList.remove('modal-animate-in');
+                content.classList.add('modal-animate-out');
+            }
+            setTimeout(() => {
+                body.innerHTML = html;
+                modal.classList.add('active');
+                const newContent = modal.querySelector('.tg-modal-wrapper, .modal-content');
+                if (newContent) {
+                    newContent.classList.remove('modal-animate-out');
+                    newContent.classList.add('modal-animate-in');
+                }
+            }, 220);
         } else {
-            navStack = [];
-            modal.classList.remove('active');
+            const content = modal.querySelector('.tg-modal-wrapper, .modal-content');
+            if (content) {
+                content.classList.remove('modal-animate-in');
+                content.classList.add('modal-animate-out');
+            }
+            setTimeout(() => {
+                navStack = [];
+                modal.classList.remove('active');
+                if (content) content.classList.remove('modal-animate-out');
+            }, 220);
         }
     }
 
@@ -144,13 +164,38 @@
 
     function openModal(id) {
         const modal = document.getElementById(id);
-        if (modal) modal.classList.add('active');
+        if (modal) {
+            // При открытии новой независимой модалки сбрасываем историю навигации,
+            // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
+            if (id === 'tempModal') {
+                navStack = [];
+                navSkipNext = null;
+            }
+            modal.classList.add('active');
+            const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
+            if (content) {
+                content.classList.remove('modal-animate-out');
+                content.classList.add('modal-animate-in');
+            }
+        }
     }
 
-    // Полное закрытие модалки (крестик/оверлей) — чистит историю навигации
+    // Полное закрытие модалки (крестик/оверлей/назад) — чистит историю навигации
     function closeModal(id) {
         const modal = document.getElementById(id);
-        if (modal) modal.classList.remove('active');
+        if (modal) {
+            const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
+            if (content) {
+                content.classList.remove('modal-animate-in');
+                content.classList.add('modal-animate-out');
+                setTimeout(() => {
+                    modal.classList.remove('active');
+                    content.classList.remove('modal-animate-out');
+                }, 220);
+            } else {
+                modal.classList.remove('active');
+            }
+        }
         if (id === 'tempModal') {
             navStack = [];
             navSkipNext = null;
@@ -367,5 +412,99 @@
             if (!document.fullscreenElement) clearBlur();
         });
     })();
-        document.documentElement.style.setProperty('--out-fg', fg);
+    document.documentElement.style.setProperty('--out-fg', fg);
+}
+
+// ===== ЗАКРЫТИЕ МОДАЛОК ПО КЛИКУ НА ОВЕРЛЕЙ (вне контента) =====
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+        closeModal(e.target.id);
     }
+});
+
+// ===== ЭКСПОРТ ГЛОБАЛЬНЫХ ФУНКЦИЙ =====
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.navBack = navBack;
+
+// ===== ЭКРАН ЗАГРУЗКИ МЕССЕНДЖЕРА =====
+(function initLoader() {
+    const screen = document.getElementById('loadingScreen');
+    const progressBar = document.getElementById('loaderProgressBar');
+    const percentEl = document.getElementById('loaderPercent');
+    const systemsEl = document.getElementById('loaderSystems');
+    const statusEl = document.getElementById('loaderStatus');
+
+    if (!screen) return;
+
+    const systems = [
+        'Интерфейс приложения',
+        'Система авторизации',
+        'Список чатов и контактов',
+        'Настройки профиля и темы',
+        'Истории и сообщения',
+        'Звонки и уведомления',
+    ];
+
+    let progress = 0;
+    let currentSystem = 0;
+
+    function setProgress(p, text) {
+        progress = Math.min(100, Math.max(0, p));
+        if (progressBar) progressBar.style.width = progress + '%';
+        if (percentEl) percentEl.textContent = progress + '%';
+        if (statusEl && text) statusEl.textContent = text;
+
+        // Обновляем статус систем
+        if (systemsEl) {
+            const items = systemsEl.querySelectorAll('li');
+            items.forEach((li, i) => {
+                if (i < currentSystem) {
+                    li.classList.remove('loading');
+                    li.classList.add('done');
+                } else if (i === currentSystem) {
+                    li.classList.add('loading');
+                } else {
+                    li.classList.remove('loading', 'done');
+                }
+            });
+        }
+    }
+
+    function nextSystem() {
+        if (currentSystem < systems.length) {
+            currentSystem++;
+            const step = Math.floor((currentSystem / systems.length) * 100);
+            const messages = [
+                'Рисуем интерфейс…',
+                'Проверяем ваш вход…',
+                'Загружаем чаты и контакты…',
+                'Подгружаем настройки…',
+                'Синхронизируем истории…',
+                'Готовим звонки и уведомления…',
+                'Всё готово!',
+            ];
+            setProgress(step, messages[currentSystem] || 'Завершаем…');
+        }
+    }
+
+    // Эмулируем逐步 загрузку систем
+    const loaderInterval = setInterval(() => {
+        nextSystem();
+        if (currentSystem >= systems.length) {
+            clearInterval(loaderInterval);
+            // Дожидаемся 100% и скрываем экран
+            setTimeout(() => {
+                setProgress(100, 'Готово!');
+                screen.classList.add('hidden');
+                // Полностью убираем из DOM через анимацию
+                setTimeout(() => {
+                    screen.style.display = 'none';
+                }, 600);
+            }, 400);
+        }
+    }, 700);
+
+    // Сначала показываем первую систему
+    setProgress(0, 'Запуск…');
+})();

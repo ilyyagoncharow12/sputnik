@@ -8,7 +8,22 @@
     overflow: hidden;
     color: white;
     width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
     box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+    transition: opacity 0.18s ease, transform 0.18s ease, filter 0.15s ease;
+}
+
+.tg-modal-wrapper.modal-animate-in {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+.tg-modal-wrapper.modal-animate-out {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
 }
 
 .tg-modal-header {
@@ -291,6 +306,54 @@
             overflow: hidden;
             font-size: 14px;
             transition: background var(--transition-normal), color var(--transition-normal);
+        }
+
+        /* ===== АНИМАЦИИ ПЕРЕХОДОВ МЕЖДУ ОКНАМИ ===== */
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.94) translateY(8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes modalFadeOut {
+            from { opacity: 1; transform: scale(1) translateY(0); }
+            to { opacity: 0; transform: scale(0.94) translateY(8px); }
+        }
+        @keyframes slideInFromRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideOutToRight {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(20px); }
+        }
+        @keyframes slideInFromLeft {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pageFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes pageFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        .modal-animate-in {
+            animation: modalFadeIn var(--transition-normal) ease-out forwards;
+        }
+        .modal-animate-out {
+            animation: modalFadeOut var(--transition-normal) ease-in forwards;
+        }
+        .page-animate-in {
+            animation: pageFadeIn var(--transition-normal) ease-out forwards;
+        }
+        .page-animate-out {
+            animation: pageFadeOut var(--transition-normal) ease-in forwards;
+        }
+
+        /* Плавный переход сайдбара ↔ зоны чата */
+        .sidebar, .chat-area {
+            transition: transform var(--transition-normal) ease, opacity var(--transition-normal) ease;
         }
 
         .app {

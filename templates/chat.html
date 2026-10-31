@@ -41,8 +41,42 @@
 <link rel="stylesheet" href="/cdn/css/presence.css">
 <link rel="stylesheet" href="/cdn/css/profile-media.css">
 <link rel="stylesheet" href="/cdn/css/tg-design.css">
+<link rel="stylesheet" href="/cdn/css/loading.css">
 </head>
 <body class="{{ body_class }}">
+
+<!-- ЭКРАН ЗАГРУЗКИ МЕССЕНДЖЕРА -->
+<div id="loadingScreen">
+    <div class="loader-planes">
+        <div class="loader-plane">✈️</div>
+        <div class="loader-plane">✈️</div>
+        <div class="loader-plane">✈️</div>
+        <div class="loader-plane">✈️</div>
+        <div class="loader-plane">✈️</div>
+        <div class="loader-plane">✈️</div>
+    </div>
+    <div class="loader-content">
+        <div class="loader-avatar">
+            <span>💬</span>
+        </div>
+        <div class="loader-title">Спутник</div>
+        <div class="loader-subtitle">Запуск мессенджера...</div>
+        <div class="loader-progress-wrap">
+            <div class="loader-progress-bar" id="loaderProgressBar"></div>
+        </div>
+        <div class="loader-percent" id="loaderPercent">0%</div>
+        <ul class="loader-systems" id="loaderSystems">
+            <li class="loading">Интерфейс приложения</li>
+            <li>Система авторизации</li>
+            <li>Список чатов и контактов</li>
+            <li>Настройки профиля и темы</li>
+            <li>Истории и сообщения</li>
+            <li>Звонки и уведомления</li>
+        </ul>
+        <div class="loader-status" id="loaderStatus">Инициализация...</div>
+    </div>
+</div>
+
 <div class="app">
     <!-- САЙДБАР -->
     <div class="sidebar" id="sidebar">

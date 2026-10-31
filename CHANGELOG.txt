@@ -2,10 +2,10 @@
   СПУТНИК (Sputnik) — Мессенджер
   ЖУРНАЛ ИЗМЕНЕНИЙ / РЕКОМЕНДАЦИИ
 ========================================================
-Последнее обновление: 23.10.2026
+Последнее обновление: 31.10.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v0.64.0
+ТЕКУЩАЯ ВЕРСИЯ: v0.64.3
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -205,51 +205,107 @@
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
 
-[23.10.2026] — v0.63.5: ФИКС НЕ ТЕМИЗИРОВАННЫХ МОДАЛОК
-  Файлы: cdn/css/tg-design.css, cdn/js/message-features.js,
-         cdn/js/profiles.js, cdn/js/messages.js, cdn/js/support.js,
-         cdn/js/stories.js, cdn/js/settings.js, cdn/js/security.js
+[31.10.2026] — v0.64.3: ЭКРАН ЗАГРУЗКИ ПЕРЕД ВХОДОМ
+  Файлы: cdn/css/loading.css (новый), templates/chat.html, cdn/js/core.js,
+         CHANGELOG.txt
 
-  В тёмной теме часть модалок оставалась светлой/рассинхронной —
-  хардкод #fff/#0f0f0f/#1c1c1e/#2c2c2e/#8e8e93/#007aff/#ff3b30
-  в CSS и в инлайн-стилях JS перекрывал переменные --modal-*.
+  ЭКРАН ЗАГРУЗКИ (запрос: экран загрузки перед запуском мессенджера):
+  - При открытии /chat показывается полноэкранный оверлей загрузки с
+    размытым фоном и градиентом фиолетово-голубой (#e0c3fc → #8ec5fc).
+  - По центру — аватар мессенджера с пульсацией, ниже — заголовок
+    «Спутник» и подзаголовок «Запуск мессенджера…».
+  - Прогресс-бар заполняется от 0 до 100% с отображением процентов.
+  - Список загружаемых систем (интерфейс, авторизация, чаты и контакты,
+    настройки профиля и темы, истории и сообщения, звонки и уведомления)
+    с чек-листом: текущая система — индикатор загрузки, готовые — галочка.
+  - На заднем фоне летят самолетики (✈️) по разным траекториям — CSS-анимация.
+  - По завершении загрузки экран плавно скрывается и открывается основной
+    интерфейс мессенджера.
 
-  CSS (tg-design.css, новые слои 11c–11f):
-  - 11c modals.css: .modal-header/.modal-close/.modal-body/
-    .modal-footer/.modal-btn-primary|secondary|danger,
-    .add-country-item (выбор страны), .story-stats-* (статистика
-    историй), .story-reply-*.
-  - 11d profile.css: .profile-modal/.edit-profile-modal/
-    .other-profile, .profile-banner, .change-photo-btn/
-    .my-profile-btn/.personal-colors-btn/.banner-action-btn/
-    .apply-color-btn/.reset-color-btn, .colors-modal/.color-circle,
-    .banner-preview, .personal-colors-section, .modal-header-block/
-    .modal-body-content, .song-mini-row, .add-account-card,
-    .channel-attachment-row.
-  - 11e contacts-app.css: .tg-modal-content/.tg-modal-header/
-    .tg-input/.tg-label/.tg-info-row/.tg-action-menu|item|divider/
-    .tg-btn-primary|secondary|danger/.tg-contacts-list/
-    .tg-contact-item|name|username|more-btn и .contact-modal-* —
-    сняты !important-хардкоды тёмной темы.
-  - 11f community.css: .comm-tabs/.comm-tab/.comm-field/
-    .comm-badge/.comm-btn/.comm-switch/.comm-avatar;
-    profile-media.css: .pm-modal/.pm-viewer/.pm-toolbar/.pm-header.
+[31.10.2026] — v0.64.1: ССЫЛКИ, АНИМАЦИИ И ТЕМА МОДАЛОК
+  Файлы: cdn/js/context-menu.js, cdn/js/profiles.js, cdn/js/core.js,
+         cdn/css/base.css, cdn/css/profile.css, cdn/css/modals.css,
+         CHANGELOG.txt
 
-  JS (инлайн-стили → var(--modal-*)):
-  - message-features.js: меню «Таймер исчезновения» (burnMenu).
-  - profiles.js: модалка переименования, плейлист/плеер, карточки
-    профилей, статусы контактов, пустые состояния.
-  - messages.js: модалка «Переслать сообщение».
-  - support.js: чат поддержки (вложения, тикеты, ответы).
-  - stories.js: модалка отправки истории, статистика.
-  - settings.js: приватность/внешний вид/активные сессии.
-  - security.js: статусы 2FA/паскода, кнопки сохранения.
-  Свотчи цветов (.tg-color-circle data-color) и акцентные
-  иконки плеера НЕ тронуты — остаются фактическими цветами.
+  ССЫЛКИ (запрос: ссылка в сообщении/био должна быть кликабельной без кнопок превью):
+  - Сообщения в чате теперь рендерятся через renderFormattedText() вместо escapeHtml(),
+    поэтому любая ссылка в тексте сообщения становится кликабельным <a> (подчёркивание
+    при наведении, тап открывает в новой вкладке, target="_blank").
+  - Кнопки превью ссылок (attachLinkPreviewButton/loadLinkPreviews/injectLinkPreview)
+    отключены — при отправке ссылки никакой карточки/кнопки не добавляется, только
+    обычный кликабельный текст.
+  - В описании профиля (bio/about) ссылки кликабельны через linkifyPlain() +
+    стили .bio-text a / .about-text a (подчёркивание при наведении).
 
-  Проверено: node --check всех 8 JS, баланс скобок tg-design.css.
+  МОДАЛКИ (по скриншотам десктоп-версии TG):
+  - Единый размер всех модалок: .modal-content и .tg-modal-wrapper ограничены
+    max-width: 560px и центрируются (margin: 0 auto).
+  - Модалка профиля (.other-profile / openMyProfile): max-width 400px → 560px,
+    overflow-y: auto (прокрутка вместо обрезки), стала шире и выше (по бокам уже).
+  - Модалка «Заблокированные» (openBlockedUsers): приведена к общему стилю
+    (tg-row, tg-action-divider, tg-btn-secondary), чистый список без инлайн-стилей.
+  - Навигация по истории модалок (navStack / navBack в core.js) сохранена — стрелка
+    «назад» возвращает на предыдущий экран, а не сразу на главный.
 
-  ОТКАТ: git checkout HEAD -- cdn/css/tg-design.css cdn/js/
+  АНИМАЦИИ ПЕРЕХОДОВ (как в Telegram):
+  - Новые CSS-ключевые кадры: modalFadeIn/Out, slideIn/Out, pageFadeIn/Out.
+  - Открытие/закрытие модалок — плавное изменение масштаба и прозрачности
+    (scale 0.94→1, translateY 12px→0, opacity 0→1).
+  - navBack() (стрелка «назад») — анимация ухода текущего экрана и входа
+    предыдущего вместо мгновенной замены.
+  - Боковая панель и зона чата — плавный translateX при переключении.
+  - Клик на оверлей модалки (фон вне контента) закрывает её и убирает блюр.
+
+  ВЫХОД ИЗ МОДАЛОК / ОЧИСТКА ИСТОРИИ:
+  - При полном закрытии любой модалки (крестик, оверлей, «назад» при пустом стеке)
+    блюр-фона убирается, opacity модалки → 0, pointer-events отключаются.
+  - При открытии новой модалки tempModal стек navStack сбрасывается — «назад»
+    не выкидывает на экраны из прошлых сессий.
+  - При закрытии tempModal стек navStack и navSkipNext всегда обнуляются,
+    чтобы при повторном входе не оставалась «прошлая история» навигации.
+
+  ЦВЕТА МОДАЛОК ПО ТЕМЕ (день / ночь):
+  - profile.css: все жёсткие #1c1c1e / #2c2c2e / #0f0f0f / #007aff /
+    #8e8e93 / white заменены на переменные --modal-* (--modal-bg,
+    --modal-fg, --modal-fg-muted, --modal-border, --modal-btn-bg,
+    --modal-btn-hover, --modal-accent и т.д.).
+  - .display-name (.profile-name-wrap и .other-profile .name-wrap): цвет
+    был жёстко white / black, теперь var(--modal-fg) — в светлой теме
+    чёрный текст, в тёмной — белый.
+  - bio-box / about-box / info-box / кнопки действий теперь корректно
+    перекрашиваются: в светлой теме — белые карточки с тёмным текстом,
+    в тёмной — тёмные карточки со светлым текстом.
+  - about-text / bio-text получили word-break: break-all и
+    overflow-wrap: break-word — текст «О себе» больше не убегает за границы
+    при длинных ссылках.
+
+  ДЕЛЕНИЕ ИСТОРИЙ:
+  - storyCardFromContent() теперь надёжнее распознаёт тег @@STORY:id:type:path@@
+    (поддерживает варианты без пути к файлу) — общая карточка истории в чате
+    отображается как обычное сообщение с обложкой, заголовком и кнопкой
+    просмотра, вместо сырого текста @@STORY:...@@.
+  - Карточка истории (.story-msg-card) перекрашена на переменные --modal-*:
+    в светлой теме — светлый фон с тёмным текстом, в тёмной — тёмный фон
+    со светлым текстом.
+
+  ОТКРЫТИЕ ПРОФИЛЯ ИЗ ИСТОРИИ:
+  - storyUserName и storyUserAvatar в просмотрщике историй теперь открывают
+    профиль автора по клику (openUserProfileModalFromStory → openUserProfileModal).
+  - closeStoryViewer, storyCardFromContent, storyCoverCardHTML экспортированы
+    в window, чтобы быть доступны из всех модулей.
+  - openUserProfileModalFromStory безопасно вызывает closeStoryViewer
+    (проверка typeof перед вызовом).
+
+  МОИ ИСТОРИИ В ПРОФИЛЕ:
+  - Во вкладке «Мой профиль» убрана кнопка «Медиа», добавлена секция
+    «Мои истории» с сеткой из 3 колонок (истории пользователя).
+  - Каждая история — карточка с обложкой (видео = иконка киноплёнки,
+    фото = изображение) и подписью, клик открывает просмотр истории.
+  - При отсутствии историй показывается «Нет историй».
+
+  ОТКАТ: git checkout HEAD -- cdn/css/base.css cdn/css/profile.css cdn/css/modals.css cdn/css/loading.css
+         cdn/js/core.js cdn/js/profiles.js cdn/js/context-menu.js cdn/js/stories.js
+
 
 [23.10.2026] — v0.63.4: МОДАЛКИ ПОД ТЕМУ (Day — белые, Night — тёмные)
   Файлы: cdn/css/base.css, cdn/css/tg-design.css

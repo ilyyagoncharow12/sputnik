@@ -1,0 +1,960 @@
+/* =====================================================================
+   TG-DESIGN.CSS — слой «как в Telegram»: цвета Day/Night + РАЗМЕРЫ TG
+   Подключается ПОСЛЕДНИМ в chat.html.
+   ===================================================================== */
+
+/* ===== 1. ФОН ПЕРЕПИСКИ (TG Day / Night) ===== */
+.chat-area {
+    background: #dfe7ed;
+}
+
+.messages-area {
+    background-color: #dfe7ed;
+}
+
+body.dark .chat-area,
+body.dark .messages-area {
+    background: #0e1621;
+}
+
+/* ===== 2. ПУЗЫРИ (метрики TG: padding 8/12, текст 15px, радиус 12) ===== */
+.messages-area {
+    padding: 10px 16px;
+    gap: 3px;
+}
+
+.message {
+    max-width: 70%;
+    margin-bottom: 0;
+}
+
+.message-bubble {
+    padding: 8px 12px;
+}
+
+.message-text {
+    font-size: 15px;
+    line-height: 1.35;
+}
+
+/* ===== 2b. КЛИКАБЕЛЬНЫЕ ССЫЛКИ (v0.64.0) ===== */
+/* Любая ссылка в тексте сообщения/bio — цвет акцента,
+   подчёркивание при наведении, тап открывает. */
+.message-text a,
+.about-text a,
+.bio-text a,
+.about-box a,
+.bio-box a,
+.member-role a {
+    color: var(--tg-accent, #3390ec);
+    text-decoration: none;
+    cursor: pointer;
+    word-break: break-all;
+}
+
+.message-text a:hover,
+.about-text a:hover,
+.bio-text a:hover,
+.about-box a:hover,
+.bio-box a:hover,
+.member-role a:hover {
+    text-decoration: underline;
+}
+
+/* исходящие: ссылки на зелёном пузыре — белые с подчёркиванием */
+.message.outgoing .message-text a {
+    color: var(--out-fg, #ffffff);
+}
+
+.message.outgoing .message-text a:hover {
+    text-decoration: underline;
+}
+
+/* исходящий: TG-зелёный Day / TG-синий Night, текст — контрастный
+   (цвет темизирован: встроенным дефолтам JS подставляет цвет темы) */
+.message.outgoing .message-bubble {
+    background: var(--primary-color);
+    color: var(--out-fg, #ffffff);
+    box-shadow: none;
+}
+
+/* входящий: белый (Day) / #182533 (Night) */
+.message.incoming .message-bubble {
+    background: #ffffff;
+    color: #17212b;
+    box-shadow: none;
+}
+
+body.dark .message.incoming .message-bubble {
+    background: #182533;
+    color: #ffffff;
+}
+
+.message-meta {
+    font-size: 12px;
+    margin-top: 2px;
+    opacity: 0.75;
+}
+
+.message-file {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.message-file:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+body.dark .message-file {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+body.dark .message-file:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.reply-indicator {
+    background: rgba(0, 0, 0, 0.05);
+    border-left-color: var(--tg-accent);
+}
+
+body.dark .reply-indicator {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+/* ===== 3. ДАТА-ПИЛЮЛЯ (как TG) ===== */
+.message-date-divider span {
+    background: var(--primary-gradient);
+    color: #ffffff;
+    font-weight: 500;
+    font-size: 12.5px;
+    padding: 3px 14px;
+}
+
+/* ===== 4. ОТВЕТ НАД ПОЛЕМ ВВОДА ===== */
+.reply-preview {
+    background: var(--bg-tertiary);
+    border-left-color: var(--tg-accent);
+}
+
+.reply-preview-name {
+    color: var(--tg-accent);
+}
+
+/* ===== 5. СПИСОК ЧАТОВ (метрики TG: ряд ~72px, аватар 54, имя 15) ===== */
+.chat-item {
+    border-left: 3px solid transparent;
+    padding: 9px 15px;
+}
+
+.chat-item.active {
+    background: var(--tg-sel);
+    border-left-color: transparent;
+}
+
+.chat-item.pinned:not(.active) {
+    background: transparent;
+}
+
+.chat-item.active .chat-name,
+.chat-item.active .chat-time {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.chat-item.active .chat-message {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.chat-item.active .chat-time {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.chat-avatar {
+    width: 54px;
+    height: 54px;
+}
+
+.chat-name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.chat-message {
+    font-size: 14px;
+}
+
+.chat-time {
+    font-size: 13px;
+}
+
+.chat-badge,
+.tab-badge {
+    background: var(--primary-gradient);
+    color: #ffffff;
+    min-width: 20px;
+    height: 20px;
+    line-height: 20px;
+    padding: 0 6px;
+    font-size: 13px;
+    border-radius: 10px;
+}
+
+.chat-item.active .chat-badge {
+    background: #ffffff;
+    color: var(--tg-sel);
+}
+
+/* ===== 6. ШАПКА ЧАТА (компактная, как TG: аватар 42) ===== */
+.chat-header-area {
+    padding: 8px 16px;
+}
+
+.chat-user-avatar {
+    width: 42px;
+    height: 42px;
+}
+
+.chat-user-name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.back-btn,
+.chat-actions button {
+    width: 40px;
+    height: 40px;
+}
+
+/* ===== 7. ПОИСК (высота 42, радиус 22, как TG) ===== */
+.search-bar {
+    padding: 8px 12px;
+}
+
+.search-bar input {
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    font-size: 15px;
+    padding: 10px 16px 10px 42px;
+}
+
+.search-bar input:focus {
+    border-color: var(--tg-accent);
+    background: var(--bg-primary);
+}
+
+.search-bar i {
+    left: 28px;
+    color: var(--text-muted);
+}
+
+/* ===== 8. КОМПОЗЕР (пилюля 46px, радиус 22, как TG) ===== */
+.message-input-area {
+    padding: 8px 16px;
+}
+
+.composer-box {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 22px;
+    padding: 4px 6px;
+}
+
+body.dark .composer-box {
+    background: #242f3d;
+    border-color: transparent;
+}
+
+.composer-box:focus-within {
+    border-color: var(--tg-accent);
+}
+
+.message-input {
+    font-size: 15px;
+    padding: 10px 8px;
+}
+
+.send-btn {
+    width: 46px;
+    height: 46px;
+}
+
+/* ===== 9. ИКОНКИ/ССЫЛКИ — всегда TG-акцент (не цвет пузыря) ===== */
+.context-menu-item i,
+.attach-btn:hover,
+.chat-actions button:hover,
+.chat-tab-add:hover,
+.pinned-banner i,
+.add-story-btn {
+    color: var(--tg-accent);
+}
+
+.add-story-btn {
+    border-color: var(--tg-accent);
+}
+
+.add-story-btn:hover {
+    background: var(--tg-accent);
+    color: #ffffff;
+}
+
+.stories-container::-webkit-scrollbar-thumb,
+.chats-list::-webkit-scrollbar-thumb,
+.messages-area::-webkit-scrollbar-thumb {
+    background: var(--tg-accent);
+}
+
+.chat-user-status.typing {
+    color: var(--tg-accent);
+}
+
+/* ===== 10. КОЛЬЦО ИСТОРИЙ (голубое, как в TG) ===== */
+.story-avatar-wrapper {
+    background: linear-gradient(135deg, #62a8e8, #3390ec);
+}
+
+body.dark .story-avatar-wrapper {
+    background: linear-gradient(135deg, #2b5278, #5288c1);
+}
+
+/* =====================================================================
+   11. МОДАЛКИ ПОД ТЕМУ (Day — белые, Night — тёмные #0f0f0f)
+   Переменные --modal-* определены в base.css (:root / body.dark).
+   ===================================================================== */
+
+/* Обёртки модалок: все три класса (wrapper/content/tempModal) */
+.tg-modal-wrapper,
+.tg-modal-content,
+.modal-content {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* Шапка */
+.tg-modal-header,
+.modal-header {
+    border-bottom-color: var(--modal-border);
+}
+
+.tg-modal-header .title,
+.modal-header h3 {
+    color: var(--modal-fg);
+}
+
+.tg-modal-header .close-btn,
+.tg-modal-header .cancel-btn {
+    color: var(--modal-fg-muted);
+}
+
+.tg-modal-header .close-btn:hover {
+    background: var(--modal-btn-bg);
+    color: var(--modal-fg);
+}
+
+.tg-modal-header .done-btn {
+    color: var(--modal-accent);
+}
+
+/* Подсказки / лейблы секций */
+.tg-hint,
+.tg-section-title,
+.tg-label {
+    color: var(--modal-fg-muted);
+}
+
+.tg-hint .link {
+    color: var(--modal-accent);
+}
+
+/* Кнопки-действия */
+.tg-action-btn,
+.tg-custom-color-btn,
+.tg-reset-btn,
+.tg-btn-secondary,
+.tg-btn-danger {
+    background: var(--modal-btn-bg);
+}
+
+.tg-action-btn:hover,
+.tg-custom-color-btn:hover,
+.tg-reset-btn:hover,
+.tg-btn-secondary:hover {
+    background: var(--modal-btn-hover);
+}
+
+.tg-action-btn {
+    color: var(--modal-accent);
+}
+
+.tg-action-btn.danger,
+.tg-reset-btn,
+.tg-btn-danger {
+    color: var(--modal-danger);
+}
+
+.tg-btn-primary {
+    background: var(--modal-accent);
+}
+
+.tg-btn-primary:hover {
+    filter: brightness(1.08);
+}
+
+/* Инпуты/текстареи */
+.tg-input,
+.tg-textarea,
+.modal-input {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.tg-input:focus,
+.tg-textarea:focus,
+.modal-input:focus {
+    border-color: var(--modal-accent) !important;
+    background: var(--modal-input-bg) !important;
+}
+
+.tg-input::placeholder,
+.tg-textarea::placeholder,
+.modal-input::placeholder {
+    color: var(--modal-fg-muted) !important;
+}
+
+/* Ряды-списки */
+.tg-row {
+    color: var(--modal-fg);
+}
+
+.tg-row:hover {
+    background: var(--modal-btn-bg);
+}
+
+.tg-info-row {
+    border-bottom-color: var(--modal-border);
+}
+
+.tg-info-row span {
+    color: var(--modal-fg);
+}
+
+.tg-info-row i {
+    color: var(--modal-accent);
+}
+
+/* Меню действий / пункты */
+.tg-action-menu {
+    background: var(--modal-bg) !important;
+}
+
+.tg-action-item {
+    color: var(--modal-fg);
+}
+
+.tg-action-item:hover {
+    background: var(--modal-btn-bg);
+}
+
+.tg-action-item i {
+    color: var(--modal-accent);
+}
+
+.tg-action-item.danger,
+.tg-action-item.danger i {
+    color: var(--modal-danger);
+}
+
+.tg-action-divider {
+    background: var(--modal-border);
+}
+
+/* Футер и рамки */
+.tg-modal-footer {
+    border-top-color: var(--modal-border);
+}
+
+.tg-banner-preview {
+    border-color: var(--modal-border);
+}
+
+.tg-custom-color-input::-webkit-color-swatch {
+    border-color: var(--modal-border);
+}
+
+.tg-color-circle:hover {
+    border-color: var(--modal-fg);
+}
+
+.tg-color-circle.selected {
+    border-color: var(--modal-accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--modal-accent) 30%, transparent);
+}
+
+/* Пунктирная кнопка */
+.tg-dashed-btn {
+    border-color: var(--modal-border);
+    color: var(--modal-accent);
+}
+
+.tg-dashed-btn:hover {
+    background: var(--modal-btn-bg);
+    border-color: var(--modal-accent);
+}
+
+/* --- 11c. modals.css: хардкод iOS-тёмных цветов → тема --- */
+.modal-header {
+    color: var(--modal-fg) !important;
+}
+
+.modal-close {
+    color: var(--modal-fg-muted) !important;
+}
+
+.modal-close:hover {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.modal-body {
+    color: var(--modal-fg) !important;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: var(--modal-border) !important;
+}
+
+.modal-footer {
+    border-top-color: var(--modal-border) !important;
+}
+
+.modal-btn-primary {
+    background: var(--modal-accent) !important;
+    color: #fff !important;
+}
+
+.modal-btn-primary:hover {
+    background: color-mix(in srgb, var(--modal-accent) 85%, #000) !important;
+}
+
+.modal-btn-secondary {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-accent) !important;
+}
+
+.modal-btn-secondary:hover {
+    background: var(--modal-btn-hover) !important;
+}
+
+.modal-btn-danger {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-danger) !important;
+}
+
+.modal-btn-danger:hover {
+    background: var(--modal-btn-hover) !important;
+}
+
+/* Выбор страны (модалка «Добавить аккаунт») */
+.add-country-item:hover {
+    background: var(--modal-btn-bg) !important;
+}
+
+.add-country-item .add-cname {
+    color: var(--modal-fg) !important;
+}
+
+.add-country-item .add-ccode {
+    color: var(--modal-fg-muted) !important;
+}
+
+/* Статистика сторис */
+.story-stats-body {
+    color: var(--modal-fg) !important;
+    background: var(--modal-bg) !important;
+}
+
+.story-stats-header {
+    background: var(--modal-bg) !important;
+    border-bottom-color: var(--modal-border) !important;
+}
+
+.story-stats-back-btn {
+    color: var(--modal-fg-muted) !important;
+}
+
+.story-stats-back-btn:hover {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.story-stats-card {
+    background: var(--modal-btn-bg) !important;
+    border-color: var(--modal-border) !important;
+}
+
+.story-stats-card .lbl {
+    color: var(--modal-fg-muted) !important;
+}
+
+.story-stats-user {
+    background: var(--modal-btn-bg) !important;
+}
+
+.story-stats-user:hover {
+    background: var(--modal-btn-hover) !important;
+}
+
+.story-stats-user .meta {
+    color: var(--modal-fg-muted) !important;
+}
+
+.story-stats-empty {
+    color: var(--modal-fg-muted) !important;
+    background: var(--modal-btn-bg) !important;
+}
+
+/* Ответ на историю */
+.story-reply-modal {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.story-reply-input {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+/* ===== 11b. МОДАЛКА «ДОБАВИТЬ АККАУНТ» ПОД ТЕМУ ===== */
+/* Днём — белая (слитно с белой модалкой), ночью — #1c1c1e. */
+.addacct {
+    background: var(--modal-bg);
+    color: var(--modal-fg);
+}
+
+body.dark .addacct {
+    background: #1c1c1e;
+}
+
+.addacct-hint,
+.addacct .profile-field label {
+    color: var(--modal-fg-muted);
+}
+
+.addacct .modal-input,
+.addacct select#addCountrySel {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.addacct .modal-input::placeholder {
+    color: var(--modal-fg-muted) !important;
+}
+
+.addacct select#addCountrySel option {
+    background: var(--modal-input-bg);
+    color: var(--modal-fg);
+}
+
+.aa-hint {
+    color: var(--modal-fg-muted);
+}
+
+/* Переключатель пароль/код: днём #eef1f8, ночью #232326 */
+.aa-seg {
+    background: #eef1f8;
+}
+
+body.dark .aa-seg {
+    background: #232326;
+}
+
+.aa-seg-btn {
+    color: var(--modal-fg-muted);
+}
+
+.aa-seg-btn.on {
+    background: #ffffff;
+    color: #6d28d9;
+    box-shadow: 0 4px 14px rgba(51, 65, 85, 0.14);
+}
+
+body.dark .aa-seg-btn.on {
+    background: #2f2f33;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.aa-code-status {
+    color: var(--modal-fg-muted);
+}
+
+/* Строка #tempModal с profile-field (лейблы в оверлее модалки) */
+#tempModal .profile-field label {
+    color: var(--modal-fg-muted) !important;
+}
+
+/* ===== 11d. profile.css — карточки профиля под тему ===== */
+.profile-modal,
+.edit-profile-modal,
+.other-profile {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.profile-banner,
+.profile-avatar-wrap,
+.user-profile-avatar-wrapper,
+.stats-avatar {
+    border-color: var(--modal-bg) !important;
+}
+
+.profile-name-wrap,
+.color-label {
+    color: var(--modal-fg) !important;
+}
+
+.change-photo-btn,
+.my-profile-btn,
+.personal-colors-btn,
+.banner-action-btn,
+.apply-color-btn {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.change-photo-btn:hover,
+.my-profile-btn:hover,
+.personal-colors-btn:hover,
+.banner-action-btn:hover,
+.apply-color-btn:hover {
+    background: var(--modal-btn-hover) !important;
+}
+
+.colors-modal {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.color-circle:hover {
+    border-color: var(--modal-fg) !important;
+}
+
+.color-hint,
+.color-circle-solid,
+.color-circle-gradient {
+    color: var(--modal-fg-muted) !important;
+}
+
+.banner-preview,
+.banner-preview-box {
+    border-color: var(--modal-border) !important;
+}
+
+.custom-color-section,
+.upload-banner-section {
+    color: var(--modal-fg-muted) !important;
+}
+
+.custom-color-input::-webkit-color-swatch {
+    border-color: var(--modal-border) !important;
+}
+
+.reset-color-btn {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-danger) !important;
+}
+
+.personal-colors-section {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.section-header {
+    color: var(--modal-fg-muted) !important;
+}
+
+.modal-header-block {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+    border-bottom-color: var(--modal-border) !important;
+}
+
+.modal-header-block .close-modal-btn {
+    color: var(--modal-fg-muted) !important;
+}
+
+.modal-body-content {
+    color: var(--modal-fg) !important;
+}
+
+.song-mini-row {
+    background: var(--modal-btn-bg) !important;
+    border-bottom-color: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.add-account-card {
+    background: var(--modal-btn-bg) !important;
+    border-color: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.channel-attachment-row {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.modal-input {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+/* ===== 11e. contacts-app.css — убрать !important-хардкод тёмной темы ===== */
+.contacts-app .tg-modal-content,
+.contact-modal-content {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-modal-header,
+.contact-modal-header {
+    color: var(--modal-fg) !important;
+    border-bottom-color: var(--modal-border) !important;
+}
+
+.contacts-app .tg-input,
+.contact-modal-input {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-label,
+.contact-avatar-preview,
+.contact-info-row,
+.contact-modal-body {
+    color: var(--modal-fg) !important;
+    border-bottom-color: var(--modal-border) !important;
+}
+
+.contacts-app .tg-action-menu,
+.contact-action-menu {
+    background: var(--modal-bg) !important;
+}
+
+.contacts-app .tg-action-item,
+.contact-action-item {
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-action-item:hover,
+.contact-action-item:hover {
+    background: var(--modal-btn-bg) !important;
+}
+
+.contacts-app .tg-action-divider,
+.contact-action-divider {
+    background: var(--modal-border) !important;
+}
+
+.contacts-app .tg-btn-primary,
+.contact-modal-btn-primary {
+    background: var(--modal-accent) !important;
+    color: #fff !important;
+}
+
+.contacts-app .tg-btn-secondary,
+.contact-modal-btn-secondary {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-btn-danger {
+    background: var(--modal-btn-bg) !important;
+    color: var(--modal-danger) !important;
+}
+
+.contacts-app .tg-contacts-list {
+    background: var(--modal-bg) !important;
+}
+
+.contacts-app .tg-contact-item {
+    background: var(--modal-bg) !important;
+    border-bottom-color: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-contact-name,
+.contacts-app .tg-contact-username {
+    color: var(--modal-fg) !important;
+}
+
+.contacts-app .tg-contact-username {
+    color: var(--modal-fg-muted) !important;
+}
+
+.contacts-app .tg-contact-more-btn {
+    color: var(--modal-fg-muted) !important;
+}
+
+.contacts-app .tg-info-row {
+    border-bottom-color: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+/* ===== 11f. community.css + profile-media.css ===== */
+.comm-tabs {
+    background: var(--modal-btn-bg) !important;
+    border-color: var(--modal-border) !important;
+}
+
+.comm-tab {
+    color: var(--modal-fg-muted) !important;
+}
+
+.comm-tab.active,
+.comm-tab.on {
+    background: var(--modal-accent) !important;
+    color: #fff !important;
+}
+
+.comm-field {
+    background: var(--modal-input-bg) !important;
+    border-color: var(--modal-input-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.comm-badge {
+    background: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.comm-btn {
+    background: var(--modal-accent) !important;
+    color: #fff !important;
+}
+
+.comm-switch {
+    background: var(--modal-btn-bg) !important;
+    border-color: var(--modal-border) !important;
+    color: var(--modal-fg) !important;
+}
+
+.comm-avatar {
+    border-color: var(--modal-border) !important;
+}
+
+/* profile-media: просмотрщик медиа — фон всегда тёмный (как в ТГ), но текст/иконки — переменные */
+.pm-modal,
+.pm-viewer {
+    background: var(--modal-bg) !important;
+    color: var(--modal-fg) !important;
+}
+
+.pm-toolbar,
+.pm-header {
+    color: var(--modal-fg) !important;
+}
