@@ -854,6 +854,39 @@ function highlightCurrentColor(color, image) {
     });
 }
 
+/**
+ * Синхронизирует баннер в шапке бургер-меню с профилем.
+ * Раньше менялись только .banner внутри профиля, а шапка бургер-меню
+ * (id="burgerHeader" / .burger-banner) оставалась со старым баннером.
+ */
+function syncBurgerBanner(opts) {
+    const header = document.getElementById('burgerHeader');
+    if (!header) return;
+    const banner = header.querySelector('.burger-banner');
+    const image = opts && opts.image;
+    const color = opts && opts.color;
+
+    if (image) {
+        const url = `/${String(image).replace(/^\/+/, '')}`;
+        header.style.setProperty('--banner-image', `url('${url}')`);
+        header.style.removeProperty('--banner-color');
+        if (banner) {
+            banner.setAttribute('data-kind', 'image');
+            banner.style.backgroundImage = `url('${url}')`;
+            banner.style.backgroundSize = 'cover';
+            banner.style.backgroundPosition = 'center';
+        }
+    } else if (color) {
+        header.style.setProperty('--banner-color', color);
+        header.style.removeProperty('--banner-image');
+        if (banner) {
+            banner.setAttribute('data-kind', 'color');
+            banner.style.backgroundImage = 'none';
+            banner.style.background = color;
+        }
+    }
+}
+
 function updateBannerColor(color) {
     const preview = document.getElementById('bannerPreviewBox');
     if (preview) {
@@ -875,6 +908,7 @@ function updateBannerColor(color) {
                 banner.style.background = color;
                 banner.style.backgroundImage = 'none';
             });
+            syncBurgerBanner({ color: color });
             showToast('Цвет баннера обновлен!');
         } else {
             alert('Ошибка при сохранении цвета: ' + (data.error || 'неизвестная ошибка'));
@@ -929,6 +963,8 @@ function uploadBannerImage(input) {
                 banner.setAttribute('style', bgStyle);
             });
 
+            syncBurgerBanner({ image: data.banner_image });
+
             document.querySelectorAll('.tg-color-circle').forEach(el => {
                 el.classList.remove('selected');
             });
@@ -976,6 +1012,7 @@ function resetBannerColor() {
                     banner.style.backgroundImage = 'none';
                 });
 
+                syncBurgerBanner({ color: defaultColor });
                 showToast('Цвет профиля сброшен');
             }
         })

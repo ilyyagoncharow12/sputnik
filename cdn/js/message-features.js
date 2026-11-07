@@ -205,10 +205,19 @@
 
     function handlePickedFiles(files) {
         if (!files || files.length === 0) return;
-        pendingFiles = Array.from(files);
-        showFilePreview(pendingFiles);
+        const list = Array.from(files);
+        // Фото/видео сначала открываем в полноэкранном редакторе (как в Telegram).
+        // Остальные файлы (документы) — в старое окно предпросмотра.
+        const mediaOnly = list.every(f => /^(image|video)\//.test(f.type || '') ||
+            /\.(jpe?g|png|gif|webp|bmp|heic|avif|mp4|webm|mov|m4v|avi|mkv|3gp)$/i.test(f.name || ''));
         document.getElementById('mediaFileInput').value = '';
         document.getElementById('docsFileInput').value = '';
+        if (mediaOnly && typeof openMediaEditor === 'function') {
+            openMediaEditor(list);
+            return;
+        }
+        pendingFiles = list;
+        showFilePreview(pendingFiles);
     }
 
     // ===== ПРЕВЬЮ ССЫЛОК =====

@@ -793,6 +793,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const f = img.getAsFile();
             if (!f) return;
             e.preventDefault();
+            // Вставленная картинка открывается в редакторе (как в Telegram)
+            if (typeof openMediaEditor === 'function') {
+                openMediaEditor([f]);
+                return;
+            }
             if (typeof pendingFiles !== 'undefined') {
                 pendingFiles = (pendingFiles || []).concat([f]);
                 showFilePreview(pendingFiles);

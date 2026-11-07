@@ -52,6 +52,18 @@
     let navStack = [];        // [{html}] — предыдущие экраны tempModal
     let navSkipNext = null;   // html, который восстанавливаем — не пушить его
 
+    // Отложенные таймеры скрытия модалок (closeModal/navBack ждут анимацию 220 мс).
+    // Если модалку успевают открыть заново раньше, старый таймер её «выбивал»:
+    // экран мигал и исчезал (например, вкладка «Цвета» в профиле).
+    const modalCloseTimers = {};
+
+    function cancelModalClose(id) {
+        if (modalCloseTimers[id]) {
+            clearTimeout(modalCloseTimers[id]);
+            delete modalCloseTimers[id];
+        }
+    }
+
     // Автосохранение: ловим ЛЮБУЮ замену содержимого #tempModalBody
     // (showModal, прямые innerHTML=... в profiles.js и т.д.)
     (function installNavObserver() {
@@ -109,7 +121,9 @@
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
             }
-            setTimeout(() => {
+            cancelModalClose(modal.id);
+            modalCloseTimers[modal.id] = setTimeout(() => {
+                delete modalCloseTimers[modal.id];
                 navStack = [];
                 modal.classList.remove('active');
                 if (content) content.classList.remove('modal-animate-out');
@@ -122,7 +136,10 @@
         navStack = [];
         navSkipNext = null;
         const modal = document.getElementById('tempModal');
-        if (modal) modal.classList.remove('active');
+        if (modal) {
+            cancelModalClose(modal.id);
+            modal.classList.remove('active');
+        }
     }
 
     // Совместимость: старое имя = «назад»
@@ -165,6 +182,9 @@
     function openModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
+            // Отменяем отложенное закрытие: иначе таймер closeModal/navBack
+            // сработает уже после открытия и снова спрячет модалку.
+            cancelModalClose(id);
             // При открытии новой независимой модалки сбрасываем историю навигации,
             // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
             if (id === 'tempModal') {
@@ -184,11 +204,13 @@
     function closeModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
+            cancelModalClose(id);
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
             if (content) {
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
-                setTimeout(() => {
+                modalCloseTimers[id] = setTimeout(() => {
+                    delete modalCloseTimers[id];
                     modal.classList.remove('active');
                     content.classList.remove('modal-animate-out');
                 }, 220);
