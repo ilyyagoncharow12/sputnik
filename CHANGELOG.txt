@@ -5,7 +5,7 @@
 Последнее обновление: 08.11.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v0.64.24
+ТЕКУЩАЯ ВЕРСИЯ: v0.64.25
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -205,107 +205,23 @@
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
 
-[08.11.2026] — v0.64.24: БУРГЕР-МЕНЮ — ПУСТОТА ПРИ НАЖАТИИ (ИСПРАВЛЕНО)
-  Файлы: cdn/js/core.js, CHANGELOG.txt
+[08.11.2026] — v0.64.25: ОТКАТ БЭКЕНДА, ОСТАВЛЕНЫ ИКОНКИ
+  Файлы: cdn/css/burger.css, templates/chat.html, static/icons/tgciosicons/, CHANGELOG.txt
 
-  ИСПРАВЛЕНО: при нажатии на любую кнопку в бургер-меню показывалась пустота.
-  Причина: showModal() сначала записывал контент в tempModalBody.innerHTML,
-  а потом вызывал openModal('tempModal'), который внутри вызывал
-  clearTempModalBody() — и стирал только что записанный HTML.
-  - showModal() теперь сначала вызывает openModal('tempModal') (который
-    сбрасывает историю навигации), а потом записывает innerHTML — контент
-    не стирается.
-  - Убран clearTempModalBody() из openModal() — он больше не нужен там,
-    сброс навигации делает resetNavHistory().
-  - closeModal() для tempModal всё ещё вызывает clearTempModalBody() —
-    при закрытии модалки тело очищается корректно.
+  ОТКАТ БЭКЕНДА:
+    - Все Python-файлы (main.py, database.py, _svc.py, config.py и др.)
+      возвращены к состоянию f80e970 (до изменений пункта 6).
+    - Функционал пункта 6 (новый чат, импорт контактов из книги телефона)
+      полностью удалён.
+    - JS/CSS изменения пункта 6 удалены.
 
-[08.11.2026] — v0.64.23: ИКОНКА PREMIUM — ИСПРАВЛЕНА
-  Файлы: static/icons/tgciosicons/premium.webp, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Исправлена иконка кнопки "Sputnik Premium" — была пустая, теперь
-      отображается иконка огня tgciosicons_013.webp из пакета
-      Telegram Colored iOS Icons.
-    - Все 16 иконок меню скачаны и на месте (contacts, calls, favorites,
-      folders, blocked, discover, create_group, create_channel, settings,
-      appearance, privacy, sessions, support, night_theme, logout, premium).
-
-[08.11.2026] — v0.64.22: ИКОНКА ТЕМЫ — МАЛЕНЬКАЯ 18PX (ИСПРАВЛЕНО НАВСЕГДА)
-  Файлы: cdn/css/burger.css, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Иконка дневная/ночная тема — МАЛЕНЬКАЯ 18×18, как раньше.
-    - Убран базовый width: 100% у .tg-menu-icon (был原因 огромной иконки).
-    - Все иконки меню — фиксированный размер 24px.
-    - Иконка темы — принудительно 18px через #nightModeIcon с !important.
-    - Техподдержка — пункт меню с иконкой tgciosicons_039.webp.
-
-[08.11.2026] — v0.64.21: ИКОНКА ТЕМЫ — МАЛЕНЬКАЯ (ИСПРАВЛЕНО)
-  Файлы: cdn/css/burger.css, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Иконка дневная/ночная тема — снова МАЛЕНЬКАЯ (18×18), как раньше.
-    - Исправлен селектор #nightModeIcon.tg-menu-icon-small (был перебит
-      #nightModeIcon.tg-menu-icon с width: 100%).
-    - Техподдержка — пункт меню с иконкой tgciosicons_039.webp.
-
-[08.11.2026] — v0.64.20: ИКОНКА ТЕМЫ — МАЛЕНЬКАЯ, ТЕХПОДДЕРЖКА
-  Файлы: cdn/css/burger.css, templates/chat.html, cdn/js/settings.js,
-         static/icons/tgciosicons/support.webp, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Иконка дневная/ночная тема — снова маленькая (18×18), как была раньше,
-      не огромная. Исправлен размер через tg-menu-icon-small.
-    - Добавлена вкладка «Техподдержка» с иконкой tgciosicons_039.webp.
-    - Функция openSupport() открывает модалку техподдержки.
-    - Иконка техподдержки скачана: static/icons/tgciosicons/support.webp
-
-[08.11.2026] — v0.64.19: БУРГЕР-МЕНЮ — КОНКРЕТНЫЕ ИКОНКИ И ТЕХПОДДЕРЖКА
-  Файлы: templates/chat.html, cdn/css/burger.css, cdn/js/settings.js, static/icons/tgciosicons/ (5 иконок), CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Активные сессии — иконка tgciosicons_079.webp
-    - Оформление — иконка tgciosicons_045.webp
-    - Папки с чатами — иконка tgciosicons_046.webp
-    - Техподдержка — новый пункт меню с иконкой tgciosicons_039.webp (открывает модалку техподдержки)
-    - Кнопка дневная/ночная тема — маленькая иконка tgciosicons_044.webp (как была раньше)
-    - Все иконки из пакета Telegram Colored iOS Icons (chpic.su)
-
-[08.11.2026] — v0.64.18: БУРГЕР-МЕНЮ — ИКОНКИ TELEGRAM COLORED iOS (chpic.su)
-  Файлы: templates/chat.html, cdn/css/burger.css, static/icons/tgciosicons/ (15 иконок), CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Заменены иконки Font Awesome на иконки из пакета "Telegram Colored iOS Icons"
-      (https://chpic.su/en/emojis/tgciosicons/).
-    - Иконки скачаны в формате WEBP в static/icons/tgciosicons/:
-      contacts, calls, favorites, folders, blocked, discover,
-      create_group, create_channel, settings, appearance, privacy,
-      sessions, premium, night_theme, logout.
-    - Активный пункт menu — синий оттенок через CSS filter (hue-rotate/saturate).
-    - Кнопка выхода — красный оттенок.
-    - Все иконки цветастые, как в официальном Telegram iOS.
-
-[08.11.2026] — v0.64.17: БУРГЕР-МЕНЮ — ИКОНКИ TELEGRAM iOS ИСПРАВЛЕНЫ
-  Файлы: templates/chat.html, cdn/css/burger.css, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Иконки возвращены на Font Awesome (были неудачные цветные SVG).
-    - Все иконки одного сдержанного серого цвета #8e8e93 (как в Telegram iOS).
-    - Активный пункт — иконка синяя #2ca5e0.
-    - Кнопка выхода — красная #ff3b30.
-    - Аккуратные отступы и размер 17px, гармонично смотрятся в меню.
-
-[08.11.2026] — v0.64.16: БУРГЕР-МЕНЮ — ЦВЕТНЫЕ ИКОНКИ TELEGRAM iOS
-  Файлы: templates/chat.html, cdn/css/burger.css, CHANGELOG.txt
-
-  БУРГЕР-МЕНЮ:
-    - Заменены иконки Font Awesome на цветные inline SVG в стиле Telegram iOS.
-    - Каждая иконка имеет свой цвет: синий (#2ca5e0) для основных действий,
-      зелёный (#00c853) для звонков, красный (#ff3b30) для выхода и блокировок,
-      серый (#8e8e93) для настроек и приватности.
-    - При активном пункте меню иконка окрашивается в акцентный цвет.
-    - Точка отката: коммит f80e970 (git reset --hard f80e970).
+  ОСТАВЛЕНЫ ТОЛЬКО ИКОНКИ:
+    - Все 16 иконок из пакета Telegram Colored iOS Icons (chpic.su)
+      в static/icons/tgciosicons/
+    - Иконки в бургер-меню заменены на цветные WEBP иконки
+    - Иконка темы — маленькая 18×18px
+    - Кнопка Premium — с иконкой огня
+    - Техподдержка — пункт меню с иконкой щита
 
 [08.11.2026] — v0.64.15: МОБ. ТОП-БАР — ОТСТУП ОТ СТАТУСНОЙ ПАНЕЛИ
   Файлы: cdn/css/mobile.css, CHANGELOG.txt
