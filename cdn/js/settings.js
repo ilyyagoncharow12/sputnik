@@ -158,106 +158,153 @@ function savePrivacySettings() {
 }
 
     function openAppearance() {
-    closeBurgerMenu();
-    fetch('/api/get_settings')
-        .then(r => r.json())
-        .then(s => {
-            // Получаем текущие настройки
-            const myColor = s.my_message_color || '#eeffde';
-            const theirColor = s.their_message_color || '#ffffff';
-            const radius = s.bubble_radius || 12;
-            const fontSize = s.font_size || 14;
-            const fontFamily = s.font_family || "'Unbounded', cursive";
-            const wallpaper = s.wallpaper_image || '';
+        closeBurgerMenu();
+        fetch('/api/get_settings')
+            .then(r => r.json())
+            .then(s => {
+                const myColor = s.my_message_color || '#eeffde';
+                const theirColor = s.their_message_color || '#ffffff';
+                const radius = s.bubble_radius || 12;
+                const fontSize = s.font_size || 14;
+                const fontFamily = s.font_family || "'Unbounded', cursive";
+                const wallpaper = s.wallpaper_image || '';
+                const theme = s.theme || 'light';
 
-            // Создаем модалку с предпросмотром
-            let html = `
-                <div class="tg-modal-wrapper">
-                    <div class="tg-modal-header">
-                        <button class="close-btn" onclick="navBack()">
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
-                        
-                        <div class="title">Оформление</div>
-                        <div style="width: 24px;"></div>
-                    </div>
-                    <div class="tg-modal-body">
-                        <!-- ПРЕДПРОСМОТР -->
-                        <div class="appearance-preview" id="appearancePreview">
-                            <div class="preview-msg theirs" style="background: ${theirColor}; color: ${['#f3f4f6', '#ffffff'].includes(theirColor) ? '#17212b' : 'white'}; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
-                                <span>Привет! Как дела?</span>
-                                <span class="label">Собеседник</span>
+                let html = `
+                    <div class="tg-modal-wrapper">
+                        <div class="tg-modal-header">
+                            <button class="close-btn" onclick="navBack()">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="title">Оформление</div>
+                            <div style="width: 24px;"></div>
+                        </div>
+                        <div class="tg-modal-body">
+                            <!-- ПРЕДПРОСМОТР (как в Telegram) -->
+                            <div class="appearance-preview">
+                                <div class="preview-row">
+                                    <div class="preview-msg theirs" style="background: ${theirColor}; color: ${theirColor === '#f3f4f6' || theirColor === '#ffffff' ? '#1e293b' : 'white'}; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
+                                        <span>Привет! Как дела?</span>
+                                        <span class="label">Собеседник</span>
+                                    </div>
+                                </div>
+                                <div class="preview-row preview-row-mine">
+                                    <div class="preview-msg mine" style="background: ${myColor}; color: white; border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
+                                        <span>Всё отлично! 👍</span>
+                                        <span class="label">Вы</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="preview-msg mine" style="background: ${myColor}; color: var(--modal-fg); border-radius: ${radius}px; font-size: ${fontSize}px; font-family: ${fontFamily};">
-                                <span>Всё отлично! 👍</span>
-                                <span class="label">Вы</span>
+
+                            <!-- НАСТРОЙКИ -->
+                            <div class="tg-section-title">Цвета сообщений</div>
+                            <div class="color-row">
+                                <div class="color-pair">
+                                    <div class="color-item">
+                                        <div class="color-label">Ваши</div>
+                                        <input type="color" id="myMessageColor" value="${myColor}" onchange="updateAppearancePreview()">
+                                    </div>
+                                    <div class="color-item">
+                                        <div class="color-label">Собеседника</div>
+                                        <input type="color" id="theirMessageColor" value="${theirColor}" onchange="updateAppearancePreview()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tg-section-title">Радиус пузырей</div>
+                            <div class="slider-row">
+                                <span id="radiusValue">${radius}px</span>
+                                <input type="range" id="bubbleRadius" min="0" max="30" value="${radius}" oninput="updateAppearancePreview()">
+                            </div>
+
+                            <div class="tg-section-title">Размер шрифта</div>
+                            <div class="slider-row">
+                                <span id="fontSizeValue">${fontSize}px</span>
+                                <input type="range" id="fontSize" min="12" max="24" value="${fontSize}" oninput="updateAppearancePreview()">
+                            </div>
+
+                            <div class="tg-section-title">Шрифт</div>
+                            <select id="fontFamily" onchange="updateAppearancePreview()" class="tg-select">
+                                <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" ${fontFamily.startsWith('-apple-system') ? 'selected' : ''}>Системный (как в Telegram)</option>
+                                <option value="'Unbounded', cursive" ${fontFamily.includes('Unbounded') ? 'selected' : ''}>Unbounded</option>
+                                <option value="'Roboto', sans-serif" ${fontFamily.includes('Roboto') ? 'selected' : ''}>Roboto</option>
+                                <option value="'Inter', sans-serif" ${fontFamily.includes('Inter') ? 'selected' : ''}>Inter</option>
+                                <option value="'Arial', sans-serif" ${fontFamily.includes('Arial') ? 'selected' : ''}>Arial</option>
+                                <option value="'Helvetica Neue', sans-serif" ${fontFamily.includes('Helvetica Neue') ? 'selected' : ''}>Helvetica Neue</option>
+                                <option value="'Times New Roman', serif" ${fontFamily.includes('Times') ? 'selected' : ''}>Times New Roman</option>
+                                <option value="'Courier New', monospace" ${fontFamily.includes('Courier') ? 'selected' : ''}>Courier New</option>
+                                <option value="'Georgia', serif" ${fontFamily.includes('Georgia') ? 'selected' : ''}>Georgia</option>
+                                <option value="'Verdana', sans-serif" ${fontFamily.includes('Verdana') ? 'selected' : ''}>Verdana</option>
+                            </select>
+
+                            <div class="tg-section-title">Тема</div>
+                            <div class="theme-row">
+                                <label class="theme-option ${theme === 'light' ? 'active' : ''}">
+                                    <input type="radio" name="appearanceTheme" value="light" onchange="setAppearanceTheme('light')" ${theme === 'light' ? 'checked' : ''}>
+                                    <span class="theme-name">Светлая</span>
+                                    <span class="theme-dot"></span>
+                                </label>
+                                <label class="theme-option ${theme === 'dark' ? 'active' : ''}">
+                                    <input type="radio" name="appearanceTheme" value="dark" onchange="setAppearanceTheme('dark')" ${theme === 'dark' ? 'checked' : ''}>
+                                    <span class="theme-name">Тёмная</span>
+                                    <span class="theme-dot"></span>
+                                </label>
+                            </div>
+
+                            <div class="tg-section-title">Обои</div>
+                            <div class="wallpaper-row">
+                                <button class="tg-action-btn" onclick="document.getElementById('wallpaperInput').click()">
+                                    <i class="fas fa-image"></i> Выбрать обои
+                                </button>
+                                <input type="file" id="wallpaperInput" accept="image/*" style="display: none;" onchange="uploadWallpaper(this)">
+                                ${wallpaper ? `
+                                <button class="tg-action-btn danger" onclick="resetWallpaper()">
+                                    <i class="fas fa-undo"></i> Убрать
+                                </button>
+                                ` : ''}
+                            </div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                                <button class="tg-action-btn" onclick="saveAppearanceSettings()" style="flex: 1; background: var(--modal-accent); color: var(--modal-fg);">
+                                    <i class="fas fa-save"></i> Сохранить
+                                </button>
+                                <button class="tg-reset-btn" onclick="resetAllAppearance()" style="flex: 1;">
+                                    <i class="fas fa-undo"></i> Сбросить всё
+                                </button>
                             </div>
                         </div>
-
-                        <!-- НАСТРОЙКИ -->
-                        <div class="tg-section-title">Цвет моих сообщений</div>
-                        <input type="color" id="myMessageColor" value="${myColor}" onchange="updateAppearancePreview()" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #2c2c2e; cursor: pointer; padding: 0;">
-
-                        <div class="tg-section-title">Цвет чужих сообщений</div>
-                        <input type="color" id="theirMessageColor" value="${theirColor}" onchange="updateAppearancePreview()" style="width: 60px; height: 60px; border-radius: 50%; border: 3px solid #2c2c2e; cursor: pointer; padding: 0;">
-
-                        <div class="tg-section-title">Радиус пузырей: <span id="radiusValue">${radius}px</span></div>
-                        <input type="range" id="bubbleRadius" min="0" max="30" value="${radius}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: var(--modal-accent);">
-
-                        <div class="tg-section-title">Размер шрифта: <span id="fontSizeValue">${fontSize}px</span></div>
-                        <input type="range" id="fontSize" min="12" max="20" value="${fontSize}" oninput="updateAppearancePreview()" style="width: 100%; accent-color: var(--modal-accent);">
-
-                        <div class="tg-section-title">Шрифт</div>
-                        <select id="fontFamily" onchange="updateAppearancePreview()" style="width: 100%; padding: 12px; background: var(--modal-btn-bg); border: 1px solid var(--modal-border); border-radius: 12px; color: var(--modal-fg); font-size: 15px; font-family: var(--font-family);">
-                            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" ${fontFamily.startsWith('-apple-system') ? 'selected' : ''}>Системный (как в Telegram)</option>
-                            <option value="'Unbounded', cursive" ${fontFamily.includes('Unbounded') ? 'selected' : ''}>Unbounded</option>
-                            <option value="'Roboto', sans-serif" ${fontFamily.includes('Roboto') ? 'selected' : ''}>Roboto</option>
-                            <option value="'Inter', sans-serif" ${fontFamily.includes('Inter') ? 'selected' : ''}>Inter</option>
-                            <option value="'Arial', sans-serif" ${fontFamily.includes('Arial') ? 'selected' : ''}>Arial</option>
-                            <option value="'Helvetica Neue', sans-serif" ${fontFamily.includes('Helvetica Neue') ? 'selected' : ''}>Helvetica Neue</option>
-                        </select>
-
-                        <div class="tg-section-title">Обои</div>
-                        <button class="tg-action-btn" onclick="document.getElementById('wallpaperInput').click()">
-                            <i class="fas fa-image"></i> Загрузить обои
-                        </button>
-                        <input type="file" id="wallpaperInput" accept="image/*" style="display: none;" onchange="uploadWallpaper(this)">
-
-                        ${wallpaper ? `
-                            <button class="tg-action-btn danger" onclick="resetWallpaper()">
-                                <i class="fas fa-undo"></i> Убрать обои
-                            </button>
-                        ` : ''}
-
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button class="tg-action-btn" onclick="saveAppearanceSettings()" style="flex: 1; background: var(--modal-accent); color: var(--modal-fg);">
-                                <i class="fas fa-save"></i> Сохранить
-                            </button>
-                            <button class="tg-reset-btn" onclick="resetAllAppearance()" style="flex: 1;">
-                                <i class="fas fa-undo"></i> Сбросить всё
-                            </button>
-                        </div>
                     </div>
-                </div>
-            `;
+                `;
 
-            document.getElementById('tempModalBody').innerHTML = html;
-            openModal('tempModal');
+                document.getElementById('tempModalBody').innerHTML = html;
+                openModal('tempModal');
 
-            // Сохраняем настройки в глобальных переменных для предпросмотра
-            window._tempSettings = {
-                myColor: myColor,
-                theirColor: theirColor,
-                radius: radius,
-                fontSize: fontSize,
-                fontFamily: fontFamily
-            };
-        })
-        .catch(err => {
-            console.error('Error loading settings:', err);
-            alert('Ошибка загрузки настроек');
+                window._tempSettings = {
+                    myColor: myColor,
+                    theirColor: theirColor,
+                    radius: radius,
+                    fontSize: fontSize,
+                    fontFamily: fontFamily
+                };
+            })
+            .catch(err => {
+                console.error('Error loading settings:', err);
+                alert('Ошибка загрузки настроек');
+            });
+    }
+
+    function setAppearanceTheme(theme) {
+        document.body.classList.toggle('dark', theme === 'dark');
+        localStorage.setItem('Sputnik_theme', theme);
+        fetch('/api/update_theme', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme: theme })
         });
-}
+        // Применяем пузыри под новую тему
+        sputnikApplyBubbleColor(window.__myBubbleColor || '');
+        updateAppearancePreview();
+    }
 
 // ===== ФУНКЦИЯ ОБНОВЛЕНИЯ ПРЕДПРОСМОТРА =====
 function updateAppearancePreview() {
@@ -276,12 +323,15 @@ function updateAppearancePreview() {
     const myMsg = document.querySelector('.appearance-preview .preview-msg.mine');
 
     if (theirMsg && myMsg) {
+        // Цвет текста для пузыря собеседника: на светлом фоне — тёмный, на тёмном — белый
+        const theirTextColor = theirColor === '#f3f4f6' || theirColor === '#ffffff' ? '#1e293b' : 'white';
         theirMsg.style.background = theirColor;
-        theirMsg.style.color = theirColor === '#f3f4f6' ? '#1e293b' : 'white';
+        theirMsg.style.color = theirTextColor;
         theirMsg.style.borderRadius = radius + 'px';
         theirMsg.style.fontSize = fontSize + 'px';
         theirMsg.style.fontFamily = fontFamily;
 
+        // Цвет текста для своего пузыря: всегда белый (как в TG)
         myMsg.style.background = myColor;
         myMsg.style.color = 'white';
         myMsg.style.borderRadius = radius + 'px';
@@ -327,6 +377,14 @@ function saveAppearanceSettings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ font_family: fontFamily })
+    });
+
+    // Сохраняем тему
+    const theme = document.body.classList.contains('dark') ? 'dark' : 'light';
+    fetch('/api/update_theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: theme })
     });
 
     // Применяем изменения
@@ -446,27 +504,261 @@ function terminateAllSessions() {
 function uploadWallpaper(input) {
     if (input.files && input.files[0]) {
         const file = input.files[0];
+        if (!/^image\//.test(file.type)) {
+            showToast('❌ Выберите изображение для обоев');
+            return;
+        }
+        openWallpaperCrop(file);
+    }
+}
+
+// ===== ОБОИ: МОДАЛЬНОЕ ОКНО ВЫБОРА/ОБРЕЗКИ (как в Telegram) =====
+let wallpaperCropState = {
+    file: null,
+    url: null,
+    aspect: '16:9',
+    offsetX: 0.5,
+    offsetY: 0.5,
+    img: null,
+};
+
+function openWallpaperCrop(file) {
+    wallpaperCropState.file = file;
+    wallpaperCropState.url = URL.createObjectURL(file);
+    wallpaperCropState.aspect = '16:9';
+    wallpaperCropState.offsetX = 0.5;
+    wallpaperCropState.offsetY = 0.5;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'wallpaper-crop-overlay';
+    overlay.id = 'wallpaperCropOverlay';
+
+    const is16x9 = wallpaperCropState.aspect === '16:9';
+    const maxW = Math.min(window.innerWidth * 0.92, 600);
+    const frameH = is16x9 ? Math.round(maxW * 9 / 16) : Math.round(maxW * 16 / 9);
+
+    overlay.innerHTML = `
+        <div class="wallpaper-crop-topbar">
+            <button class="wallpaper-crop-btn" onclick="wallpaperCropCancel()"><i class="fas fa-xmark"></i></button>
+            <div style="flex:1;"></div>
+            <button class="wallpaper-crop-btn primary" onclick="wallpaperCropApply()"><i class="fas fa-check"></i></button>
+        </div>
+        <div class="wallpaper-crop-body">
+            <div class="wallpaper-crop-bg-blur" id="wallpaperCropBgBlur"></div>
+            <div class="wallpaper-crop-frame" id="wallpaperCropFrame" style="width:${maxW}px;height:${frameH}px;">
+                <div class="wallpaper-crop-aspect" id="wallpaperCropAspect"></div>
+                <img class="wallpaper-crop-frame-image" id="wallpaperCropImage" src="${wallpaperCropState.url}" alt="">
+            </div>
+        </div>
+        <div class="wallpaper-crop-bottom">
+            <div class="wallpaper-crop-aspect-row">
+                <button class="wallpaper-crop-aspect-chip ${wallpaperCropState.aspect==='16:9'?'active':''}" onclick="wallpaperCropSetAspect('16:9')">16:9</button>
+                <button class="wallpaper-crop-aspect-chip ${wallpaperCropState.aspect==='9:16'?'active':''}" onclick="wallpaperCropSetAspect('9:16')">9:16</button>
+            </div>
+            <div class="wallpaper-crop-actions">
+                <button class="wallpaper-crop-btn" onclick="wallpaperCropCancel()">Отмена</button>
+                <button class="wallpaper-crop-btn primary" onclick="wallpaperCropApply()">Использовать</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.classList.add('active');
+
+    const bgBlur = document.getElementById('wallpaperCropBgBlur');
+    if (bgBlur) bgBlur.style.backgroundImage = `url('${wallpaperCropState.url}')`;
+
+    const img = document.getElementById('wallpaperCropImage');
+    const frame = document.getElementById('wallpaperCropFrame');
+
+    img.onload = () => {
+        wallpaperCropState.img = img;
+        wallpaperCropUpdate();
+    };
+
+    // Перетаскивание изображения пальцами/курсором
+    let isDragging = false;
+    let startX = 0, startY = 0, baseOffsetX = 0.5, baseOffsetY = 0.5;
+
+    const startDrag = (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        startX = clientX;
+        startY = clientY;
+        baseOffsetX = wallpaperCropState.offsetX;
+        baseOffsetY = wallpaperCropState.offsetY;
+        e.preventDefault();
+    };
+
+    const moveDrag = (e) => {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = (clientX - startX) / Math.max(1, frame.clientWidth);
+        const dy = (clientY - startY) / Math.max(1, frame.clientHeight);
+        wallpaperCropState.offsetX = Math.max(0, Math.min(1, baseOffsetX + dx));
+        wallpaperCropState.offsetY = Math.max(0, Math.min(1, baseOffsetY + dy));
+        wallpaperCropUpdate();
+        e.preventDefault();
+    };
+
+    const endDrag = () => { isDragging = false; };
+
+    frame.addEventListener('pointerdown', startDrag);
+    frame.addEventListener('pointermove', moveDrag);
+    frame.addEventListener('pointerup', endDrag);
+    frame.addEventListener('pointercancel', endDrag);
+    frame.addEventListener('touchstart', startDrag, { passive: false });
+    frame.addEventListener('touchmove', moveDrag, { passive: false });
+    frame.addEventListener('touchend', endDrag);
+}
+
+function wallpaperCropUpdate() {
+    const img = document.getElementById('wallpaperCropImage');
+    const frame = document.getElementById('wallpaperCropFrame');
+    if (!img || !frame) return;
+
+    const is16x9 = wallpaperCropState.aspect === '16:9';
+    const frameW = frame.clientWidth;
+    const frameH = frame.clientHeight;
+    const imgW = img.naturalWidth || img.width;
+    const imgH = img.naturalHeight || img.height;
+    const targetAsp = is16x9 ? 16 / 9 : 9 / 16;
+
+    let drawW, drawH;
+    if (imgW / imgH > targetAsp) {
+        drawH = frameH;
+        drawW = drawH * (imgW / imgH);
+    } else {
+        drawW = frameW;
+        drawH = drawW / (imgW / imgH);
+    }
+
+    const scaleX = drawW / frameW;
+    const scaleY = drawH / frameH;
+    const scale = Math.max(scaleX, scaleY);
+
+    const finalW = imgW * scale;
+    const finalH = imgH * scale;
+    const offsetX = (frameW - finalW) * wallpaperCropState.offsetX;
+    const offsetY = (frameH - finalH) * wallpaperCropState.offsetY;
+
+    img.style.width = Math.round(finalW) + 'px';
+    img.style.height = Math.round(finalH) + 'px';
+    img.style.left = Math.round(offsetX) + 'px';
+    img.style.top = Math.round(offsetY) + 'px';
+    img.style.position = 'absolute';
+    img.style.objectFit = 'none';
+    img.style.cursor = 'grab';
+
+    const bgBlur = document.getElementById('wallpaperCropBgBlur');
+    if (bgBlur) {
+        bgBlur.style.backgroundImage = `url('${wallpaperCropState.url}')`;
+    }
+}
+
+function wallpaperCropSetAspect(aspect) {
+    wallpaperCropState.aspect = aspect;
+    document.querySelectorAll('.wallpaper-crop-aspect-chip').forEach(b => {
+        b.classList.toggle('active', b.textContent === aspect);
+    });
+    const frame = document.getElementById('wallpaperCropFrame');
+    const is16x9 = aspect === '16:9';
+    const maxW = Math.min(window.innerWidth * 0.92, 600);
+    const frameH = is16x9 ? Math.round(maxW * 9 / 16) : Math.round(maxW * 16 / 9);
+    frame.style.width = maxW + 'px';
+    frame.style.height = frameH + 'px';
+    wallpaperCropState.offsetX = 0.5;
+    wallpaperCropState.offsetY = 0.5;
+    wallpaperCropUpdate();
+}
+
+function wallpaperCropCancel() {
+    const overlay = document.getElementById('wallpaperCropOverlay');
+    if (overlay) {
+        if (wallpaperCropState.url) URL.revokeObjectURL(wallpaperCropState.url);
+        overlay.remove();
+    }
+    wallpaperCropState = { file: null, url: null, aspect: '16:9', offsetX: 0.5, offsetY: 0.5, img: null };
+}
+
+async function wallpaperCropApply() {
+    const overlay = document.getElementById('wallpaperCropOverlay');
+    if (!overlay) return;
+
+    const img = document.getElementById('wallpaperCropImage');
+    const frame = document.getElementById('wallpaperCropFrame');
+    if (!img || !frame) return;
+
+    const is16x9 = wallpaperCropState.aspect === '16:9';
+    const frameW = frame.clientWidth;
+    const frameH = frame.clientHeight;
+    const targetAsp = is16x9 ? 16 / 9 : 9 / 16;
+
+    const canvas = document.createElement('canvas');
+    const outW = 1600;
+    const outH = is16x9 ? Math.round(outW * 9 / 16) : Math.round(outW * 16 / 9);
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+
+    const imgW = img.naturalWidth || img.width;
+    const imgH = img.naturalHeight || img.height;
+
+    let drawW, drawH;
+    if (imgW / imgH > targetAsp) {
+        drawH = frameH;
+        drawW = drawH * (imgW / imgH);
+    } else {
+        drawW = frameW;
+        drawH = drawW / (imgW / imgH);
+    }
+
+    const scaleX = drawW / frameW;
+    const scaleY = drawH / frameH;
+    const scale = Math.max(scaleX, scaleY);
+
+    const finalW = imgW * scale;
+    const finalH = imgH * scale;
+    const offsetX = (frameW - finalW) * wallpaperCropState.offsetX;
+    const offsetY = (frameH - finalH) * wallpaperCropState.offsetY;
+
+    const srcX = Math.max(0, -offsetX) * scale;
+    const srcY = Math.max(0, -offsetY) * scale;
+    const srcW = Math.min(frameW * scale, imgW - srcX);
+    const srcH = Math.min(frameH * scale, imgH - srcY);
+
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+
+    canvas.toBlob(async (blob) => {
+        if (!blob) {
+            showToast('❌ Ошибка обработки изображения');
+            wallpaperCropCancel();
+            return;
+        }
+
+        const file = new File([blob], wallpaperCropState.file.name, { type: 'image/jpeg' });
+        wallpaperCropCancel();
+
         const fd = new FormData();
         fd.append('wallpaper', file);
 
-        fetch('/api/update_wallpaper', {
-            method: 'POST',
-            body: fd
-        })
-        .then(r => r.json())
-        .then(data => {
+        try {
+            const r = await fetch('/api/update_wallpaper', { method: 'POST', body: fd });
+            const data = await r.json();
             if (data.success) {
                 document.getElementById('messagesArea').style.backgroundImage = `url('/${data.wallpaper_image}')`;
                 closeModal('tempModal');
                 showToast('✅ Обои обновлены!');
-                // Переоткрываем меню оформления
                 setTimeout(openAppearance, 500);
             } else {
                 showToast('❌ Ошибка при загрузке обоев');
             }
-        })
-        .catch(() => showToast('❌ Ошибка соединения'));
-    }
+        } catch (e) {
+            showToast('❌ Ошибка соединения');
+        }
+    }, 'image/jpeg', 0.92);
 }
 
 // ===== СБРОС ОБОЕВ =====
@@ -581,6 +873,13 @@ function resetAllAppearance() {
     function openChatInfo() {
         if (!currentChat) return;
         if (currentChatType === 'personal') {
+            const chatName = (currentChat && currentChat.name) || '';
+            const isFavorite = chatName.indexOf('Избранное') !== -1;
+            // Избранное — как канал в Telegram: информационная страница, не профиль пользователя
+            if (isFavorite) {
+                openFavoriteInfo();
+                return;
+            }
             const otherUserId = currentChat.other_user_id || currentChat.id;
             openUserProfileModal(otherUserId);
         } else if (currentChatType === 'group') {
@@ -589,6 +888,88 @@ function resetAllAppearance() {
         } else if (currentChatType === 'channel') {
             if (typeof openChannelInfo === 'function') openChannelInfo(currentChat.id);
             else showModal('Информация о канале', '<div class="user-profile-body"><p>Информация о канале</p></div>');
+        }
+    }
+
+    // ===== ИНФО ИЗБРАННОГО (как канал в Telegram) =====
+    function openFavoriteInfo() {
+        closeBurgerMenu();
+        fetch('/api/get_settings')
+            .then(r => r.json())
+            .then(settings => {
+                const wallpaper = settings.wallpaper_image || '';
+                const myColor = settings.my_message_color || '#eeffde';
+                const theirColor = settings.their_message_color || '#ffffff';
+                const radius = settings.bubble_radius || 12;
+
+                let bannerStyle = '';
+                if (settings.banner_image) {
+                    bannerStyle = `background-image: url('/${settings.banner_image}'); background-size: cover; background-position: center;`;
+                } else if (settings.banner_color) {
+                    bannerStyle = `background: ${settings.banner_color};`;
+                } else {
+                    bannerStyle = `background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);`;
+                }
+
+                let html = '<div class="other-profile">';
+                html += '<div class="modal-content" style="background: var(--modal-bg); border-radius: 24px; overflow-y: auto; color: var(--modal-fg); max-width: 560px;">';
+                html += `<div class="banner" id="profileBanner" style="${bannerStyle}">`;
+                html += '<div class="overlay"></div>';
+                html += '<div class="top-bar">';
+                html += '<button class="back-btn" onclick="closeModal(\'tempModal\')"><i class="fas fa-arrow-left"></i></button>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '<div class="avatar-wrap"><div class="avatar-placeholder">★</div></div>';
+                html += '<div class="name-wrap">';
+                html += '<div class="display-name">Избранное</div>';
+                html += '<div class="username">Ваш личный сейф</div>';
+                html += '</div>';
+
+                // Описание
+                html += '<div class="info-section" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color);">';
+                html += '<div style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Сообщения, фото, видео, файлы и ссылки, которые вы сохранили.</div>';
+                html += '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);">МЕДИА</div>';
+                html += '</div>';
+
+                // Ссылка на медиа-галерею
+                html += '<div class="media-row-link" data-name="Избранное" onclick="openUserMediaFromFavorite()" style="display: flex; align-items: center; padding: 14px 20px; cursor: pointer; border-bottom: 1px solid var(--border-color);">';
+                html += '<i class="fas fa-photo-film" style="width: 30px; color: var(--text-secondary);"></i>';
+                html += '<div style="flex: 1;">';
+                html += '<div style="font-size: 15px; color: var(--text-primary); font-weight: 600;">Медиа</div>';
+                html += '<div style="font-size: 13px; color: var(--text-muted);">Фото, видео, файлы и ссылки из Избранного</div>';
+                html += '</div>';
+                html += '<span class="value">смотреть <i class="fas fa-chevron-right"></i></span>';
+                html += '</div>';
+
+                // Подпись
+                html += '<div class="info-section" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color);">';
+                html += '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);">ОБ ИЗБРАННОМ</div>';
+                html += '<div style="font-size: 14px; color: var(--text-primary); line-height: 1.5;">Сообщения, которые вы переслали в «Избранное», остаются здесь навсегда. Только вы видите этот чат.</div>';
+                html += '</div>';
+
+                // Кнопки действий
+                html += '<div style="padding: 16px 20px; display: flex; gap: 8px;">';
+                html += '<button class="tg-action-btn" style="flex: 1;" onclick="closeModal(\'tempModal\'); openChatTrash();"><i class="fas fa-trash-restore"></i> Очистить Избранное</button>';
+                html += '<button class="tg-action-btn danger" style="flex: 1;" onclick="closeModal(\'tempModal\');"><i class="fas fa-times"></i> Закрыть</button>';
+                html += '</div>';
+
+                html += '</div>';
+                html += '</div>';
+
+                showModal('Избранное', html);
+            })
+            .catch(err => {
+                console.error('Error loading favorite info:', err);
+                showModal('Избранное', '<div style="padding: 20px; text-align: center;">Не удалось загрузить информацию</div>');
+            });
+    }
+
+    // ===== МЕДИА ИЗБРАННОГО =====
+    function openUserMediaFromFavorite() {
+        closeModal('tempModal');
+        if (typeof openUserMedia === 'function' && window.CURRENT_USER) {
+            openUserMedia(window.CURRENT_USER.id, 'Избранное');
         }
     }
 
@@ -869,4 +1250,11 @@ function resetAllAppearance() {
             searchResults.classList.remove('active');
         }
     });
+
+    // ===== ЭКСПОРТ ФУНКЦИЙ ОБОЕВ =====
+    window.openWallpaperCrop = openWallpaperCrop;
+    window.wallpaperCropApply = wallpaperCropApply;
+    window.wallpaperCropCancel = wallpaperCropCancel;
+    window.wallpaperCropSetAspect = wallpaperCropSetAspect;
+    window.wallpaperCropUpdate = wallpaperCropUpdate;
 

@@ -351,9 +351,190 @@
             animation: pageFadeOut var(--transition-normal) ease-in forwards;
         }
 
-        /* Плавный переход сайдбара ↔ зоны чата */
-        .sidebar, .chat-area {
-            transition: transform var(--transition-normal) ease, opacity var(--transition-normal) ease;
+        /* ===== ПРЕДПРОСМОТР ВНЕШНЕГО ВИДА — не вылетает за модалку ===== */
+        .appearance-preview {
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            background: var(--modal-input-bg, #ffffff);
+            border: 1px solid var(--modal-border, #e4e7ea);
+            border-radius: 16px;
+            margin-bottom: 12px;
+        }
+        .preview-msg {
+            max-width: 70%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            color: #ffffff;
+            font-size: 14px;
+            line-height: 1.4;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .preview-msg.theirs {
+            align-self: flex-start;
+            background: #ffffff;
+            color: #17212b;
+        }
+        .preview-msg.mine {
+            align-self: flex-end;
+            background: #eeffde;
+            color: #17212b;
+        }
+        body.dark .appearance-preview {
+            background: var(--modal-input-bg, #1c1c1e);
+            border-color: var(--modal-border, #2c2c2e);
+        }
+        body.dark .preview-msg.theirs {
+            background: #182533;
+            color: #ffffff;
+        }
+        body.dark .preview-msg.mine {
+            background: #2b5278;
+            color: #ffffff;
+        }
+        .preview-msg .label {
+            display: block;
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        /* ===== ОФОРМЛЕНИЕ: цветные пары и слайдеры ===== */
+        .appearance-preview {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            background: var(--modal-input-bg, #ffffff);
+            border: 1px solid var(--modal-border, #e4e7ea);
+            border-radius: 16px;
+            margin-bottom: 12px;
+        }
+        .preview-row {
+            display: flex;
+            justify-content: flex-start;
+        }
+        .preview-row-mine {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .color-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .color-pair {
+            display: flex;
+            gap: 12px;
+        }
+        .color-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        .color-label {
+            font-size: 11px;
+            color: var(--modal-fg-muted, #707579);
+        }
+        .color-item input[type="color"] {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 50%;
+            background: none;
+            cursor: pointer;
+            padding: 0;
+        }
+        .color-item input[type="color"]::-webkit-color-picker-wrapper {
+            padding: 0;
+        }
+        .color-item input[type="color"]::-webkit-color-picker-button {
+            border: none;
+            background: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .slider-row span:first-child {
+            min-width: 34px;
+            font-size: 13px;
+            color: var(--modal-fg-muted, #707579);
+        }
+        .tg-select {
+            width: 100%;
+            padding: 12px;
+            background: var(--modal-btn-bg, #f1f1f4);
+            border: 1px solid var(--modal-border, #e4e7ea);
+            border-radius: 12px;
+            color: var(--modal-fg, #17212b);
+            font-size: 15px;
+            font-family: var(--font-family);
+            cursor: pointer;
+        }
+        body.dark .tg-select {
+            background: #1c1c1e;
+            border-color: #2c2c2e;
+            color: #ffffff;
+        }
+        .theme-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 12px;
+            transition: background 0.2s;
+        }
+        .theme-option:hover {
+            background: var(--modal-btn-hover, #e4e7ea);
+        }
+        .theme-option.active {
+            background: var(--modal-btn-bg, #f1f1f4);
+        }
+        .theme-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--modal-accent, #3390ec);
+        }
+        .theme-name {
+            font-size: 15px;
+            color: var(--modal-fg, #17212b);
+            font-weight: 500;
+        }
+        .theme-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--modal-accent, #3390ec);
+            margin-left: auto;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .theme-option.active .theme-dot {
+            opacity: 1;
+        }
+        .wallpaper-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
         }
 
         .app {
@@ -361,5 +542,42 @@
             height: 100vh;
             width: 100%;
             overflow: hidden;
+        }
+
+        /* ===== 9. ЗЕЛЁНАЯ ТОЧКА ОНЛАЙН — базовые стили (все экраны) ===== */
+        .online-dot {
+            position: absolute;
+            bottom: 4px;
+            right: 2px;
+            width: 10px;
+            height: 10px;
+            background: #34c759;
+            border: 2px solid var(--bg-secondary, #ffffff);
+            border-radius: 50%;
+            box-shadow: 0 0 6px rgba(52, 199, 89, 0.6);
+            z-index: 5;
+            opacity: 1;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .online-dot.hidden {
+            opacity: 0;
+            transform: scale(0.6);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        /* ===== 8. ЧЕРНОВИК — КРАСНАЯ ТОЧКА В СПИСКЕ ЧАТОВ (все экраны) ===== */
+        .chat-draft-dot {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px var(--bg-secondary, #ffffff);
+            z-index: 5;
+        }
+        .chat-item.has-draft.active .chat-draft-dot {
+            right: 14px;
         }
 

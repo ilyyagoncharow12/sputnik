@@ -62,6 +62,13 @@
         lastBodyHtml = '';
     }
 
+    // Полная очистка тела tempModal (чтобыobserver не пушил старый контент в стек)
+    function clearTempModalBody() {
+        const body = document.getElementById('tempModalBody');
+        if (body) body.innerHTML = '';
+        lastBodyHtml = '';
+    }
+
     // Автосохранение: ловим ЛЮБУЮ замену содержимого #tempModalBody
     // (showModal, прямые innerHTML=... в profiles.js и т.д.)
     (function installNavObserver() {
@@ -123,6 +130,7 @@
             }
             setTimeout(() => {
                 resetNavHistory();     // полный выход — стек и история не восстанавливаются
+                clearTempModalBody();  // тело модалки очищаем, чтобы по новой шло
                 modal.classList.remove('active');
                 if (content) content.classList.remove('modal-animate-out');
             }, 220);
@@ -132,6 +140,7 @@
     // Полное закрытие модалки (с очисткой истории)
     function closeTempModal() {
         resetNavHistory();
+        clearTempModalBody();
         const modal = document.getElementById('tempModal');
         if (modal) modal.classList.remove('active');
     }
@@ -180,6 +189,7 @@
             // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
             if (id === 'tempModal') {
                 resetNavHistory();
+                clearTempModalBody();   // очищаем тело, чтобы по новой шло
             }
             modal.classList.add('active');
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
@@ -212,6 +222,7 @@
         }
         if (id === 'tempModal') {
             resetNavHistory();
+            clearTempModalBody();
         }
     }
 

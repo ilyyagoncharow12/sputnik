@@ -52,6 +52,14 @@
             if (item.dataset.chatType !== 'personal') return;
             const avatar = item.querySelector('.chat-avatar');
             if (!avatar) return;
+            const name = item.querySelector('.chat-name');
+            const isSystem = name && name.textContent && (name.textContent.indexOf('Спутник') !== -1 || name.textContent.indexOf('@sputnik') !== -1);
+            const isFavorite = name && name.textContent && name.textContent.indexOf('Избранное') !== -1;
+            // Системный чат и Избранное — без точки онлайн
+            if (isSystem || isFavorite) {
+                applyDot(avatar, false);
+                return;
+            }
             applyDot(avatar, onlineFor(item.dataset.chatId));
         });
     }
@@ -65,11 +73,30 @@
             return;
         }
         if (!uid) return;
-        const online = onlineFor(uid) && canShowStatus(uid);
-        applyDot(document.getElementById('chatUserAvatar'), online);
+
+        const chatName = (currentChat && currentChat.name) || '';
+        const isSystemChat = chatName.indexOf('Спутник') !== -1 || chatName.indexOf('@sputnik') !== -1;
+        const isFavoriteChat = chatName.indexOf('Избранное') !== -1;
 
         const statusEl = document.getElementById('chatUserStatus');
-        if (!statusEl || statusEl.classList.contains('typing')) return;
+        if (!statusEl) return;
+
+        // Системный чат и Избранное — без точки онлайн
+        const avatarEl = document.getElementById('chatUserAvatar');
+        if (avatarEl) applyDot(avatarEl, false);
+
+        if (isSystemChat) {
+            statusEl.textContent = 'Системный чат мессенжера';
+            return;
+        }
+        if (isFavoriteChat) {
+            statusEl.textContent = 'Ваш личный сейф';
+            return;
+        }
+
+        const online = onlineFor(uid) && canShowStatus(uid);
+        if (avatarEl) applyDot(avatarEl, online);
+        if (statusEl.classList.contains('typing')) return;
         if (online) {
             statusEl.textContent = 'в сети';
             return;

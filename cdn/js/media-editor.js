@@ -18,6 +18,7 @@ const meState = {
     selected: null,
     textColor: '#ffffff',
     pendingText: '',
+    textSize: 0.09,
     drawColor: '#ff453a',
     drawWidth: 0.014,
     stageW: 0,
@@ -178,8 +179,6 @@ function meEnsureDom() {
                 <span class="me-counter" id="meCounter">1 / 1</span>
                 <button class="me-nav" id="meNext" onclick="meNextItem()"><i class="fas fa-chevron-right"></i></button>
             </div>
-            <button class="me-icon-btn" id="meUndoBtn" onclick="meUndo()" title="Отменить"><i class="fas fa-rotate-left"></i></button>
-            <button class="me-send-btn" id="meSendBtn" onclick="meSend()" title="Отправить"><i class="fas fa-paper-plane"></i></button>
         </div>
         <div class="me-body">
             <div class="me-stage-wrap" id="meStageWrap">
@@ -214,6 +213,11 @@ function meEnsureDom() {
                 <button onclick="meLayerSize(-1)" title="Меньше"><i class="fas fa-minus"></i></button>
                 <button onclick="meLayerSize(1)" title="Больше"><i class="fas fa-plus"></i></button>
                 <button class="danger" onclick="meDeleteLayer()" title="Удалить"><i class="fas fa-trash"></i></button>
+            </div>
+            <!-- Кнопки отправки и сброса — внизу, чтобы было удобно нажимать пальцем -->
+            <div class="me-row" style="justify-content: space-between; align-items: center; margin-top: 6px;">
+                <button class="me-icon-btn" id="meUndoBtn" onclick="meUndo()" title="Отменить" style="flex: 0 0 auto;"><i class="fas fa-rotate-left"></i></button>
+                <button class="me-send-btn" id="meSendBtn" onclick="meSend()" title="Отправить" style="flex: 0 0 auto;"><i class="fas fa-paper-plane"></i></button>
             </div>
             <div class="me-tool-panel" id="meToolPanel"></div>
             <div class="me-tabs">
@@ -752,10 +756,16 @@ function meRenderPanel() {
             ${isVideo ? '<div class="me-section-title">Обрезка видео — ползунки на кадре</div>' : ''}
         `;
     } else if (meState.tool === 'text') {
+        const curSize = (meState.selected && meState.selected.type === 'text') ? (meState.selected.size || 0.09) : 0.09;
         panel.innerHTML = `
             <div class="me-row">
                 <input class="me-input" id="meTextInput" placeholder="Введите текст" maxlength="120" autocomplete="off">
                 <button class="me-chip primary" onclick="meAddText()">${meState.selected && meState.selected.type === 'text' ? 'Изменить' : 'Добавить'}</button>
+            </div>
+            <div class="me-row">
+                <div class="me-section-title">Размер текста</div>
+                <input type="range" id="meTextSize" min="0.04" max="0.3" step="0.01" value="${curSize}" oninput="meSetTextSize(this.value)">
+                <span id="meTextSizeLbl">${Math.round(curSize * 100)}%</span>
             </div>
             <div class="me-row">
                 <div class="me-swatches">
@@ -920,6 +930,21 @@ function mePickTextColor(c) {
     });
 }
 
+function meSetTextSize(val) {
+    const size = parseFloat(val);
+    const lbl = document.getElementById('meTextSizeLbl');
+    if (lbl) lbl.textContent = Math.round(size * 100) + '%';
+    const item = meState.items[meState.index];
+    if (!item) return;
+    if (meState.selected && meState.selected.type === 'text') {
+        mePushUndo(item);
+        meState.selected.size = size;
+        meLayout();
+        meUpdateTopbar();
+    }
+    meState.textSize = size;
+}
+
 function meAddText() {
     const item = meState.items[meState.index];
     const inp = document.getElementById('meTextInput');
@@ -935,7 +960,7 @@ function meAddText() {
         const layer = {
             type: 'text', text,
             x: 0.5, y: 0.5,
-            size: 0.09,
+            size: meState.textSize || 0.09,
             color: meState.textColor,
         };
         item.edit.layers.push(layer);

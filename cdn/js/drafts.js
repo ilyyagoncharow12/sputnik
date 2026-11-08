@@ -114,6 +114,17 @@
         return n;
     }
 
+    // Есть ли несохранённый черновик для данного чата
+    function hasDraftFor(chatType, chatId) {
+        if (typeof currentUser === 'undefined' || !currentUser || !currentUser.id) return false;
+        if (!chatType || !chatId) return false;
+        const key = PREFIX + currentUser.id + ':' + chatType + ':' + chatId;
+        try {
+            const v = localStorage.getItem(key);
+            return !!v && v.trim().length > 0;
+        } catch (e) { return false; }
+    }
+
     // Глобальный доступ
     window.saveDraftNow = saveNow;
     window.scheduleDraftSave = scheduleSave;
@@ -121,6 +132,7 @@
     window.loadChatDraft = loadDraft;
     window.discardDraft = discardDraft;
     window.countDrafts = countDrafts;
+    window.hasDraftFor = hasDraftFor;
 
     document.addEventListener('DOMContentLoaded', function () {
         const input = document.getElementById('messageInput');

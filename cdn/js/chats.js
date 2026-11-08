@@ -174,12 +174,14 @@
             const isActive = currentChat && currentChatType === chatType &&
                             ((chatType === 'personal' && currentChat.other_user_id == openId) ||
                              (chatType !== 'personal' && currentChat.id == openId));
+            const hasDraft = typeof window.hasDraftFor === 'function' && window.hasDraftFor(chatType, openId);
 
             return `
-                <div class="chat-item ${c.is_pinned ? 'pinned' : ''} ${isActive ? 'active' : ''}"
+                <div class="chat-item ${c.is_pinned ? 'pinned' : ''} ${isActive ? 'active' : ''} ${hasDraft ? 'has-draft' : ''}"
                      data-chat-id="${openId}"
                      data-chat-type="${chatType}"
                      onclick="openChat(${openId}, '${chatType}')">
+                    ${hasDraft ? `<span class="chat-draft-dot"></span>` : ''}
                     ${chatType === 'personal' ? `<div class="pin-button" onclick="event.stopPropagation();togglePin(this, ${chatId})">
                         <i class="fas fa-thumbtack" style="color: ${c.is_pinned ? '#10b981' : 'var(--text-muted)'};"></i>
                     </div>` : ''}
@@ -382,6 +384,7 @@ function continueOpenChat(id, type) {
                             frozenO ? null : d.other_user.id);
                         if (frozenO) document.getElementById('chatUserName')
                             .insertAdjacentHTML('beforeend', '<span class="snow-emoji">❄</span>');
+                        if (typeof window.updatePresenceUI === 'function') window.updatePresenceUI();
                     })
                     .catch(() => {
                         // Если ошибка — используем оригинальное
@@ -390,6 +393,7 @@ function continueOpenChat(id, type) {
                             frozenO ? null : d.other_user.id);
                         if (frozenO) document.getElementById('chatUserName')
                             .insertAdjacentHTML('beforeend', '<span class="snow-emoji">❄</span>');
+                        if (typeof window.updatePresenceUI === 'function') window.updatePresenceUI();
                     });
 
                 document.getElementById('chatUserAvatar').innerHTML = frozenO ?
@@ -408,6 +412,11 @@ function continueOpenChat(id, type) {
                 document.getElementById('messageInput').placeholder = d.other_user.has_blocked_me ? 'Вы заблокированы — сообщение не доставится' : 'Сообщение...';
                 showBlockedBanner(d.other_user.has_blocked_me);
                 removeUnsubscribeButton();
+                // Для Избранного скрываем кнопки звонков (избранное — не собеседник)
+                if (currentChat.name && currentChat.name.indexOf('Избранное') !== -1) {
+                    document.getElementById('audioCallBtn').style.display = 'none';
+                    document.getElementById('videoCallBtn').style.display = 'none';
+                }
             } else if (type === 'group' && d.group) {
                 currentChat.name = d.group.name;
                 currentChat.user_role = d.user_role;

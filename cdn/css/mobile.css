@@ -251,4 +251,274 @@ body.mobile .mobile-gesture,
     .link-preview {
         max-width: 100%;
     }
+
+    /* ===== 8. ЧЕРНОВИК — КРАСНАЯ ПОДСВЕТКА В СПИСКЕ ЧАТОВ (как в TG) ===== */
+    .chat-item.has-draft {
+        position: relative;
+    }
+    .chat-draft-dot {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 8px;
+        height: 8px;
+        background: #ef4444;
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px var(--bg-secondary);
+        z-index: 5;
+    }
+    .chat-item.has-draft.active .chat-draft-dot {
+        right: 14px;
+    }
+
+    /* ===== 9. АНИМАЦИЯ ЗЕЛЁНОЙ ТОЧКИ ОНЛАЙН (появление/исчезновение) ===== */
+    .online-dot {
+        position: absolute;
+        bottom: 4px;
+        right: 2px;
+        width: 10px;
+        height: 10px;
+        background: #34c759;
+        border: 2px solid var(--bg-secondary);
+        border-radius: 50%;
+        box-shadow: 0 0 6px rgba(52, 199, 89, 0.6);
+        z-index: 5;
+        opacity: 1;
+        transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+    .online-dot.hidden {
+        opacity: 0;
+        transform: scale(0.6);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    /* ===== 10. КЛАВИАТУРА НЕ СКРЫВАЕТ ИНФО О ПОЛЬЗОВАТЕЛЕ (мобильная) ===== */
+    .chat-header-area {
+        flex-shrink: 0;
+    }
+    .messages-area {
+        overflow-y: auto;
+    }
+    body.mobile .chat-area {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        max-height: 100dvh;
+    }
+    body.mobile .messages-area {
+        flex: 1;
+        min-height: 0;
+    }
+    /* При открытой клавиатуре — не сжимаем заголовок чата */
+    body.mobile .message-input-area {
+        flex-shrink: 0;
+    }
+
+    /* ===== МОБ. ТОП-БАР: отступ от статусной панели телефона ===== */
+    body.mobile {
+        padding-top: max(10px, env(safe-area-inset-top)) !important;
+        padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    }
+    /* Все модальные окна — отступ сверху под статусную панель */
+    body.mobile .tg-modal-header,
+    body.mobile .modal-header,
+    body.mobile .burger-header,
+    body.mobile .chat-header-area,
+    body.mobile .wallpaper-crop-topbar {
+        padding-top: calc(10px + max(0px, env(safe-area-inset-top))) !important;
+    }
+    /* Кнопки в верхней строке — крупные зоны нажатия (минимум 44x44) */
+    body.mobile .close-btn,
+    body.mobile .back-btn,
+    body.mobile .wallpaper-crop-btn,
+    body.mobile .me-icon-btn,
+    body.mobile .burger-item-icon,
+    body.mobile .hamburger-btn {
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    body.mobile .close-btn i,
+    body.mobile .back-btn i,
+    body.mobile .wallpaper-crop-btn i,
+    body.mobile .me-icon-btn i {
+        font-size: 20px !important;
+    }
+    /* Шапка чата — не прижимается к верхнему краю */
+    body.mobile .chat-header-area {
+        padding-top: calc(12px + max(0px, env(safe-area-inset-top))) !important;
+    }
+    /* Бургер-меню — шапка не заезжает под статусную панель */
+    body.mobile .burger-header {
+        padding-top: calc(14px + max(0px, env(safe-area-inset-top))) !important;
+    }
+}
+
+/* ===== ОБОИ: модальное окно выбора/обрезки (как в Telegram) ===== */
+.wallpaper-crop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100001;
+    background: #000;
+    display: none;
+    flex-direction: column;
+    height: 100dvh;
+    color: #fff;
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: contain;
+}
+.wallpaper-crop-overlay.active { display: flex; }
+
+.wallpaper-crop-topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,.8), rgba(0,0,0,0));
+    z-index: 2;
+}
+
+.wallpaper-crop-btn {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,.1);
+    color: #fff;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background .15s ease, transform .1s ease;
+}
+.wallpaper-crop-btn:active { transform: scale(.92); }
+.wallpaper-crop-btn:hover { background: rgba(255,255,255,.18); }
+.wallpaper-crop-btn.primary {
+    background: #2f7cf6;
+    box-shadow: 0 4px 14px rgba(47,124,246,.45);
+}
+
+.wallpaper-crop-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Размытый фон */
+.wallpaper-crop-bg-blur {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background-size: cover;
+    background-position: center;
+    filter: blur(24px) brightness(0.45);
+    opacity: 0.7;
+}
+
+/* Рамка обрезки */
+.wallpaper-crop-frame {
+    position: relative;
+    z-index: 2;
+    border: 2px solid rgba(255,255,255,.7);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.85);
+    background: #000;
+    max-width: 92vw;
+    max-height: 65vh;
+}
+
+.wallpaper-crop-frame-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: none;
+    cursor: grab;
+}
+.wallpaper-crop-frame-image:active { cursor: grabbing; }
+
+.wallpaper-crop-aspect {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+    border: 2px dashed rgba(255,255,255,.5);
+    border-radius: 14px;
+    box-sizing: border-box;
+}
+
+/* Соотношение сторон */
+.wallpaper-crop-aspect-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 4px;
+    scrollbar-width: none;
+}
+.wallpaper-crop-aspect-row::-webkit-scrollbar { display: none; }
+.wallpaper-crop-aspect-chip {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.08);
+    color: #ddd;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s ease;
+}
+.wallpaper-crop-aspect-chip.active {
+    background: rgba(47,124,246,.3);
+    border-color: rgba(47,124,246,.8);
+    color: #8cc3ff;
+    box-shadow: 0 0 0 2px rgba(47,124,246,.2);
+}
+
+.wallpaper-crop-bottom {
+    flex-shrink: 0;
+    background: #141414;
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 2;
+}
+
+.wallpaper-crop-actions {
+    display: flex;
+    gap: 8px;
+}
+.wallpaper-crop-actions .wallpaper-crop-btn {
+    flex: 1;
+    height: 44px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .wallpaper-crop-topbar { padding: 8px 10px; }
+    .wallpaper-crop-btn { width: 36px; height: 36px; font-size: 16px; }
+    .wallpaper-crop-frame { max-width: 95vw; max-height: 60vh; border-radius: 14px; }
+    .wallpaper-crop-bottom { padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
+    .wallpaper-crop-actions .wallpaper-crop-btn { height: 42px; font-size: 14px; }
 }
