@@ -189,7 +189,6 @@
             // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
             if (id === 'tempModal') {
                 resetNavHistory();
-                clearTempModalBody();   // очищаем тело, чтобы по новой шло
             }
             modal.classList.add('active');
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');

@@ -205,6 +205,31 @@
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
 
+[08.11.2026] — SSL НА opencode.kiselgram.ru (порт :443)
+  Файлы: CHANGELOG.txt
+
+  Настроен HTTPS на сервере opencode.kiselgram.ru.
+  - Nginx настроен на порт 443 с SSL (Let's Encrypt сертификаты
+    /etc/letsencrypt/live/opencode.kiselgram.ru/fullchain.pem + privkey.pem).
+  - Порт 80 делает редирект 301 на HTTPS.
+  - .env обновлён: USE_HTTPS=1, COOKIE_SECURE=1.
+  - Сервисы sputnik.service и nginx перезапущены и активны.
+  - Проверено: HTTPS на :443 возвращает HTTP 302 (редирект на /auth).
+
+[08.11.2026] — Деплой на продакшен сервер opencode.kiselgram.ru (порт :80)
+  Файлы: CHANGELOG.txt
+
+  Развёрнута стабильная версия приложения на сервере opencode.kiselgram.ru.
+  - Удалено всё с сервера кроме кастомных скриптов (ddosfix.sh, disk.sh,
+    ifupdown.sh, scan.sh) и MOTD-конфигов (/etc/bash.bashrc, /etc/profile,
+    /etc/ssh/sshd_config).
+  - Приложение развёрнуто в /opt/sputnik из ветки main (v0.64.24).
+  - Nginx настроен на прослушивание порта 80, проксирует на 127.0.0.1:5000.
+  - Systemd сервис sputnik.service создан и запущен (пользователь sputnik,
+    venv, production .env с PostgreSQL).
+  - База данных kiselgram-db-1 (PostgreSQL) сохранена и подключена.
+  - Сервер проверен: приложение отвечает на порт 80.
+
 [08.11.2026] — v0.64.25: ОТКАТ БЭКЕНДА, ОСТАВЛЕНЫ ИКОНКИ
   Файлы: cdn/css/burger.css, templates/chat.html, static/icons/tgciosicons/, CHANGELOG.txt
 
