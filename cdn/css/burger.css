@@ -356,10 +356,12 @@
     object-fit: contain;
 }
 
-/* Иконка ночной темы */
-#nightModeIcon.tg-menu-icon {
-    width: 100%;
-    height: 100%;
+/* Иконка темы — маленькая (как раньше) */
+#nightModeIcon.tg-menu-icon-small {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
     object-fit: contain;
 }
 
