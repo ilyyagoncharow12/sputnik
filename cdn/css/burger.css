@@ -310,6 +310,31 @@
     flex-shrink: 0;
 }
 
+/* Цветные иконки в стиле Telegram iOS */
+.burger-item-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.tg-icon-contacts svg path { fill: #2ca5e0; }
+.tg-icon-calls svg path { fill: #00c853; }
+.tg-icon-favorites svg path { fill: #ff3b30; }
+.tg-icon-folders svg path { fill: #8e8e93; }
+.tg-icon-blocked svg path { fill: #ff3b30; }
+.tg-icon-discover svg path { fill: #2ca5e0; }
+.tg-icon-group svg path { fill: #2ca5e0; }
+.tg-icon-channel svg path { fill: #2ca5e0; }
+.tg-icon-settings svg path { fill: #8e8e93; }
+.tg-icon-appearance svg path { fill: #8e8e93; }
+.tg-icon-privacy svg path { fill: #8e8e93; }
+.tg-icon-sessions svg path { fill: #8e8e93; }
+.tg-icon-logout svg path { fill: #ff3b30; }
+
+/* Активный цвет для выбранного пункта */
+.burger-item.active .burger-item-icon svg path {
+    fill: var(--primary-color, #2ca5e0);
+}
+
 .burger-item span {
     font-size: 15px;
     font-weight: 500;
