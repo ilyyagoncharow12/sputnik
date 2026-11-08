@@ -236,6 +236,10 @@ function meEnsureDom() {
     stage.addEventListener('pointerup', meStagePointerUp);
     stage.addEventListener('pointercancel', meStagePointerUp);
     stage.addEventListener('wheel', meStageWheel, { passive: false });
+    stage.addEventListener('touchstart', meStageTouchStart, { passive: false });
+    stage.addEventListener('touchmove', meStageTouchMove, { passive: false });
+    stage.addEventListener('touchend', meStageTouchEnd, { passive: false });
+    stage.addEventListener('touchcancel', meStageTouchEnd, { passive: false });
 
     const draw = document.getElementById('meDrawCanvas');
     draw.addEventListener('pointerdown', meDrawPointerDown);
