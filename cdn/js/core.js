@@ -133,6 +133,8 @@
                 clearTempModalBody();  // тело модалки очищаем, чтобы по новой шло
                 modal.classList.remove('active');
                 if (content) content.classList.remove('modal-animate-out');
+                // === Размытие фона убирается при полном выходе из модалки ===
+                clearModalBlur();
             }, 220);
         }
     }
@@ -143,6 +145,8 @@
         clearTempModalBody();
         const modal = document.getElementById('tempModal');
         if (modal) modal.classList.remove('active');
+        // === Размытие фона убирается при полном выходе из модалки ===
+        clearModalBlur();
     }
 
     // Совместимость: старое имя = «назад»
