@@ -473,6 +473,16 @@ function openSessions() {
         });
 }
 
+function openSupport() {
+    closeBurgerMenu();
+    showModal('Техподдержка', `
+        <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:14px;">
+            <p>Техподдержка Спутника</p>
+            <p>Если у вас возникли вопросы или проблемы, напишите в системный чат @sputnik</p>
+        </div>
+    `);
+}
+
 function terminateSession(token) {
     if (!confirm('Завершить эту сессию?')) return;
     fetch('/api/terminate_session', {

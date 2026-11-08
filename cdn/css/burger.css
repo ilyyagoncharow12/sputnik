@@ -316,6 +316,12 @@
     object-fit: contain;
 }
 
+/* Маленькая иконка темы (как была раньше) */
+.tg-menu-icon-small {
+    width: 20px !important;
+    height: 20px !important;
+}
+
 /* Активный пункт — синий оттенок (как в Telegram) */
 .burger-item.active .tg-menu-icon {
     filter: hue-rotate(-40deg) saturate(300%) brightness(1.2);
