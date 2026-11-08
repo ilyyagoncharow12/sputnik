@@ -5,7 +5,7 @@
 Последнее обновление: 08.11.2026
 
 --------------------------------------------------------
-ТЕКУЩАЯ ВЕРСИЯ: v0.64.16
+ТЕКУЩАЯ ВЕРСИЯ: v0.64.18
 --------------------------------------------------------
 
 ВАЖНО: Этот файл автоматически обновляется при каждом изменении
@@ -204,6 +204,30 @@
 ========================================================
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
+
+[08.11.2026] — v0.64.18: БУРГЕР-МЕНЮ — ИКОНКИ TELEGRAM COLORED iOS (chpic.su)
+  Файлы: templates/chat.html, cdn/css/burger.css, static/icons/tgciosicons/ (15 иконок), CHANGELOG.txt
+
+  БУРГЕР-МЕНЮ:
+    - Заменены иконки Font Awesome на иконки из пакета "Telegram Colored iOS Icons"
+      (https://chpic.su/en/emojis/tgciosicons/).
+    - Иконки скачаны в формате WEBP в static/icons/tgciosicons/:
+      contacts, calls, favorites, folders, blocked, discover,
+      create_group, create_channel, settings, appearance, privacy,
+      sessions, premium, night_theme, logout.
+    - Активный пункт menu — синий оттенок через CSS filter (hue-rotate/saturate).
+    - Кнопка выхода — красный оттенок.
+    - Все иконки цветастые, как в официальном Telegram iOS.
+
+[08.11.2026] — v0.64.17: БУРГЕР-МЕНЮ — ИКОНКИ TELEGRAM iOS ИСПРАВЛЕНЫ
+  Файлы: templates/chat.html, cdn/css/burger.css, CHANGELOG.txt
+
+  БУРГЕР-МЕНЮ:
+    - Иконки возвращены на Font Awesome (были неудачные цветные SVG).
+    - Все иконки одного сдержанного серого цвета #8e8e93 (как в Telegram iOS).
+    - Активный пункт — иконка синяя #2ca5e0.
+    - Кнопка выхода — красная #ff3b30.
+    - Аккуратные отступы и размер 17px, гармонично смотрятся в меню.
 
 [08.11.2026] — v0.64.16: БУРГЕР-МЕНЮ — ЦВЕТНЫЕ ИКОНКИ TELEGRAM iOS
   Файлы: templates/chat.html, cdn/css/burger.css, CHANGELOG.txt

@@ -305,50 +305,47 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
-    color: #8e8e93;
     flex-shrink: 0;
-    transition: color 0.2s ease;
 }
 
-/* Все иконки одного серого цвета, как в Telegram iOS */
-.burger-item-icon i {
-    color: #8e8e93;
+/* Иконки Telegram Colored iOS (WEBP) */
+.tg-menu-icon {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
 }
 
-/* Активный пункт — синяя иконка и текст */
-.burger-item.active .burger-item-icon i {
-    color: #2ca5e0;
+/* Активный пункт — синий оттенок (как в Telegram) */
+.burger-item.active .tg-menu-icon {
+    filter: hue-rotate(-40deg) saturate(300%) brightness(1.2);
 }
 
-.burger-item.active .burger-item-icon {
-    color: #2ca5e0;
+/* Кнопка выхода — красный оттенок */
+.burger-item.danger .tg-menu-icon {
+    filter: hue-rotate(0deg) saturate(200%) brightness(1.1);
 }
 
-/* Кнопка выхода — красная иконка */
-.burger-item.danger .burger-item-icon i {
-    color: #ff3b30;
-}
-.burger-item.danger .burger-item-icon i:hover {
-    color: #ff453a;
-}
-
-/* Переключатель темы — иконка луны */
-.theme-toggle-item .burger-item-icon i {
-    color: #8e8e93;
-}
-
-/* Premuim иконка */
+/* Премиум иконка */
 .burger-item-icon-premium {
     width: 24px;
     height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #8e8e93;
 }
-.burger-item-icon-premium i {
-    color: #ff3b30;
+
+.burger-item-icon-premium .tg-menu-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Иконка ночной темы */
+#nightModeIcon.tg-menu-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .burger-item span {
