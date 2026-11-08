@@ -205,6 +205,17 @@
 3. ЧТО ДОБАВЛЕНО В ЭТОТ РАЗ (НЕДАВНИЕ ИЗМЕНЕНИЯ)
 ========================================================
 
+[08.11.2026] — v0.64.23: ИКОНКА PREMIUM — ИСПРАВЛЕНА
+  Файлы: static/icons/tgciosicons/premium.webp, CHANGELOG.txt
+
+  БУРГЕР-МЕНЮ:
+    - Исправлена иконка кнопки "Sputnik Premium" — была пустая, теперь
+      отображается иконка огня tgciosicons_013.webp из пакета
+      Telegram Colored iOS Icons.
+    - Все 16 иконок меню скачаны и на месте (contacts, calls, favorites,
+      folders, blocked, discover, create_group, create_channel, settings,
+      appearance, privacy, sessions, support, night_theme, logout, premium).
+
 [08.11.2026] — v0.64.22: ИКОНКА ТЕМЫ — МАЛЕНЬКАЯ 18PX (ИСПРАВЛЕНО НАВСЕГДА)
   Файлы: cdn/css/burger.css, CHANGELOG.txt
 
