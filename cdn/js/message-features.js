@@ -857,14 +857,82 @@
     }
 
     function openNewChatModal() {
+        closeBurgerMenu();
         let h = `
-            <input type="text" id="newChatSearch" class="modal-input" placeholder="Поиск по номеру или имени..." oninput="searchForNewChat()">
-            <div id="newChatResults"></div>
+            <div class="new-chat-wrap" style="padding:0;">
+                <!-- Поиск -->
+                <div class="new-chat-search-wrap" style="padding:16px 20px;">
+                    <div class="new-chat-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="newChatSearch" class="new-chat-search-input" placeholder="Поиск по номеру или имени...">
+                    </div>
+                </div>
+
+                <!-- Контакты в мессенджере -->
+                <div class="new-chat-section" style="display:none;" id="newChatInMessenger">
+                    <div class="new-chat-section-title">В мессенджере</div>
+                    <div class="new-chat-list" id="newChatInMessengerList"></div>
+                </div>
+
+                <!-- Контакты из книги телефона -->
+                <div class="new-chat-section" style="display:none;" id="newChatFromPhone">
+                    <div class="new-chat-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>Из книги контактов телефона</span>
+                        <button class="new-chat-import-btn" onclick="importPhoneContacts()">
+                            <i class="fas fa-download"></i> Импортировать
+                        </button>
+                    </div>
+                    <div class="new-chat-list" id="newChatFromPhoneList"></div>
+                    <div class="new-chat-permission" id="newChatPermission" style="display:none;padding:16px 20px;text-align:center;color:var(--text-muted);font-size:13px;">
+                        <p>Чтобы увидеть контакты из книги телефона, разрешите доступ:</p>
+                        <button class="new-chat-permission-btn" onclick="requestPhoneContacts()">
+                            <i class="fas fa-mobile-alt"></i> Разрешить доступ к контактам
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Статус -->
+                <div id="newChatStatus" style="padding:16px 20px;font-size:13px;color:var(--text-muted);"></div>
+            </div>
         `;
         showModal('Новый чат', h);
         document.getElementById('newChatSearch').focus();
+
+        // Загружаем контакты из мессенджера
+        loadMessengerContacts();
     }
 
+    // ===== ЗАГРУЗКА КОНТАКТОВ ИЗ МЕССЕНДЖЕРА =====
+    function loadMessengerContacts() {
+        fetch('/api/get_contacts')
+            .then(r => r.json())
+            .then(contacts => {
+                const box = document.getElementById('newChatInMessenger');
+                const list = document.getElementById('newChatInMessengerList');
+                if (!box || !list) return;
+
+                if (contacts && contacts.length > 0) {
+                    box.style.display = 'block';
+                    list.innerHTML = contacts.map(c => `
+                        <div class="new-chat-item" onclick="openNewChatContact(${c.id}, '${escapeHtml(c.display_name || c.username || c.phone)}')">
+                            <div class="new-chat-item-avatar">
+                                ${c.is_banned ? '<span>❄</span>' : (c.avatar ? `<img src="/${c.avatar}" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">` : '')}
+                                ${!c.avatar && !c.is_banned ? `<span>${(c.display_name || c.username || '?')[0].toUpperCase()}</span>` : ''}
+                            </div>
+                            <div class="new-chat-item-info">
+                                <div class="new-chat-item-name">${c.is_banned ? escapeHtml('Удалённый аккаунт') + '<span class="snow-emoji">❄</span>' : escapeHtml(c.custom_name || c.display_name || c.username || 'Без имени')}</div>
+                                <div class="new-chat-item-sub">@${escapeHtml(c.username || '')} • ${escapeHtml(c.phone || '')}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    box.style.display = 'none';
+                }
+            })
+            .catch(() => {});
+    }
+
+    // ===== ПОИСК ПО НОВОМУ ЧАТУ =====
     function searchForNewChat() {
         const q = document.getElementById('newChatSearch').value.trim();
         if (q.length < 2) {
@@ -875,7 +943,9 @@
         fetch(`/api/search_users?q=${encodeURIComponent(q)}`)
             .then(r => r.json())
             .then(u => {
-                document.getElementById('newChatResults').innerHTML = u.map(i => `
+                const box = document.getElementById('newChatResults');
+                if (!box) return;
+                box.innerHTML = u.map(i => `
                     <div class="search-result-item" onclick="openChat(${i.id}, 'personal'); closeModal('tempModal');">
                         <div class="search-result-avatar">
                             ${i.is_banned ? `<span>❄</span>` : (i.avatar ? `<img src="/${i.avatar}">` : `<span>${(i.username || '?')[0].toUpperCase()}</span>`)}
@@ -887,6 +957,155 @@
                     </div>
                 `).join('');
             });
+    }
+
+    // ===== ОТКРЫТИЕ ЧАТА С КОНТАКТОМ ИЗ МЕССЕНДЖЕРА =====
+    function openNewChatContact(userId, name) {
+        closeModal('tempModal');
+        openChat(userId, 'personal');
+    }
+
+    // ===== ЗАПРОС ДОСТУПА К КОНТАКТАМ ТЕЛЕФОНА =====
+    async function requestPhoneContacts() {
+        const btn = document.getElementById('newChatPermissionBtn');
+        if (btn) btn.disabled = true;
+        const status = document.getElementById('newChatStatus');
+        if (status) status.textContent = 'Запрос доступа к контактам…';
+
+        try {
+            // Пытаемся использовать Contacts API (Chrome/Edge/Android)
+            if (typeof window.ContactsManager !== 'undefined' || navigator.contacts) {
+                // Нативный Contacts API (Chrome on Android)
+                const contacts = await navigator.contacts.select(['name', 'phoneNumbers'], { multiple: true });
+                await processPhoneContacts(contacts);
+                return;
+            }
+
+            // Fallback: просим пользователя вручную ввести номера
+            showModal('Импорт контактов', `
+                <div style="padding:20px;">
+                    <p>Вставьте номера телефонов (через запятую или с новой строки):</p>
+                    <textarea id="manualContacts" rows="6" style="width:100%;padding:12px;border:1px solid var(--border-color);border-radius:12px;font-family:inherit;"></textarea>
+                    <div style="margin-top:16px;display:flex;gap:10px;">
+                        <button class="tg-action-btn" onclick="closeModal('tempModal'); importManualContacts()">Импортировать</button>
+                        <button class="tg-reset-btn" onclick="closeModal('tempModal')">Отмена</button>
+                    </div>
+                </div>
+            `);
+        } catch (e) {
+            console.error('Contacts API error:', e);
+            const status = document.getElementById('newChatStatus');
+            if (status) status.textContent = 'Не удалось получить доступ к контактам. Используйте поиск выше.';
+        }
+    }
+
+    // ===== ОБРАБОТКА КОНТАКТОВ ИЗ ТЕЛЕФОНА =====
+    async function processPhoneContacts(contacts) {
+        const status = document.getElementById('newChatStatus');
+        const list = document.getElementById('newChatFromPhoneList');
+        const section = document.getElementById('newChatFromPhone');
+        const permission = document.getElementById('newChatPermission');
+
+        if (!status || !list || !section) return;
+
+        if (!contacts || contacts.length === 0) {
+            status.textContent = 'Контакты не найдены';
+            return;
+        }
+
+        // Скрываем запрос доступа, показываем раздел
+        if (permission) permission.style.display = 'none';
+        section.style.display = 'block';
+
+        // Подготавливаем данные для импорта
+        const phoneEntries = contacts.map(c => ({
+            name: c.name || '',
+            phones: c.phoneNumbers ? c.phoneNumbers.map(p => p.value).filter(Boolean) : []
+        }));
+
+        status.textContent = `Найдено ${contacts.length} контактов. Импортируем…`;
+
+        try {
+            const r = await fetch('/api/contacts/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contacts: phoneEntries })
+            });
+            const d = await r.json();
+
+            if (d.success) {
+                status.textContent = `Импортировано ${d.imported} из ${d.scanned} контактов`;
+                renderPhoneContacts(d.matched || []);
+            } else {
+                status.textContent = 'Ошибка импорта: ' + (d.error || 'неизвестно');
+            }
+        } catch (e) {
+            status.textContent = 'Ошибка соединения';
+        }
+    }
+
+    // ===== РЕНДЕР КОНТАКТОВ ИЗ ТЕЛЕФОНА =====
+    function renderPhoneContacts(matched) {
+        const list = document.getElementById('newChatFromPhoneList');
+        if (!list) return;
+
+        if (!matched || matched.length === 0) {
+            list.innerHTML = '<div class="new-chat-empty">Контакты из книги телефона не зарегистрированы в мессенджере</div>';
+            return;
+        }
+
+        list.innerHTML = matched.map(m => `
+            <div class="new-chat-item" onclick="openNewChatContact(${m.user.id}, '${escapeHtml(m.name || m.user.display_name || m.user.username || '')}')">
+                <div class="new-chat-item-avatar">
+                    ${m.user.avatar ? `<img src="/${m.user.avatar}" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">` : ''}
+                    ${!m.user.avatar ? `<span>${(m.user.display_name || m.user.username || '?')[0].toUpperCase()}</span>` : ''}
+                </div>
+                <div class="new-chat-item-info">
+                    <div class="new-chat-item-name">${escapeHtml(m.name || m.user.display_name || m.user.username || 'Без имени')}</div>
+                    <div class="new-chat-item-sub">@${escapeHtml(m.user.username || '')} • ${escapeHtml(m.user.phone || '')}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // ===== РУЧНОЙ ИМПОРТ КОНТАКТОВ =====
+    function importManualContacts() {
+        const ta = document.getElementById('manualContacts');
+        if (!ta) return;
+        const text = ta.value.trim();
+        if (!text) return;
+
+        const phones = text.split(/[\n,;]+/).map(p => p.trim()).filter(Boolean);
+        const entries = phones.map(p => ({ name: '', phones: [p] }));
+
+        closeModal('tempModal');
+
+        const status = document.getElementById('newChatStatus');
+        if (status) status.textContent = 'Импортируем…';
+
+        fetch('/api/contacts/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contacts: entries })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                status.textContent = `Импортировано ${d.imported} из ${d.scanned}`;
+                renderPhoneContacts(d.matched || []);
+                const section = document.getElementById('newChatFromPhone');
+                const permission = document.getElementById('newChatPermission');
+                if (section) section.style.display = 'block';
+                if (permission) permission.style.display = 'none';
+            } else {
+                status.textContent = 'Ошибка: ' + (d.error || 'неизвестно');
+            }
+        });
+    }
+
+    // ===== ИМПОРТ ТЕЛЕФОННЫХ КОНТАКТОВ (кнопка) =====
+    function importPhoneContacts() {
+        requestPhoneContacts();
     }
 
     // ===== ИСТОРИЯ РЕДАКТИРОВАНИЯ СООБЩЕНИЯ =====

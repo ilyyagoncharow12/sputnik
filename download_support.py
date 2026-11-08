@@ -4,11 +4,7 @@ import os
 os.makedirs('static/icons/tgciosicons', exist_ok=True)
 
 icons = {
-    'sessions': 79,      # активные сессии
-    'appearance': 45,    # оформление
-    'folders': 46,       # папки с чатами
-    'support': 39,       # техподдержка
-    'night_theme': 44,   # день/ночь тема
+    'support': 39,      # техподдержка
 }
 
 for name, num in icons.items():

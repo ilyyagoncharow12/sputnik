@@ -318,8 +318,17 @@
 
 /* Маленькая иконка темы (как была раньше) */
 .tg-menu-icon-small {
-    width: 20px !important;
-    height: 20px !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+}
+
+/* Иконка темы внутри left блока */
+.theme-toggle-item .tg-menu-icon-small {
+    width: 18px !important;
+    height: 18px !important;
+    object-fit: contain;
 }
 
 /* Активный пункт — синий оттенок (как в Telegram) */

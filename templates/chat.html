@@ -491,9 +491,13 @@
 
         <div class="burger-divider"></div>
         <div class="burger-group-label">Создать</div>
-        <div class="burger-item" onclick="openDiscover()">
-            <div class="burger-item-icon"><img src="/static/icons/tgciosicons/discover.webp" class="tg-menu-icon" alt="Поиск"></div>
-            <span>Поиск групп и каналов</span>
+        <div class="burger-item" onclick="openNewChatModal()">
+            <div class="burger-item-icon burger-item-icon-new-chat">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm4 8h-4v4a1 1 0 11-2 0v-4H4a1 1 0 110-2h4V4a1 1 0 112 0v4h4a1 1 0 110 2z" fill="#3390ec"/>
+                </svg>
+            </div>
+            <span>Новый чат</span>
         </div>
         <div class="burger-item" onclick="createGroup()">
             <div class="burger-item-icon"><img src="/static/icons/tgciosicons/create_group.webp" class="tg-menu-icon" alt="Группа"></div>
