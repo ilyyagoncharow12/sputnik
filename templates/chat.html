@@ -466,130 +466,67 @@
     <div class="burger-menu-items">
         <div class="burger-group-label">Основное</div>
         <div class="burger-item" onclick="openContacts()">
-            <div class="burger-item-icon tg-icon tg-icon-contacts">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 12a4 4 0 11-8 0 4 4 0 018 0zM9 18a3 3 0 100-6 3 3 0 000 6zM3 3v18h18V3H3z" fill="#2ca5e0"/>
-                    <path d="M21 3a1 1 0 011 1v18a1 1 0 01-1 1H3a1 1 0 01-1-1V4a1 1 0 011-1h18zM5 5a1 1 0 00-1 1v16a1 1 0 001 1h16a1 1 0 001-1V6a1 1 0 00-1-1H5z" fill="#2ca5e0" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-user-friends"></i></div>
             <span>Контакты</span>
             <span class="badge" id="contactsBadge" style="display:none;">0</span>
         </div>
         <div class="burger-item" onclick="openCalls()">
-            <div class="burger-item-icon tg-icon tg-icon-calls">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3.05 4.33a.75.75 0 011.06 0l18 10.5a.75.75 0 01-.06 1.06L16.25 19a.75.75 0 01-1.06-.06l-2.25-1.29a.75.75 0 01-.06-1.06l2.5-1.44a.75.75 0 011.06.06l18 10.5a.75.75 0 01-.06 1.06L16.25 19a.75.75 0 01-1.06-.06l-2.25-1.29a.75.75 0 01-.06-1.06L15.5 16a.75.75 0 011.06.06l2.5-1.44a.75.75 0 011.06-.06l18 10.5a.75.75 0 01-.06 1.06L16.25 19a.75.75 0 01-1.06-.06l-2.25-1.29a.75.75 0 01-.06-1.06z" fill="#00c853"/>
-                    <path d="M3.05 4.33a.75.75 0 011.06 0l18 10.5a.75.75 0 01-.06 1.06L16.25 19a.75.75 0 01-1.06-.06l-2.25-1.29a.75.75 0 01-.06-1.06l2.5-1.44a.75.75 0 011.06.06l18 10.5a.75.75 0 01-.06 1.06L16.25 19a.75.75 0 01-1.06-.06l-2.25-1.29a.75.75 0 01-.06-1.06z" fill="#00c853" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-phone-alt"></i></div>
             <span>Звонки</span>
         </div>
         <div class="burger-item" onclick="openFavorites()">
-            <div class="burger-item-icon tg-icon tg-icon-favorites">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" fill="#ff3b30"/>
-                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" fill="#ff3b30" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-bookmark"></i></div>
             <span>Избранное</span>
         </div>
 
         <div class="burger-item" onclick="openFolderManager()">
-            <div class="burger-item-icon tg-icon tg-icon-folders">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 5V4a2 2 0 012-2h14a2 2 0 012 2v1l.01 4a2 2 0 01-2 2H5a2 2 0 01-2-2z" fill="#8e8e93"/>
-                    <path d="M3 5V4a2 2 0 012-2h14a2 2 0 012 2v1l.01 4a2 2 0 01-2 2H5a2 2 0 01-2-2z" fill="#8e8e93" opacity=".5"/>
-                </svg>
-            </div>
-            <span>Папки с чатами</span>
-        </div>
+    <div class="burger-item-icon"><i class="fas fa-folder"></i></div>
+    <span>Папки с чатами</span>
+</div>
+
 
         <div class="burger-item" onclick="openBlockedUsers()">
-            <div class="burger-item-icon tg-icon tg-icon-blocked">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22C4.93 22 4.93 2 12 2s7.07 20 7.07 20S19.07 22 12 22z" fill="#ff3b30"/>
-                    <path d="M7 12a1 1 0 112 0 1 1 0 01-2 0zm8 0a1 1 0 112 0 1 1 0 01-2 0zm-4-4a1 1 0 112 0 1 1 0 01-2 0zm8 0a1 1 0 112 0 1 1 0 01-2 0z" fill="#ff3b30"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-ban"></i></div>
             <span>Заблокированные</span>
         </div>
 
         <div class="burger-divider"></div>
         <div class="burger-group-label">Создать</div>
         <div class="burger-item" onclick="openDiscover()">
-            <div class="burger-item-icon tg-icon tg-icon-discover">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="11" cy="11" r="8" stroke="#2ca5e0" stroke-width="2"/>
-                    <line x1="21" y1="21" x2="15.8" y2="15.8" stroke="#2ca5e0" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-compass"></i></div>
             <span>Поиск групп и каналов</span>
         </div>
         <div class="burger-item" onclick="createGroup()">
-            <div class="burger-item-icon tg-icon tg-icon-group">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" fill="#2ca5e0"/>
-                    <circle cx="9" cy="7" r="4" fill="#2ca5e0"/>
-                    <path d="M23 21v-2a4 4 0 00-4-4h-3a4 4 0 00-4 4v2" fill="#2ca5e0"/>
-                    <path d="M16 3.13A4 4 0 0113.02 3H4a4 4 0 00-4 4v11a4 4 0 004 4h16a4 4 0 004-4V7a4 4 0 00-4-3.87z" fill="#2ca5e0"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-users"></i></div>
             <span>Создать группу</span>
         </div>
         <div class="burger-item" onclick="createChannel()">
-            <div class="burger-item-icon tg-icon tg-icon-channel">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6 15v5a2 2 0 002 2h10a2 2 0 002-2v-5M8 3H4a2 2 0 00-2 2v11a2 2 0 002 2h16a2 2 0 002-2V5a2 2 0 00-2-2H8z" fill="#2ca5e0"/>
-                    <path d="M6 15v5a2 2 0 002 2h10a2 2 0 002-2v-5M8 3H4a2 2 0 00-2 2v11a2 2 0 002 2h16a2 2 0 002-2V5a2 2 0 00-2-2H8z" fill="#2ca5e0" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-bullhorn"></i></div>
             <span>Создать канал</span>
         </div>
 
         <div class="burger-divider"></div>
         <div class="burger-group-label">Настройки</div>
         <div class="burger-item" onclick="openSettings()">
-            <div class="burger-item-icon tg-icon tg-icon-settings">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="3" stroke="#8e8e93" stroke-width="2"/>
-                    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82-.33l-.06-.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" fill="#8e8e93"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-cog"></i></div>
             <span>Настройки</span>
         </div>
         <div class="burger-item" onclick="openAppearance()">
-            <div class="burger-item-icon tg-icon tg-icon-appearance">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2 22 6.477 22 12 17.523 22 12 22zm0-18.4A6.4 6.4 0 005.6 5.6L2.343 8.657l4.086 4.086L6.6 18.4c-1.395.403-2.6.91-3.6 1.354l1.623 1.623a6.4 6.4 0 004.938 1.354c3.513 0 6.4-2.887 6.4-6.4 0-.907-.177-1.77-.47-2.578l1.624-1.623A6.4 6.4 0 0018.4 5.6l-3.257-3.043A6.4 6.4 0 0012 3.6z" fill="#8e8e93"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-palette"></i></div>
             <span>Оформление</span>
         </div>
         <div class="burger-item" onclick="openPrivacy()">
-            <div class="burger-item-icon tg-icon tg-icon-privacy">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22s8-4 8-4V8l-8-4-8 4v8c0 4 4.533 4 8 4z" fill="#8e8e93"/>
-                    <path d="M12 18a4 4 0 100-8 4 4 0 000 8z" fill="#8e8e93"/>
-                    <path d="M12 22s8-4 8-4V8l-8-4-8 4v8c0 4 4.533 4 8 4z" fill="#8e8e93" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-lock"></i></div>
             <span>Конфиденциальность</span>
         </div>
         <div class="burger-item" onclick="openSessions()">
-            <div class="burger-item-icon tg-icon tg-icon-sessions">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22s8-4 8-4V8l-8-4-8 4v8c0 4 4.533 4 8 4z" fill="#8e8e93"/>
-                    <path d="M12 12l2 2 4-4" fill="#8e8e93"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-shield-alt"></i></div>
             <span>Активные сессии</span>
         </div>
         <div class="burger-item burger-item-premium" onclick="openPremium()">
             <div class="burger-item-icon burger-item-icon-premium">
                 <img src="/static/icons/premium.png" alt="" onerror="this.style.display='none';">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 5v14l9-4 9 4V5l-9-4-9 4z" fill="#ff3b30"/>
-                </svg>
+                <i class="fas fa-crown"></i>
             </div>
             <span>Sputnik Premium</span>
             <span class="badge" id="premiumBadge" style="display:none;">PRO</span>
@@ -598,9 +535,7 @@
         <div class="burger-divider"></div>
         <div class="theme-toggle-item" onclick="toggleNightMode()">
             <div class="left">
-                <svg id="nightModeIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0121 12.79z" fill="#8e8e93"/>
-                </svg>
+                <i class="fas fa-moon" id="nightModeIcon"></i>
                 <span id="nightModeText">Ночная тема</span>
             </div>
             <label class="switch" style="margin: 0;">
@@ -611,12 +546,7 @@
 
         <div class="burger-divider"></div>
         <div class="burger-item danger" onclick="logout()">
-            <div class="burger-item-icon tg-icon tg-icon-logout">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4l5 5-5 5z" fill="#ff3b30"/>
-                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4l5 5-5 5z" fill="#ff3b30" opacity=".5"/>
-                </svg>
-            </div>
+            <div class="burger-item-icon"><i class="fas fa-sign-out-alt"></i></div>
             <span>Выйти</span>
         </div>
     </div>
