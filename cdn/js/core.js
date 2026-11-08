@@ -48,20 +48,18 @@
     // Стек экранов: каждая новая модалка кладёт предыдущий экран в стек,
     // кнопка «назад» (стрелка в шапке) возвращает на шаг назад, а не
     // закрывает всё. Полное закрытие (крестик/оверлей/«Закрыть») чистит стек.
+    // После полного выхода стек НЕ восстанавливается при следующем входе —
+    // переход по новому пути не возвращает к старым экранам.
 
-    let navStack = [];        // [{html}] — предыдущие экраны tempModal
+    let navStack = [];        // предыдущие экраны tempModal
     let navSkipNext = null;   // html, который восстанавливаем — не пушить его
+    let lastBodyHtml = '';    // последний известный HTML тела tempModal
 
-    // Отложенные таймеры скрытия модалок (closeModal/navBack ждут анимацию 220 мс).
-    // Если модалку успевают открыть заново раньше, старый таймер её «выбивал»:
-    // экран мигал и исчезал (например, вкладка «Цвета» в профиле).
-    const modalCloseTimers = {};
-
-    function cancelModalClose(id) {
-        if (modalCloseTimers[id]) {
-            clearTimeout(modalCloseTimers[id]);
-            delete modalCloseTimers[id];
-        }
+    // Сброс всей истории навигации (вызывается при открытии и полном закрытии)
+    function resetNavHistory() {
+        navStack = [];
+        navSkipNext = null;
+        lastBodyHtml = '';
     }
 
     // Автосохранение: ловим ЛЮБУЮ замену содержимого #tempModalBody
@@ -71,7 +69,7 @@
             const body = document.getElementById('tempModalBody');
             if (!body || body.__navObserved) return;
             body.__navObserved = true;
-            let prev = body.innerHTML;
+            let prev = lastBodyHtml || body.innerHTML;
             new MutationObserver(() => {
                 const now = body.innerHTML;
                 if (now === prev) return;
@@ -87,6 +85,7 @@
                 }
                 if (navSkipNext !== null && now === navSkipNext) navSkipNext = null;
                 prev = now;
+                lastBodyHtml = now;
             }).observe(body, { childList: true, subtree: true });
         };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
@@ -107,6 +106,7 @@
                 content.classList.add('modal-animate-out');
             }
             setTimeout(() => {
+                lastBodyHtml = html;   // не пушим старый экран при восстановлении
                 body.innerHTML = html;
                 modal.classList.add('active');
                 const newContent = modal.querySelector('.tg-modal-wrapper, .modal-content');
@@ -121,10 +121,8 @@
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
             }
-            cancelModalClose(modal.id);
-            modalCloseTimers[modal.id] = setTimeout(() => {
-                delete modalCloseTimers[modal.id];
-                navStack = [];
+            setTimeout(() => {
+                resetNavHistory();     // полный выход — стек и история не восстанавливаются
                 modal.classList.remove('active');
                 if (content) content.classList.remove('modal-animate-out');
             }, 220);
@@ -133,13 +131,9 @@
 
     // Полное закрытие модалки (с очисткой истории)
     function closeTempModal() {
-        navStack = [];
-        navSkipNext = null;
+        resetNavHistory();
         const modal = document.getElementById('tempModal');
-        if (modal) {
-            cancelModalClose(modal.id);
-            modal.classList.remove('active');
-        }
+        if (modal) modal.classList.remove('active');
     }
 
     // Совместимость: старое имя = «назад»
@@ -182,14 +176,10 @@
     function openModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
-            // Отменяем отложенное закрытие: иначе таймер closeModal/navBack
-            // сработает уже после открытия и снова спрячет модалку.
-            cancelModalClose(id);
             // При открытии новой независимой модалки сбрасываем историю навигации,
             // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
             if (id === 'tempModal') {
-                navStack = [];
-                navSkipNext = null;
+                resetNavHistory();
             }
             modal.classList.add('active');
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
@@ -204,24 +194,40 @@
     function closeModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
-            cancelModalClose(id);
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
             if (content) {
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
-                modalCloseTimers[id] = setTimeout(() => {
-                    delete modalCloseTimers[id];
+                setTimeout(() => {
                     modal.classList.remove('active');
                     content.classList.remove('modal-animate-out');
+                    // === 3. Размытие фона убирается автоматически при выходе из модалки ===
+                    clearModalBlur();
                 }, 220);
             } else {
                 modal.classList.remove('active');
+                // === 3. Размытие фона убирается автоматически при выходе из модалки ===
+                clearModalBlur();
             }
         }
         if (id === 'tempModal') {
-            navStack = [];
-            navSkipNext = null;
+            resetNavHistory();
         }
+    }
+
+    // === 3. Убирает размытие фона со всего экрана после выхода из любой модалки ===
+    function clearModalBlur() {
+        const targets = [document.documentElement, document.body]
+            .concat(Array.from(document.querySelectorAll('.modal')));
+        targets.forEach(el => {
+            if (!el || !el.style) return;
+            el.style.backdropFilter = '';
+            el.style.webkitBackdropFilter = '';
+            el.style.filter = el.style.filter
+                .replace(/blur\([^)]*\)\s*/gi, '')
+                .trim();
+            if (!el.style.filter) el.style.filter = '';
+        });
     }
 
     function isMobile() {

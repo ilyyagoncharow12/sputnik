@@ -15,7 +15,8 @@ function openUserProfileModal(userId) {
     // Сначала получаем кастомное имя контакта (если есть)
     fetch(`/api/check_contact/${userId}`)
         .then(r => r.json())
-        .then(contactInfo => {            const customName = contactInfo.contact_name || null;
+        .then(contactInfo => {
+            const customName = contactInfo.contact_name || null;
 
             // Теперь загружаем профиль пользователя
             fetch(`/api/get_user_profile/${userId}`)
@@ -501,7 +502,8 @@ function loadContactsList() {
 
     // ===== МОЙ ПРОФИЛЬ =====
 function openMyProfile() {
-    closeBurgerMenu();    fetch('/api/get_my_user')
+    closeBurgerMenu();
+    fetch('/api/get_my_user')
         .then(r => r.json())
         .then(u => {
             fetch('/api/get_settings')
@@ -1149,7 +1151,8 @@ function openPlaylistManager(targetUserId) {
 
 
 // ===== ФУНКЦИЯ ИЗМЕНЕНИЯ АВАТАРКИ =====
-function changeAvatar() {    fetch('/api/preloaded_avatars')
+function changeAvatar() {
+    fetch('/api/preloaded_avatars')
         .then(r => r.json())
         .then(avatars => {
             let html = `
