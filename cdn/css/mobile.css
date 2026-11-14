@@ -428,7 +428,7 @@ body.mobile .mobile-gesture,
     opacity: 0.7;
 }
 
-/* Рамка обрезки */
+/* Рамка обрезки: размер задаёт JS под свободное место */
 .wallpaper-crop-frame {
     position: relative;
     z-index: 2;
@@ -437,19 +437,29 @@ body.mobile .mobile-gesture,
     overflow: hidden;
     box-shadow: 0 20px 60px rgba(0,0,0,.85);
     background: #000;
-    max-width: 92vw;
-    max-height: 65vh;
+    flex: 0 0 auto;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
 }
+.wallpaper-crop-frame.dragging { cursor: grabbing; }
 
+/* Картинку масштабируем вручную (width/height/left/top ставит JS) */
 .wallpaper-crop-frame-image {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: none;
-    cursor: grab;
+    left: 0;
+    top: 0;
+    display: block;
+    max-width: none;
+    max-height: none;
+    object-fit: fill;
+    pointer-events: none;   /* события ловит рамка */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
 }
-.wallpaper-crop-frame-image:active { cursor: grabbing; }
 
 .wallpaper-crop-aspect {
     position: absolute;
@@ -493,6 +503,51 @@ body.mobile .mobile-gesture,
     box-shadow: 0 0 0 2px rgba(47,124,246,.2);
 }
 
+/* Зум: ползунок «приблизить / отдалить» */
+.wallpaper-crop-zoom {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 4px;
+    color: rgba(255,255,255,.75);
+    font-size: 13px;
+}
+.wallpaper-crop-zoom i {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+.wallpaper-crop-zoom input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,.25);
+    outline: none;
+    margin: 0;
+}
+.wallpaper-crop-zoom input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+    cursor: pointer;
+}
+.wallpaper-crop-zoom input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    cursor: pointer;
+}
+
 .wallpaper-crop-bottom {
     flex-shrink: 0;
     background: #141414;
@@ -518,7 +573,7 @@ body.mobile .mobile-gesture,
 @media (max-width: 768px) {
     .wallpaper-crop-topbar { padding: 8px 10px; }
     .wallpaper-crop-btn { width: 36px; height: 36px; font-size: 16px; }
-    .wallpaper-crop-frame { max-width: 95vw; max-height: 60vh; border-radius: 14px; }
+    .wallpaper-crop-frame { border-radius: 14px; }
     .wallpaper-crop-bottom { padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
     .wallpaper-crop-actions .wallpaper-crop-btn { height: 42px; font-size: 14px; }
 }

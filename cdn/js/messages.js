@@ -541,7 +541,12 @@ document.addEventListener('keydown', (e) => {
                     sputnikApplyBubbleColor(s.my_message_color);
                 }
                 if (s.wallpaper_image) {
-                    document.getElementById('messagesArea').style.backgroundImage = `url('/${s.wallpaper_image}')`;
+                    const area = document.getElementById('messagesArea');
+                    if (area) {
+                        area.style.backgroundImage = `url('/${s.wallpaper_image}')`;
+                        area.style.backgroundSize = 'cover';
+                        area.style.backgroundPosition = 'center';
+                    }
                 }
             });
     }

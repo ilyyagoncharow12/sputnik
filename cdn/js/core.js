@@ -55,6 +55,18 @@
     let navSkipNext = null;   // html, который восстанавливаем — не пушить его
     let lastBodyHtml = '';    // последний известный HTML тела tempModal
 
+    // Отложенные таймеры скрытия модалок: closeModal/navBack ждут анимацию 220 мс.
+    // Если модалку успевают открыть заново раньше, старый таймер прятал уже
+    // открытую — вкладка «Цвета» в профиле мигала и исчезала.
+    const modalCloseTimers = {};
+
+    function cancelModalClose(id) {
+        if (modalCloseTimers[id]) {
+            clearTimeout(modalCloseTimers[id]);
+            delete modalCloseTimers[id];
+        }
+    }
+
     // Сброс всей истории навигации (вызывается при открытии и полном закрытии)
     function resetNavHistory() {
         navStack = [];
@@ -112,7 +124,9 @@
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
             }
-            setTimeout(() => {
+            cancelModalClose(modal.id);
+            modalCloseTimers[modal.id] = setTimeout(() => {
+                delete modalCloseTimers[modal.id];
                 lastBodyHtml = html;   // не пушим старый экран при восстановлении
                 body.innerHTML = html;
                 modal.classList.add('active');
@@ -128,11 +142,13 @@
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
             }
-            setTimeout(() => {
-                resetNavHistory();     // полный выход — стек и история не восстанавливаются
-                clearTempModalBody();  // тело модалки очищаем, чтобы по новой шло
+            cancelModalClose(modal.id);
+            modalCloseTimers[modal.id] = setTimeout(() => {
+                delete modalCloseTimers[modal.id];
                 modal.classList.remove('active');
                 if (content) content.classList.remove('modal-animate-out');
+                resetNavHistory();     // полный выход — стек и история не восстанавливаются
+                clearTempModalBody();  // тело модалки очищаем, чтобы по новой шло
                 // === Размытие фона убирается при полном выходе из модалки ===
                 clearModalBlur();
             }, 220);
@@ -141,10 +157,13 @@
 
     // Полное закрытие модалки (с очисткой истории)
     function closeTempModal() {
+        const modal = document.getElementById('tempModal');
+        if (modal) {
+            cancelModalClose(modal.id);
+            modal.classList.remove('active');
+        }
         resetNavHistory();
         clearTempModalBody();
-        const modal = document.getElementById('tempModal');
-        if (modal) modal.classList.remove('active');
         // === Размытие фона убирается при полном выходе из модалки ===
         clearModalBlur();
     }
@@ -189,6 +208,12 @@
     function openModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
+            // Отменяем отложенное закрытие: иначе таймер closeModal/navBack
+            // сработает уже после открытия и снова спрячет модалку.
+            cancelModalClose(id);
+            // Возвращаем размытие фона (clearModalBlur ставил inline none)
+            modal.style.backdropFilter = '';
+            modal.style.webkitBackdropFilter = '';
             // При открытии новой независимой модалки сбрасываем историю навигации,
             // чтобы «назад» не выкидывал на старые экраны из прошлых сессий
             if (id === 'tempModal') {
@@ -207,33 +232,33 @@
     function closeModal(id) {
         const modal = document.getElementById(id);
         if (modal) {
+            cancelModalClose(id);
             const content = modal.querySelector('.modal-content, .tg-modal-wrapper, .story-viewer-content');
+            const finish = () => {
+                modal.classList.remove('active');
+                if (content) content.classList.remove('modal-animate-out');
+                // === Размытие фона убирается автоматически при выходе из модалки ===
+                clearModalBlur();
+                if (id === 'tempModal') clearTempModalBody();
+            };
             if (content) {
                 content.classList.remove('modal-animate-in');
                 content.classList.add('modal-animate-out');
-                setTimeout(() => {
-                    modal.classList.remove('active');
-                    content.classList.remove('modal-animate-out');
-                    // === 3. Размытие фона убирается автоматически при выходе из модалки ===
-                    clearModalBlur();
+                modalCloseTimers[id] = setTimeout(() => {
+                    delete modalCloseTimers[id];
+                    finish();
                 }, 220);
             } else {
-                modal.classList.remove('active');
-                // === 3. Размытие фона убирается автоматически при выходе из модалки ===
-                clearModalBlur();
+                finish();
             }
         }
-        if (id === 'tempModal') {
-            resetNavHistory();
-            clearTempModalBody();
-        }
+        if (id === 'tempModal') resetNavHistory();
     }
 
     // === 3. Убирает размытие фона со всего экрана после выхода из любой модалки ===
     function clearModalBlur() {
-        const targets = [document.documentElement, document.body]
-            .concat(Array.from(document.querySelectorAll('.modal')));
-        targets.forEach(el => {
+        // html/body — снимаем случайные inline-фильтры
+        [document.documentElement, document.body].forEach(el => {
             if (!el || !el.style) return;
             el.style.backdropFilter = '';
             el.style.webkitBackdropFilter = '';
@@ -241,6 +266,13 @@
                 .replace(/blur\([^)]*\)\s*/gi, '')
                 .trim();
             if (!el.style.filter) el.style.filter = '';
+        });
+        // Закрытым модалкам принудительно гасим backdrop-filter: в Chromium он
+        // иногда «залипает» и размывает интерфейс даже при opacity: 0.
+        document.querySelectorAll('.modal').forEach(el => {
+            if (el.classList.contains('active')) return;
+            el.style.backdropFilter = 'none';
+            el.style.webkitBackdropFilter = 'none';
         });
     }
 

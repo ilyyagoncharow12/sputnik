@@ -506,36 +506,60 @@ function uploadWallpaper(input) {
         const file = input.files[0];
         if (!/^image\//.test(file.type)) {
             showToast('❌ Выберите изображение для обоев');
+            input.value = '';
             return;
         }
         openWallpaperCrop(file);
     }
+    // Сбрасываем value, чтобы повторный выбор того же файла снова открывал редактор
+    input.value = '';
 }
 
 // ===== ОБОИ: МОДАЛЬНОЕ ОКНО ВЫБОРА/ОБРЕЗКИ (как в Telegram) =====
+const WALLPAPER_CROP_MAX_ZOOM = 4;
+
 let wallpaperCropState = {
     file: null,
     url: null,
     aspect: '16:9',
-    offsetX: 0.5,
+    zoom: 1,          // 1 = вписано по короткой стороне (cover), до 4
+    offsetX: 0.5,     // положение изображения в рамке: 0..1 (0.5 — центр)
     offsetY: 0.5,
     img: null,
+    pointers: new Map(),
+    panStart: null,
+    pinchStart: null,
+    cleanup: null,
 };
 
+function wallpaperCropResetState() {
+    wallpaperCropState = {
+        file: null, url: null, aspect: '16:9', zoom: 1,
+        offsetX: 0.5, offsetY: 0.5, img: null,
+        pointers: new Map(), panStart: null, pinchStart: null, cleanup: null
+    };
+}
+
 function openWallpaperCrop(file) {
-    wallpaperCropState.file = file;
-    wallpaperCropState.url = URL.createObjectURL(file);
-    wallpaperCropState.aspect = '16:9';
-    wallpaperCropState.offsetX = 0.5;
-    wallpaperCropState.offsetY = 0.5;
+    // Если окно уже открыто — закрываем предыдущее
+    if (document.getElementById('wallpaperCropOverlay')) wallpaperCropCancel();
+
+    const state = wallpaperCropState;
+    state.file = file;
+    state.url = URL.createObjectURL(file);
+    // На телефоне логичнее вертикальные обои, на ПК — горизонтальные
+    state.aspect = window.innerHeight > window.innerWidth ? '9:16' : '16:9';
+    state.zoom = 1;
+    state.offsetX = 0.5;
+    state.offsetY = 0.5;
+    state.img = null;
+    state.pointers = new Map();
+    state.panStart = null;
+    state.pinchStart = null;
 
     const overlay = document.createElement('div');
     overlay.className = 'wallpaper-crop-overlay';
     overlay.id = 'wallpaperCropOverlay';
-
-    const is16x9 = wallpaperCropState.aspect === '16:9';
-    const maxW = Math.min(window.innerWidth * 0.92, 600);
-    const frameH = is16x9 ? Math.round(maxW * 9 / 16) : Math.round(maxW * 16 / 9);
 
     overlay.innerHTML = `
         <div class="wallpaper-crop-topbar">
@@ -545,15 +569,21 @@ function openWallpaperCrop(file) {
         </div>
         <div class="wallpaper-crop-body">
             <div class="wallpaper-crop-bg-blur" id="wallpaperCropBgBlur"></div>
-            <div class="wallpaper-crop-frame" id="wallpaperCropFrame" style="width:${maxW}px;height:${frameH}px;">
+            <div class="wallpaper-crop-frame" id="wallpaperCropFrame">
                 <div class="wallpaper-crop-aspect" id="wallpaperCropAspect"></div>
-                <img class="wallpaper-crop-frame-image" id="wallpaperCropImage" src="${wallpaperCropState.url}" alt="">
+                <img class="wallpaper-crop-frame-image" id="wallpaperCropImage" src="${state.url}" alt="" draggable="false">
             </div>
         </div>
         <div class="wallpaper-crop-bottom">
             <div class="wallpaper-crop-aspect-row">
-                <button class="wallpaper-crop-aspect-chip ${wallpaperCropState.aspect==='16:9'?'active':''}" onclick="wallpaperCropSetAspect('16:9')">16:9</button>
-                <button class="wallpaper-crop-aspect-chip ${wallpaperCropState.aspect==='9:16'?'active':''}" onclick="wallpaperCropSetAspect('9:16')">9:16</button>
+                <button class="wallpaper-crop-aspect-chip ${state.aspect === '16:9' ? 'active' : ''}" data-aspect="16:9" onclick="wallpaperCropSetAspect('16:9')">16:9</button>
+                <button class="wallpaper-crop-aspect-chip ${state.aspect === '9:16' ? 'active' : ''}" data-aspect="9:16" onclick="wallpaperCropSetAspect('9:16')">9:16</button>
+            </div>
+            <div class="wallpaper-crop-zoom">
+                <i class="fas fa-magnifying-glass-minus"></i>
+                <input type="range" id="wallpaperCropZoom" min="1" max="${WALLPAPER_CROP_MAX_ZOOM}" step="0.01" value="1"
+                       oninput="wallpaperCropZoomInput(this.value)">
+                <i class="fas fa-magnifying-glass-plus"></i>
             </div>
             <div class="wallpaper-crop-actions">
                 <button class="wallpaper-crop-btn" onclick="wallpaperCropCancel()">Отмена</button>
@@ -565,171 +595,296 @@ function openWallpaperCrop(file) {
     overlay.classList.add('active');
 
     const bgBlur = document.getElementById('wallpaperCropBgBlur');
-    if (bgBlur) bgBlur.style.backgroundImage = `url('${wallpaperCropState.url}')`;
+    if (bgBlur) bgBlur.style.backgroundImage = `url('${state.url}')`;
 
     const img = document.getElementById('wallpaperCropImage');
     const frame = document.getElementById('wallpaperCropFrame');
+    state.img = img;
 
-    img.onload = () => {
-        wallpaperCropState.img = img;
-        wallpaperCropUpdate();
+    // Размер рамки считаем от реально доступного места (без искажения пропорций)
+    wallpaperCropSizeFrame();
+
+    if (img.complete && img.naturalWidth) wallpaperCropUpdate();
+    else img.onload = () => wallpaperCropUpdate();
+
+    // ----- Перетаскивание и пинч-зум через pointer events (ПК + тач) -----
+    const pointers = state.pointers;
+
+    const framePoint = (e) => {
+        const rect = frame.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
 
-    // Перетаскивание изображения пальцами/курсором
-    let isDragging = false;
-    let startX = 0, startY = 0, baseOffsetX = 0.5, baseOffsetY = 0.5;
+    const onPointerDown = (e) => {
+        if (e.target.closest && e.target.closest('button')) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        try { frame.setPointerCapture(e.pointerId); } catch (_) {}
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    const startDrag = (e) => {
-        if (e.target.tagName === 'BUTTON') return;
-        isDragging = true;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        startX = clientX;
-        startY = clientY;
-        baseOffsetX = wallpaperCropState.offsetX;
-        baseOffsetY = wallpaperCropState.offsetY;
+        if (pointers.size === 1) {
+            state.panStart = {
+                pointerX: e.clientX,
+                pointerY: e.clientY,
+                offsetX: state.offsetX,
+                offsetY: state.offsetY,
+                lay: wallpaperCropLayout()
+            };
+            state.pinchStart = null;
+            frame.classList.add('dragging');
+        } else if (pointers.size === 2) {
+            const pts = Array.from(pointers.values());
+            const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+            const rect = frame.getBoundingClientRect();
+            state.pinchStart = {
+                dist,
+                zoom: state.zoom,
+                midX: (pts[0].x + pts[1].x) / 2 - rect.left,
+                midY: (pts[0].y + pts[1].y) / 2 - rect.top
+            };
+            state.panStart = null;
+        }
         e.preventDefault();
     };
 
-    const moveDrag = (e) => {
-        if (!isDragging) return;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const dx = (clientX - startX) / Math.max(1, frame.clientWidth);
-        const dy = (clientY - startY) / Math.max(1, frame.clientHeight);
-        wallpaperCropState.offsetX = Math.max(0, Math.min(1, baseOffsetX + dx));
-        wallpaperCropState.offsetY = Math.max(0, Math.min(1, baseOffsetY + dy));
-        wallpaperCropUpdate();
-        e.preventDefault();
+    const onPointerMove = (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size >= 2 && state.pinchStart) {
+            const pts = Array.from(pointers.values());
+            const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+            const rect = frame.getBoundingClientRect();
+            const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+            const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+            wallpaperCropSetZoom(state.pinchStart.zoom * (dist / state.pinchStart.dist), midX, midY);
+            e.preventDefault();
+            return;
+        }
+
+        if (pointers.size === 1 && state.panStart) {
+            const ps = state.panStart;
+            const lay = ps.lay || wallpaperCropLayout();
+            if (!lay) return;
+            const spanX = lay.frameW - lay.finalW;
+            const spanY = lay.frameH - lay.finalH;
+            const dx = e.clientX - ps.pointerX;
+            const dy = e.clientY - ps.pointerY;
+            if (spanX < -0.5) {
+                state.offsetX = Math.max(0, Math.min(1, ps.offsetX + dx / spanX));
+            }
+            if (spanY < -0.5) {
+                state.offsetY = Math.max(0, Math.min(1, ps.offsetY + dy / spanY));
+            }
+            wallpaperCropUpdate();
+            e.preventDefault();
+        }
     };
 
-    const endDrag = () => { isDragging = false; };
+    const onPointerUp = (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) state.pinchStart = null;
+        if (pointers.size === 1) {
+            // после пинча остался один палец — продолжаем как перетаскивание
+            const rest = Array.from(pointers.values())[0];
+            state.panStart = {
+                pointerX: rest.x,
+                pointerY: rest.y,
+                offsetX: state.offsetX,
+                offsetY: state.offsetY,
+                lay: wallpaperCropLayout()
+            };
+        }
+        if (pointers.size === 0) {
+            state.panStart = null;
+            frame.classList.remove('dragging');
+        }
+    };
 
-    frame.addEventListener('pointerdown', startDrag);
-    frame.addEventListener('pointermove', moveDrag);
-    frame.addEventListener('pointerup', endDrag);
-    frame.addEventListener('pointercancel', endDrag);
-    frame.addEventListener('touchstart', startDrag, { passive: false });
-    frame.addEventListener('touchmove', moveDrag, { passive: false });
-    frame.addEventListener('touchend', endDrag);
+    const onWheel = (e) => {
+        e.preventDefault();
+        const p = framePoint(e);
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        wallpaperCropSetZoom(state.zoom * factor, p.x, p.y);
+    };
+
+    frame.addEventListener('pointerdown', onPointerDown);
+    frame.addEventListener('pointermove', onPointerMove);
+    frame.addEventListener('pointerup', onPointerUp);
+    frame.addEventListener('pointercancel', onPointerUp);
+    frame.addEventListener('wheel', onWheel, { passive: false });
+
+    // При повороте экрана/изменении окна рамка и картинка пересчитываются
+    const onResize = () => {
+        wallpaperCropSizeFrame();
+        wallpaperCropUpdate();
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    state.cleanup = () => {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('orientationchange', onResize);
+    };
+}
+
+// Геометрия: cover-масштаб + зум. Возвращает размеры/позицию картинки в рамке.
+function wallpaperCropLayout() {
+    const frame = document.getElementById('wallpaperCropFrame');
+    const img = document.getElementById('wallpaperCropImage');
+    if (!frame || !img) return null;
+
+    const frameW = frame.clientWidth;
+    const frameH = frame.clientHeight;
+    const imgW = img.naturalWidth || img.width || 0;
+    const imgH = img.naturalHeight || img.height || 0;
+    if (!frameW || !frameH || !imgW || !imgH) return null;
+
+    // Правильный cover: картинка полностью закрывает рамку
+    const baseScale = Math.max(frameW / imgW, frameH / imgH);
+    const scale = baseScale * wallpaperCropState.zoom;
+    const finalW = imgW * scale;
+    const finalH = imgH * scale;
+
+    // offsetX/offsetY: 0..1 — где стоит картинка (0.5 = центр)
+    const left = (frameW - finalW) * wallpaperCropState.offsetX;
+    const top = (frameH - finalH) * wallpaperCropState.offsetY;
+
+    return { img, frameW, frameH, imgW, imgH, baseScale, scale, finalW, finalH, left, top };
+}
+
+// Подгоняем рамку под свободное место, сохраняя выбранное соотношение сторон
+function wallpaperCropSizeFrame() {
+    const overlay = document.getElementById('wallpaperCropOverlay');
+    const frame = document.getElementById('wallpaperCropFrame');
+    const body = overlay && overlay.querySelector('.wallpaper-crop-body');
+    if (!frame || !body) return;
+
+    const availW = Math.max(120, body.clientWidth - 16);
+    const availH = Math.max(120, body.clientHeight - 16);
+    const ar = wallpaperCropState.aspect === '9:16' ? 9 / 16 : 16 / 9;
+
+    let w = Math.min(availW, availH * ar, 900);
+    let h = w / ar;
+    if (h > availH) {
+        h = availH;
+        w = h * ar;
+    }
+
+    frame.style.width = Math.round(w) + 'px';
+    frame.style.height = Math.round(h) + 'px';
 }
 
 function wallpaperCropUpdate() {
+    const lay = wallpaperCropLayout();
+    if (!lay) return;
     const img = document.getElementById('wallpaperCropImage');
-    const frame = document.getElementById('wallpaperCropFrame');
-    if (!img || !frame) return;
+    if (!img) return;
 
-    const is16x9 = wallpaperCropState.aspect === '16:9';
-    const frameW = frame.clientWidth;
-    const frameH = frame.clientHeight;
-    const imgW = img.naturalWidth || img.width;
-    const imgH = img.naturalHeight || img.height;
-    const targetAsp = is16x9 ? 16 / 9 : 9 / 16;
-
-    let drawW, drawH;
-    if (imgW / imgH > targetAsp) {
-        drawH = frameH;
-        drawW = drawH * (imgW / imgH);
-    } else {
-        drawW = frameW;
-        drawH = drawW / (imgW / imgH);
-    }
-
-    const scaleX = drawW / frameW;
-    const scaleY = drawH / frameH;
-    const scale = Math.max(scaleX, scaleY);
-
-    const finalW = imgW * scale;
-    const finalH = imgH * scale;
-    const offsetX = (frameW - finalW) * wallpaperCropState.offsetX;
-    const offsetY = (frameH - finalH) * wallpaperCropState.offsetY;
-
-    img.style.width = Math.round(finalW) + 'px';
-    img.style.height = Math.round(finalH) + 'px';
-    img.style.left = Math.round(offsetX) + 'px';
-    img.style.top = Math.round(offsetY) + 'px';
+    img.style.width = lay.finalW + 'px';
+    img.style.height = lay.finalH + 'px';
+    img.style.left = lay.left + 'px';
+    img.style.top = lay.top + 'px';
     img.style.position = 'absolute';
-    img.style.objectFit = 'none';
     img.style.cursor = 'grab';
 
     const bgBlur = document.getElementById('wallpaperCropBgBlur');
-    if (bgBlur) {
-        bgBlur.style.backgroundImage = `url('${wallpaperCropState.url}')`;
+    if (bgBlur) bgBlur.style.backgroundImage = `url('${wallpaperCropState.url}')`;
+
+    const slider = document.getElementById('wallpaperCropZoom');
+    if (slider && Math.abs(parseFloat(slider.value) - wallpaperCropState.zoom) > 0.001) {
+        slider.value = wallpaperCropState.zoom;
     }
 }
 
 function wallpaperCropSetAspect(aspect) {
+    if (aspect !== '16:9' && aspect !== '9:16') return;
     wallpaperCropState.aspect = aspect;
-    document.querySelectorAll('.wallpaper-crop-aspect-chip').forEach(b => {
-        b.classList.toggle('active', b.textContent === aspect);
-    });
-    const frame = document.getElementById('wallpaperCropFrame');
-    const is16x9 = aspect === '16:9';
-    const maxW = Math.min(window.innerWidth * 0.92, 600);
-    const frameH = is16x9 ? Math.round(maxW * 9 / 16) : Math.round(maxW * 16 / 9);
-    frame.style.width = maxW + 'px';
-    frame.style.height = frameH + 'px';
+    wallpaperCropState.zoom = 1;
     wallpaperCropState.offsetX = 0.5;
     wallpaperCropState.offsetY = 0.5;
+    document.querySelectorAll('.wallpaper-crop-aspect-chip').forEach(b => {
+        b.classList.toggle('active', b.dataset.aspect === aspect);
+    });
+    wallpaperCropSizeFrame();
     wallpaperCropUpdate();
 }
 
 function wallpaperCropCancel() {
     const overlay = document.getElementById('wallpaperCropOverlay');
-    if (overlay) {
-        if (wallpaperCropState.url) URL.revokeObjectURL(wallpaperCropState.url);
-        overlay.remove();
+    const state = wallpaperCropState;
+    if (state.cleanup) {
+        try { state.cleanup(); } catch (_) {}
     }
-    wallpaperCropState = { file: null, url: null, aspect: '16:9', offsetX: 0.5, offsetY: 0.5, img: null };
+    if (overlay) overlay.remove();
+    if (state.url) URL.revokeObjectURL(state.url);
+    wallpaperCropResetState();
+}
+
+function wallpaperCropZoomInput(value) {
+    const z = parseFloat(value);
+    wallpaperCropSetZoom(isNaN(z) ? 1 : z);
+}
+
+// Установка зума с сохранением точки под «якорем» (курсор/центр пинча)
+function wallpaperCropSetZoom(newZoom, anchorX, anchorY) {
+    const state = wallpaperCropState;
+    const lay = wallpaperCropLayout();
+    if (!lay) {
+        state.zoom = Math.max(1, Math.min(WALLPAPER_CROP_MAX_ZOOM, newZoom));
+        return;
+    }
+
+    newZoom = Math.max(1, Math.min(WALLPAPER_CROP_MAX_ZOOM, newZoom));
+    if (anchorX == null) anchorX = lay.frameW / 2;
+    if (anchorY == null) anchorY = lay.frameH / 2;
+
+    // Точка изображения (в пикселях исходника) под якорем
+    const imgX = (anchorX - lay.left) / lay.scale;
+    const imgY = (anchorY - lay.top) / lay.scale;
+
+    state.zoom = newZoom;
+    const scale = lay.baseScale * newZoom;
+    const finalW = lay.imgW * scale;
+    const finalH = lay.imgH * scale;
+    const left = anchorX - imgX * scale;
+    const top = anchorY - imgY * scale;
+
+    const spanX = lay.frameW - finalW;
+    const spanY = lay.frameH - finalH;
+    state.offsetX = spanX < -0.5 ? Math.max(0, Math.min(1, left / spanX)) : 0.5;
+    state.offsetY = spanY < -0.5 ? Math.max(0, Math.min(1, top / spanY)) : 0.5;
+
+    wallpaperCropUpdate();
 }
 
 async function wallpaperCropApply() {
     const overlay = document.getElementById('wallpaperCropOverlay');
     if (!overlay) return;
 
-    const img = document.getElementById('wallpaperCropImage');
-    const frame = document.getElementById('wallpaperCropFrame');
-    if (!img || !frame) return;
+    const lay = wallpaperCropLayout();
+    if (!lay) {
+        showToast('❌ Изображение ещё не загрузилось');
+        return;
+    }
 
     const is16x9 = wallpaperCropState.aspect === '16:9';
-    const frameW = frame.clientWidth;
-    const frameH = frame.clientHeight;
-    const targetAsp = is16x9 ? 16 / 9 : 9 / 16;
+    const outW = is16x9 ? 1600 : 900;
+    // Высота — строго по видимой области рамки, чтобы не было растяжения
+    const outH = Math.round(outW * lay.frameH / lay.frameW);
 
     const canvas = document.createElement('canvas');
-    const outW = 1600;
-    const outH = is16x9 ? Math.round(outW * 9 / 16) : Math.round(outW * 16 / 9);
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-    const imgW = img.naturalWidth || img.width;
-    const imgH = img.naturalHeight || img.height;
+    // Видимая область рамки — в пикселях исходного изображения
+    const srcX = Math.max(0, -lay.left / lay.scale);
+    const srcY = Math.max(0, -lay.top / lay.scale);
+    const srcW = Math.min(lay.imgW - srcX, lay.frameW / lay.scale);
+    const srcH = Math.min(lay.imgH - srcY, lay.frameH / lay.scale);
 
-    let drawW, drawH;
-    if (imgW / imgH > targetAsp) {
-        drawH = frameH;
-        drawW = drawH * (imgW / imgH);
-    } else {
-        drawW = frameW;
-        drawH = drawW / (imgW / imgH);
-    }
-
-    const scaleX = drawW / frameW;
-    const scaleY = drawH / frameH;
-    const scale = Math.max(scaleX, scaleY);
-
-    const finalW = imgW * scale;
-    const finalH = imgH * scale;
-    const offsetX = (frameW - finalW) * wallpaperCropState.offsetX;
-    const offsetY = (frameH - finalH) * wallpaperCropState.offsetY;
-
-    const srcX = Math.max(0, -offsetX) * scale;
-    const srcY = Math.max(0, -offsetY) * scale;
-    const srcW = Math.min(frameW * scale, imgW - srcX);
-    const srcH = Math.min(frameH * scale, imgH - srcY);
-
-    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+    ctx.drawImage(lay.img, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
 
     canvas.toBlob(async (blob) => {
         if (!blob) {
@@ -738,7 +893,8 @@ async function wallpaperCropApply() {
             return;
         }
 
-        const file = new File([blob], wallpaperCropState.file.name, { type: 'image/jpeg' });
+        const baseName = (wallpaperCropState.file.name || 'wallpaper').replace(/\.[^.]+$/, '') || 'wallpaper';
+        const file = new File([blob], baseName + '.jpg', { type: 'image/jpeg' });
         wallpaperCropCancel();
 
         const fd = new FormData();
@@ -748,7 +904,12 @@ async function wallpaperCropApply() {
             const r = await fetch('/api/update_wallpaper', { method: 'POST', body: fd });
             const data = await r.json();
             if (data.success) {
-                document.getElementById('messagesArea').style.backgroundImage = `url('/${data.wallpaper_image}')`;
+                const area = document.getElementById('messagesArea');
+                if (area) {
+                    area.style.backgroundImage = `url('/${data.wallpaper_image}')`;
+                    area.style.backgroundSize = 'cover';
+                    area.style.backgroundPosition = 'center';
+                }
                 closeModal('tempModal');
                 showToast('✅ Обои обновлены!');
                 setTimeout(openAppearance, 500);
