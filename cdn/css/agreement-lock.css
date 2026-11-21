@@ -1,0 +1,175 @@
+/* Замок пользовательского соглашения: аккаунт доступен, общение — нет. */
+
+.agreement-lock-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10040;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: linear-gradient(90deg, #3a2b00, #241a00);
+    border-bottom: 1px solid rgba(255, 184, 0, 0.45);
+    color: #ffd66b;
+    font-size: 13px;
+    line-height: 1.4;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.agreement-lock-banner .lock-banner-icon {
+    font-size: 20px;
+    flex: 0 0 auto;
+}
+
+.agreement-lock-banner .lock-banner-text {
+    flex: 1 1 auto;
+}
+
+.agreement-lock-banner button {
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 10px;
+    padding: 8px 14px;
+    background: #ffb800;
+    color: #1a1400;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.agreement-lock-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 5, 12, 0.86);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.agreement-lock-card {
+    width: 100%;
+    max-width: 430px;
+    padding: 32px 26px;
+    border-radius: 24px;
+    background: #0f0f0f;
+    border: 1px solid rgba(255, 184, 0, 0.35);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    color: #fff;
+}
+
+.agreement-lock-icon {
+    font-size: 58px;
+    margin-bottom: 12px;
+}
+
+.agreement-lock-card h2 {
+    font-size: 22px;
+    margin: 0 0 10px;
+    font-weight: 800;
+}
+
+.agreement-lock-card p {
+    margin: 0 0 16px;
+    color: #b9b9c1;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.agreement-lock-reasons {
+    text-align: left;
+    margin: 0 0 22px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(255, 59, 48, 0.1);
+    border: 1px solid rgba(255, 59, 48, 0.28);
+    color: #ffb8c7;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.agreement-lock-btn {
+    width: 100%;
+    margin-bottom: 10px;
+    border: 0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    background: #4b8dff;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.agreement-lock-btn:hover { background: #3a7bf0; }
+
+.agreement-lock-ghost {
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 16px;
+    background: #1c1c1e;
+    color: #8e8e93;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* Визуальные замки прямо в интерфейсе */
+body.agreement-locked .message-input-area {
+    position: relative;
+}
+
+body.agreement-locked .message-input-area::after {
+    content: '🔒 Примите пользовательское соглашение, чтобы писать сообщения';
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 12px;
+    background: rgba(10, 10, 14, 0.86);
+    border-radius: 16px;
+    color: #ffd66b;
+    font-size: 13px;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+body.agreement-locked #sendBtn,
+body.agreement-locked #audioCallBtn,
+body.agreement-locked #videoCallBtn,
+body.agreement-locked #groupVideoCallBtn,
+body.agreement-locked #attachBtn,
+body.agreement-locked #emojiBtn,
+body.agreement-locked #micBtn,
+body.agreement-locked #circleBtn,
+body.agreement-locked #pollBtn,
+body.agreement-locked #timerBtn {
+    opacity: 0.4;
+    filter: grayscale(1);
+    pointer-events: none;
+}
+
+body.agreement-locked .chat-user-status::after {
+    content: ' 🔒 соглашение отозвано';
+    color: #ffb800;
+}
+
+@media (max-width: 768px) {
+    .agreement-lock-banner {
+        padding: 9px 12px;
+        font-size: 12px;
+    }
+    .agreement-lock-card {
+        padding: 26px 20px;
+        border-radius: 20px;
+    }
+    .agreement-lock-icon { font-size: 48px; }
+}
