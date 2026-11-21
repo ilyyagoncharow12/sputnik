@@ -43,6 +43,7 @@
 <link rel="stylesheet" href="/cdn/css/tg-design.css">
 <link rel="stylesheet" href="/cdn/css/media-editor.css">
 <link rel="stylesheet" href="/cdn/css/loading.css">
+<link rel="stylesheet" href="/cdn/css/agreement-lock.css">
 </head>
 <body class="{{ body_class }}">
 
@@ -75,6 +76,32 @@
             <li>Звонки и уведомления</li>
         </ul>
         <div class="loader-status" id="loaderStatus">Инициализация...</div>
+    </div>
+</div>
+
+<!-- ЗАМОК ПОЛЬЗОВАТЕЛЬСКОГО СОГЛАШЕНИЯ: аккаунт доступен, общение — нет -->
+<div id="agreementLockBanner" class="agreement-lock-banner" role="alert">
+    <span class="lock-banner-icon">🔒</span>
+    <span class="lock-banner-text agreement-lock-message">Примите пользовательское соглашение, чтобы начать пользоваться мессенджером</span>
+    <button type="button" onclick="hideAgreementLockOverlay()">Понятно</button>
+</div>
+
+<div id="agreementLockOverlay" class="agreement-lock-overlay" role="dialog" aria-modal="true" aria-labelledby="agreementLockTitle">
+    <div class="agreement-lock-card">
+        <div class="agreement-lock-icon">🔒</div>
+        <h2 id="agreementLockTitle">Общение заблокировано</h2>
+        <p class="agreement-lock-message">Примите пользовательское соглашение, чтобы начать пользоваться мессенджером</p>
+        <div class="agreement-lock-reasons">
+            Пока соглашение отозвано, нельзя писать и получать сообщения,
+            звонить, отвечать на звонки, отправлять файлы, стикеры и реакции.
+            Аккаунт и настройки остаются доступными.
+        </div>
+        <button id="agreementAcceptBtn" class="agreement-lock-btn" type="button" onclick="acceptAgreement()">
+            <i class="fas fa-file-circle-check"></i> Принять соглашение
+        </button>
+        <button class="agreement-lock-ghost" type="button" onclick="hideAgreementLockOverlay()">
+            Остаться в аккаунте
+        </button>
     </div>
 </div>
 
@@ -631,10 +658,12 @@
         id: {{ user['id'] }},
         unique_id: {{ user['unique_id'] }},
         username: '{{ user['username'] }}',
-        display_name: '{{ user['display_name'] or user['username'] }}'
+        display_name: '{{ user['display_name'] or user['username'] }}',
+        agreement_accepted: {{ 'true' if agreement_accepted else 'false' }}
     };
 </script>
 <script src="/cdn/js/core.js"></script>
+<script src="/cdn/js/agreement-lock.js"></script>
 <script src="/cdn/js/emoji-data.js"></script>
 <script src="/cdn/js/formatting.js"></script>
 <script src="/cdn/js/stickers.js"></script>

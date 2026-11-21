@@ -227,6 +227,22 @@
             75% { transform: translateX(5px); }
         }
 
+        .agreement-restore-note {
+            display: none;
+            margin: 16px 0 -6px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            color: #9a3412;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .agreement-restore-note.show {
+            display: block;
+        }
+
         .agreement-row input[type="checkbox"] {
             width: 22px;
             height: 22px;
@@ -243,7 +259,8 @@
             user-select: none;
         }
 
-        .agreement-text .link {
+        .agreement-text .link,
+        .agreement-restore-note .link {
             color: #667eea;
             font-weight: 600;
             cursor: pointer;
@@ -252,12 +269,14 @@
             transition: all 0.2s;
         }
 
-        .agreement-text .link:hover {
+        .agreement-text .link:hover,
+        .agreement-restore-note .link:hover {
             color: #5a67d8;
             text-decoration: none;
         }
 
-        .agreement-text .link:active {
+        .agreement-text .link:active,
+        .agreement-restore-note .link:active {
             color: #764ba2;
         }
 
@@ -1204,13 +1223,19 @@
                     </div>
 
                     <!-- ===== ГАЛОЧКА СОГЛАШЕНИЯ ДЛЯ ВХОДА ===== -->
+                    <div class="agreement-restore-note" id="loginAgreementRestoreNote">
+                        🔒 Соглашение было отозвано. Отметьте галочку ниже, чтобы принять его обратно и вернуться в мессенджер.
+                        <span class="link" onclick="window.open('/terms', '_blank')">Пользовательское соглашение</span>
+                    </div>
                     <div class="agreement-row" id="loginAgreementRow">
-                        <input type="checkbox" id="loginAgreementCheck" onchange="updateLoginAgreement()">
+                        <input type="checkbox" id="loginAgreementCheck" name="agreement_accepted" onchange="updateLoginAgreement()">
                         <div class="agreement-text">
-                            Я принимаю условия
-                            <span class="link" onclick="window.open('/terms', '_blank')">Пользовательского соглашения</span>
-    и
-    <span class="link" onclick="window.open('/privacy', '_blank')">Политики конфиденциальности</span>
+                            <span id="loginAgreementPrefix">Я принимаю условия</span>
+                            <span id="loginAgreementLinks">
+                                <span class="link" onclick="window.open('/terms', '_blank')">Пользовательского соглашения</span>
+                                и
+                                <span class="link" onclick="window.open('/privacy', '_blank')">Политики конфиденциальности</span>
+                            </span>
                         </div>
                     </div>
                     <div class="agreement-error" id="loginAgreementError">
@@ -1359,6 +1384,22 @@
         </div>
     </div>
 
+    <!-- ===== ЭКРАН «СОГЛАШЕНИЕ ОТОЗВАНО» ===== -->
+    <div id="agreementOverlay" class="banned-overlay" style="display:none;">
+        <div class="banned-card">
+            <div class="banned-icon">📄</div>
+            <h2>Соглашение отозвано</h2>
+            <p class="banned-reason" id="agreementReason">
+                Вы отозвали пользовательское соглашение. Аккаунт доступен, но общение заблокировано.
+            </p>
+            <p class="banned-hint">
+                Чтобы вернуться в мессенджер, отметьте галочку принятия соглашения на экране входа
+                и нажмите <b>«Войти»</b> — соглашение будет принято обратно автоматически.
+            </p>
+            <button type="button" class="btn btn-secondary" onclick="hideAgreementOverlay()">Понятно</button>
+        </div>
+    </div>
+
     <!-- ===== ОЗНАКОМЛЕНИЕ КАК В ТГ (тёмная тема, анимированные сцены) ===== -->
     <div id="onboarding" aria-hidden="true">
         <div class="ob-view">
@@ -1438,6 +1479,43 @@
             }
         }
 
+        // Проверяем по номеру: отозвано ли соглашение. Если да — показываем
+        // отдельную подсказку и меняем текст галочки на «принять обратно».
+        let loginAgreementCheckTimeout = null;
+        function checkLoginAgreementRevoked() {
+            const input = document.getElementById('loginPhone');
+            const note = document.getElementById('loginAgreementRestoreNote');
+            const prefix = document.getElementById('loginAgreementPrefix');
+            const links = document.getElementById('loginAgreementLinks');
+            const digits = (input.value || '').replace(/\D/g, '');
+
+            function setRevoked(revoked) {
+                if (note) note.classList.toggle('show', revoked);
+                if (prefix) prefix.textContent = revoked
+                    ? 'Принять обратно пользовательское соглашение'
+                    : 'Я принимаю условия';
+                if (links) links.style.display = revoked ? 'none' : '';
+            }
+
+            if (digits.length < 11) {
+                if (loginAgreementCheckTimeout) clearTimeout(loginAgreementCheckTimeout);
+                setRevoked(false);
+                return;
+            }
+
+            if (loginAgreementCheckTimeout) clearTimeout(loginAgreementCheckTimeout);
+            loginAgreementCheckTimeout = setTimeout(() => {
+                fetch('/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `action=check_phone&phone=${encodeURIComponent('+' + digits)}`
+                })
+                .then(r => r.json())
+                .then(data => setRevoked(!!(data.exists && data.agreement_revoked)))
+                .catch(() => {});
+            }, 500);
+        }
+
         function validateLoginAgreement(event) {
             loginAgreementAccepted = document.getElementById('loginAgreementCheck').checked;
 
@@ -1505,6 +1583,9 @@
             body.append('phone', phone);
             body.append('password', password);
             body.append('code', code);
+            if (document.getElementById('loginAgreementCheck').checked) {
+                body.append('agreement_accepted', 'on');
+            }
             if (document.getElementById('remember').checked) body.append('remember', 'on');
 
             fetch('/auth', {
@@ -1529,6 +1610,12 @@
                     return;
                 }
                 if (res.status >= 400) {
+                    if (res.j && res.j.agreement_revoked) {
+                        showAgreementRevoked(res.j.error);
+                        btn.disabled = false;
+                        btn.textContent = 'Войти';
+                        return;
+                    }
                     if (res.j && res.j.banned) {
                         showBanned(res.j.ban_reason || res.j.error);
                         btn.disabled = false;
@@ -1551,9 +1638,11 @@
 
         // ===== ЭТАП 2: ОБЛАЧНЫЙ ПАРОЛЬ (2FA) =====
         let twofaPhone = '';
+        let twofaAcceptAgreement = false;
 
         function showTwoFA(phone, hint) {
             twofaPhone = phone || '';
+            twofaAcceptAgreement = document.getElementById('loginAgreementCheck').checked;
             document.getElementById('twofaPhone').textContent = twofaPhone;
             const h = document.getElementById('twofaHint');
             if (hint) { h.textContent = 'Подсказка: ' + hint; h.style.display = 'block'; }
@@ -1585,12 +1674,17 @@
             fetch('/api/2fa/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: twofaPhone, password: pw })
+                body: JSON.stringify({ phone: twofaPhone, password: pw,
+                                       agreement_accepted: twofaAcceptAgreement })
             })
             .then(r => r.json())
             .then(d => {
                 btn.disabled = false;
                 btn.textContent = 'Войти';
+                if (d.agreement_revoked) {
+                    showAgreementRevoked(d.error);
+                    return;
+                }
                 if (d.success) {
                     window.location.href = d.redirect || '/chat';
                 } else {
@@ -1624,6 +1718,10 @@
             })
             .then(r => r.json())
             .then(d => {
+                if (d.agreement_revoked) {
+                    showAgreementRevoked(d.error);
+                    return;
+                }
                 if (d.success) {
                     err.textContent = 'Пароль сброшен. Теперь войдите по коду заново.';
                     document.getElementById('twofaRecover').classList.remove('open');
@@ -1641,6 +1739,18 @@
         }
         function hideBanned() {
             document.getElementById('bannedOverlay').style.display = 'none';
+        }
+
+        // ===== ЭКРАН «СОГЛАШЕНИЕ ОТОЗВАНО» =====
+        function showAgreementRevoked(reason) {
+            const el = document.getElementById('agreementReason');
+            if (el && reason) el.textContent = reason;
+            const overlay = document.getElementById('agreementOverlay');
+            if (overlay) overlay.style.display = 'flex';
+        }
+        function hideAgreementOverlay() {
+            const overlay = document.getElementById('agreementOverlay');
+            if (overlay) overlay.style.display = 'none';
         }
 
         // ===== ПЕРЕКЛЮЧЕНИЕ «ПАРОЛЬ / КОД» =====
@@ -1707,6 +1817,12 @@
             .then(r => r.json().then(j => ({ status: r.status, j })))
             .then(res => {
                 if (res.status >= 400) {
+                    if (res.j && res.j.agreement_revoked) {
+                        showAgreementRevoked(res.j.error);
+                        btn.disabled = false;
+                        btn.textContent = 'Получить код';
+                        return;
+                    }
                     if (res.j && res.j.banned) {
                         showBanned(res.j.ban_reason || res.j.error);
                         btn.disabled = false;
@@ -2141,6 +2257,7 @@
 
         document.getElementById('loginPhone').addEventListener('input', function() {
             this.value = formatPhoneNumber(this.value);
+            checkLoginAgreementRevoked();
         });
 
         // ===== ИНИЦИАЛИЗАЦИЯ =====
@@ -2152,6 +2269,13 @@
                 switchTab('register');
             } else {
                 switchTab('login');
+            }
+
+            const reason = urlParams.get('reason') || '{{ reason or "" }}';
+            if (reason === 'agreement') {
+                showAgreementRevoked();
+            } else if (reason === 'banned') {
+                showBanned();
             }
 
             document.querySelectorAll('.tab').forEach(tab => {

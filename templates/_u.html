@@ -409,11 +409,28 @@ table.data tbody tr.clickable:hover { background: #1e1e21; }
     </div>
 </div>
 
+<div id="agreementModal" class="modal-ovr" style="display:none;">
+    <div class="modal-box">
+        <h3><i class="fas fa-file-circle-xmark"></i> Отозвать пользовательское соглашение</h3>
+        <p style="color:#ffd66b; font-size:13px; margin-bottom:12px; line-height:1.5;">
+            <b>ВНИМАНИЕ!</b> Пользователь <b>останется в аккаунте</b>, но всё общение будет
+            закрыто замком: нельзя писать и получать сообщения, звонить, отвечать на звонки,
+            отправлять файлы и стикеры. В интерфейсе появится сообщение с кнопкой
+            «Принять пользовательское соглашение, чтобы начать пользоваться мессенджером».
+        </p>
+        <div class="mbtns">
+            <button class="btn primary" style="background:#ff3b30;" onclick="confirmAgreementRevoke()"><i class="fas fa-file-circle-xmark"></i> Отозвать</button>
+            <button class="btn ghost" onclick="closeAgreementModal()">Отмена</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 const U = {{ urimap|tojson }};
 let allUsers = [];
 let banTargetId = null;
+let agreementTargetId = null;
 
 function post(url, body) {
     return fetch(url, {
@@ -519,8 +536,10 @@ function loadUsers() {
 function renderUsers(users) {
     const banned = users.filter(u => u.is_banned).length;
     const deleted = users.filter(u => u.is_deleted).length;
+    const revoked = users.filter(u => u.agreement_accepted === false).length;
     document.getElementById('statsRow').innerHTML = `
         <div class="stat-card"><div class="n">${users.length}</div><div class="l">Всего аккаунтов</div></div>
+        <div class="stat-card"><div class="n"${revoked ? ' style="color:#ffb800;"' : ''}>${revoked}</div><div class="l">📄 Соглашение отозвано</div></div>
         <div class="stat-card"><div class="n">${deleted}</div><div class="l">Удалённых</div></div>
         <div class="stat-card"><div class="n" style="color:#ff4757;">${banned}</div><div class="l">❄ Заморожено</div></div>
         <div class="stat-card"><div class="n">${users.reduce((s,u) => s + (u.messages_count || 0), 0)}</div><div class="l">Сообщений</div></div>
@@ -536,11 +555,14 @@ function renderUsers(users) {
         const avatar = u.avatar
             ? `<img class="avatar-sm ${u.is_banned ? 'frozen' : ''}" src="/${esc(u.avatar)}">`
             : `<span class="avatar-sm ${u.is_banned ? 'frozen' : ''}">${u.is_banned ? '❄' : inits}</span>`;
+        const agreementRevoked = u.agreement_accepted === false;
         const statusBadge = u.is_deleted
             ? '<span class="badge gray">удалён</span>'
-            : u.is_banned
-                ? '<span class="badge frz">❄ заморожен</span>'
-                : '<span class="badge ok">активен</span>';
+            : agreementRevoked
+                ? '<span class="badge ban">📄 соглашение отозвано</span>'
+                : u.is_banned
+                    ? '<span class="badge frz">❄ заморожен</span>'
+                    : '<span class="badge ok">активен</span>';
         const reason = u.is_banned && u.ban_reason ? `<br><span style="color:#ff8aa0;font-size:11px;">причина: ${esc(u.ban_reason)}</span>` : '';
         rows += `<tr class="clickable" onclick="openProfile(${u.id})">
             <td>${avatar}</td>
@@ -593,9 +615,12 @@ function renderProfile(p) {
     const avatar = p.avatar
         ? `<img class="avatar ${p.is_banned ? 'frozen' : ''}" src="/${esc(p.avatar)}">`
         : `<span class="avatar ${p.is_banned ? 'frozen' : ''}">${p.is_banned ? '❄' : inits}</span>`;
-    document.getElementById('panelStatus').innerHTML = p.is_banned
-        ? '<span class="badge frz">❄ заморожен</span>'
-        : '<span class="badge ok">активен</span>';
+    const agreementRevoked = p.agreement_accepted === false;
+    document.getElementById('panelStatus').innerHTML = agreementRevoked
+        ? '<span class="badge ban">📄 соглашение отозвано</span>'
+        : p.is_banned
+            ? '<span class="badge frz">❄ заморожен</span>'
+            : '<span class="badge ok">активен</span>';
 
     const rows = [
         ['ID (внутренний)', p.id],
@@ -609,6 +634,7 @@ function renderProfile(p) {
         ['Зарегистрирован', fmtDateTime(p.created_at)],
         ['Был в сети', fmtDateTime(p.last_seen)],
         ['Регистрация завершена', p.registration_complete ? 'Да' : 'Нет'],
+        ['Пользовательское соглашение', agreementRevoked ? 'отозвано' : 'принято'],
         ['Аккаунт удалён', p.is_deleted ? 'Да' : 'Нет'],
         ['Сообщений', p.messages_count],
         ['Чатов', p.chats_count],
@@ -632,6 +658,9 @@ function renderProfile(p) {
         ${p.is_banned
             ? `<button class="pbtn unban" onclick="setBan(${p.id}, false)"><i class="fas fa-check-circle"></i> Разморозить аккаунт</button>`
             : `<button class="pbtn ban" onclick="openBanModal(${p.id})"><i class="fas fa-snowflake"></i> Заморозить (заблокировать)</button>`}
+        ${agreementRevoked
+            ? `<button class="pbtn unban" onclick="setAgreement(${p.id}, true)"><i class="fas fa-file-circle-check"></i> Восстановить соглашение</button>`
+            : `<button class="pbtn ban" onclick="openAgreementModal(${p.id})"><i class="fas fa-file-circle-xmark"></i> Отозвать пользовательское соглашение</button>`}
         <button class="pbtn moder" onclick="deleteContent(${p.id})"><i class="fas fa-eraser"></i> Удалить контент (сообщения и истории)</button>
         <div id="panelMsg"></div>
     `;
@@ -689,6 +718,38 @@ function setBan(userId, banned, reason) {
             if (d.success) {
                 msg.textContent = banned ? `✅ Аккаунт заморожен (причина: ${d.reason || '—'})` : '✅ Аккаунт разморожен';
                 msg.style.color = banned ? '#4fc3f7' : '#34c759';
+                loadUsers();
+                openProfile(userId);
+            } else {
+                msg.textContent = 'Ошибка: ' + (d.error || '');
+            }
+        });
+}
+
+function openAgreementModal(userId) {
+    agreementTargetId = userId;
+    document.getElementById('agreementModal').style.display = 'flex';
+}
+function closeAgreementModal() {
+    document.getElementById('agreementModal').style.display = 'none';
+    agreementTargetId = null;
+}
+function confirmAgreementRevoke() {
+    const userId = agreementTargetId;
+    closeAgreementModal();
+    setAgreement(userId, false);
+}
+function setAgreement(userId, accepted) {
+    const msg = document.getElementById('panelMsg');
+    msg.style.color = accepted ? '#34c759' : '#ff4757';
+    msg.textContent = accepted ? '⏳ Восстановление соглашения...' : '⏳ Отзыв соглашения...';
+    post(U.agreement, { user_id: userId, accepted })
+        .then(d => {
+            if (d.success) {
+                msg.textContent = accepted
+                    ? '✅ Соглашение восстановлено — общение разблокировано'
+                    : '🔒 Соглашение отозвано — общение заблокировано, аккаунт доступен';
+                msg.style.color = accepted ? '#34c759' : '#ffb800';
                 loadUsers();
                 openProfile(userId);
             } else {
@@ -940,6 +1001,8 @@ function loadJournal() {
             const actionNames = {
                 'ban': '❄ Заморозка аккаунта',
                 'unban': '✅ Разморозка аккаунта',
+                'revoke_agreement': '📄 Отзыв пользовательского соглашения',
+                'restore_agreement': '✅ Восстановление пользовательского соглашения',
                 'delete_content': '🗑 Удаление контента',
                 'edit_profile': '✏️ Редактирование профиля',
                 'delete_group': '🚫 Удаление группы',
@@ -1541,6 +1604,9 @@ document.getElementById('ipPhone').addEventListener('keydown', e => {
 });
 document.getElementById('banModal').addEventListener('click', e => {
     if (e.target === document.getElementById('banModal')) closeBanModal();
+});
+document.getElementById('agreementModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('agreementModal')) closeAgreementModal();
 });
 
 fetch(U.status, { headers: { 'X-CSRF-Token': CSRF, 'Accept': 'application/json' } })

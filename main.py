@@ -85,6 +85,7 @@ from database import (
     get_system_user, ensure_system_chat, send_system_message,
     create_login_code, verify_login_code,
     is_user_banned, get_ban_info, is_user_deleted, get_account_flags,
+    is_agreement_accepted, set_agreement_accepted,
     ban_group_member, unban_group_member, is_group_banned, get_group_bans,
     mute_group_member, unmute_group_member, is_group_muted, get_group_mutes,
     add_group_join_request, get_group_join_request_status, get_group_join_requests,
@@ -224,6 +225,37 @@ socketio = SocketIO(app, cors_allowed_origins=ALLOWED_ORIGINS,
 # Инициализация WebRTC менеджера
 webrtc_manager = init_webrtc(socketio)
 
+# ===== ЗАМОК СОГЛАШЕНИЯ ДЛЯ SOCKET.IO =====
+# Оборачиваем обработчик ДО регистрации в Flask-SocketIO: только внутри его
+# обёртки есть request_context с session/emit. Обёртка поверх server.handlers
+# оказалась бы снаружи контекста и падала бы с "Working outside of request
+# context". connect/disconnect не трогаем — через них замок не проходит.
+_original_socketio_on = socketio.on
+
+
+def _agreement_guarded_handler(fn):
+    @functools.wraps(fn)
+    def guarded(*args, **kwargs):
+        uid = session.get('user_id')
+        if uid and not is_agreement_accepted(uid):
+            emit('agreement_locked',
+                 {'accepted': False, 'message': AGREEMENT_LOCK_MESSAGE})
+            return False
+        return fn(*args, **kwargs)
+    return guarded
+
+
+def _socketio_on_with_agreement(message, namespace=None):
+    def decorator(fn):
+        if message in ('connect', 'disconnect'):
+            return _original_socketio_on(message, namespace)(fn)
+        return _original_socketio_on(message, namespace)(
+            _agreement_guarded_handler(fn))
+    return decorator
+
+
+socketio.on = _socketio_on_with_agreement
+
 # ================= БЕЗОПАСНОСТЬ =================
 # Простой rate-limit по IP (в памяти)
 RATE_LIMIT_REQUESTS = defaultdict(deque)
@@ -356,9 +388,12 @@ def ban_check():
                 return jsonify({'error': banned_message(info['ban_reason']),
                                 'banned': True, 'ban_reason': info['ban_reason']}), 403
             return redirect(url_for('auth'))
+        # Отзыв соглашения НЕ разлогинивает: аккаунт остаётся доступным,
+        # но общение блокируется отдельным before_request и Socket.IO-замком.
         # Живая сессия удалённого аккаунта: пока вкладка открыта, запросы
         # продолжали проходить (например, открытие чата вновь создавало
-        # чаты-сироты). Теперь при первом же запросе сессия сбрасывается.
+        # чаты-сироты). При первом же запросе сессия сбрасывается только
+        # для удалённых аккаунтов.
         if flags['is_deleted'] and not path.startswith('/logout'):
             session.clear()
             if path.startswith('/api/'):
@@ -372,6 +407,94 @@ def banned_message(reason):
     if reason:
         msg += f': {reason}'
     return msg
+
+
+AGREEMENT_LOCK_MESSAGE = (
+    '🔒 Примите пользовательское соглашение, чтобы начать пользоваться мессенджером: '
+    'писать сообщения, получать их, звонить и т.д.'
+)
+
+
+def agreement_locked_response():
+    """Ответ для заблокированных общих действий."""
+    return jsonify({'error': AGREEMENT_LOCK_MESSAGE,
+                    'agreement_revoked': True, 'lock': True}), 403
+
+
+# Эти ручки должны работать даже при отозванном соглашении — через них
+# пользователь видит замок и может принять соглашение обратно.
+AGREEMENT_UNLOCK_PATHS = (
+    '/api/revoke_agreement',
+    '/api/agreement/status',
+    '/api/agreement/accept',
+)
+
+# Пути входа должны работать всегда: отозвавший соглашение пользователь может
+# зайти повторно и поставить галочку «принять обратно».
+AGREEMENT_LOGIN_PATHS = (
+    '/auth',
+    '/auth/auto_login',
+    '/api/2fa/verify',
+    '/api/2fa/recover',
+)
+
+# GET-ручки, которые выдают сообщения/звонки/сториc и другой «живой» контент.
+# Обычные страницы и настройки аккаунта остаются доступны, но через них
+# новые сообщения всё равно не приходят.
+AGREEMENT_READ_LOCK_PREFIXES = (
+    '/api/get_chat',
+    '/api/get_stories',
+    '/api/get_story_',
+    '/api/story_',
+    '/api/search_in_chat',
+    '/api/get_reactions',
+    '/api/message_edits',
+    '/api/trash',
+    '/api/pinned_message',
+    '/api/poll/',
+    '/api/get_call_history',
+    '/api/get_call_info',
+    '/api/album/',
+    '/api/get_user_media',
+    '/api/group/join_requests',
+    '/api/folders/',
+    '/api/scheduled_messages',
+    '/api/stickers',
+)
+
+
+def agreement_read_locked(path):
+    """True, если GET-ручка выдаёт контент мессенджера и должна быть закрыта."""
+    return path.startswith(AGREEMENT_READ_LOCK_PREFIXES)
+
+
+@app.before_request
+def agreement_write_lock():
+    """Замок общения при отозванном соглашении.
+
+    - любые изменяющие API-запросы закрыты (кроме самого принятия/отзыва);
+    - GET-ручки с сообщениями/сториc/звонками тоже закрыты, чтобы нельзя
+      было «дотянуться» до новых сообщений через опрос;
+    - страницы аккаунта, настройки и сам замок остаются доступными.
+    """
+    uid = session.get('user_id')
+    if not uid:
+        return None
+    path = request.path
+    if path in AGREEMENT_LOGIN_PATHS:
+        return None
+    if request.method in GET_METHODS:
+        if not path.startswith('/api/') or not agreement_read_locked(path):
+            return None
+    else:
+        if path in AGREEMENT_UNLOCK_PATHS:
+            return None
+    try:
+        if is_agreement_accepted(uid):
+            return None
+    except Exception:
+        return None
+    return agreement_locked_response()
 # ================= АДМИН-ПАНЕЛЬ МОДЕРАЦИИ (конец) =================
 
 # Создаём папки
@@ -470,8 +593,29 @@ def get_ip_location(ip):
         return 'Неизвестно'
 
 
-def complete_login(user, remember=False, notify=True, method='password'):
+def _restore_agreement_on_login(user):
+    """Повторно принять соглашение по галочке на экране входа.
+
+    Если соглашение было отозвано, снимаем замок общения прямо здесь — тогда
+    после редиректа в /chat пользователь сразу попадает в рабочий мессенджер,
+    а не в экран блокировки.
+    """
+    try:
+        uid = user['id']
+        if is_agreement_accepted(uid):
+            return
+        ok, _err = set_agreement_accepted(uid, True)
+        if ok:
+            apply_agreement_socket_state(uid, True)
+    except Exception as e:
+        print('[agreement] restore on login failed: %s' % e)
+
+
+def complete_login(user, remember=False, notify=True, method='password',
+                   accept_agreement=False):
     """Завершает вход пользователя, устанавливает сессию"""
+    if accept_agreement:
+        _restore_agreement_on_login(user)
     session['user_id'] = user['id']
     session['unique_id'] = user['unique_id']
     session['username'] = user['username']
@@ -581,7 +725,8 @@ def auth():
             existing = check_phone_exists(phone)
             return jsonify({
                 'exists': existing is not None,
-                'registration_complete': bool(existing['registration_complete']) if existing else False
+                'registration_complete': bool(existing['registration_complete']) if existing else False,
+                'agreement_revoked': (not is_agreement_accepted(existing['id'])) if existing else False
             })
 
         # === ВХОД ===
@@ -620,7 +765,9 @@ def auth():
                         'success': False, 'twofa_required': True,
                         'phone': phone, 'hint': info.get('hint') or None
                     })
-                return complete_login(user, remember, method='code')
+                return complete_login(
+                    user, remember, method='code',
+                    accept_agreement=request.form.get('agreement_accepted') == 'on')
 
             # Вход по паролю
             if not phone or not password:
@@ -638,7 +785,9 @@ def auth():
                                 'banned': True, 'ban_reason': info['ban_reason']}), 403
             if not user['registration_complete']:
                 return jsonify({'error': 'Регистрация не завершена. Используйте регистрацию.'}), 400
-            return complete_login(user, remember, method='password')
+            return complete_login(
+                user, remember, method='password',
+                accept_agreement=request.form.get('agreement_accepted') == 'on')
 
         # === РЕГИСТРАЦИЯ ===
         elif action == 'register':
@@ -717,7 +866,6 @@ def api_auth_send_login_code():
         info = get_ban_info(user['id'])
         return jsonify({'error': banned_message(info['ban_reason']),
                         'banned': True, 'ban_reason': info['ban_reason']}), 403
-
     code = create_login_code(user['id'])
     try:
         send_system_message(user['id'],
@@ -768,6 +916,10 @@ def chat_page():
     avatars = get_preloaded_avatars()
     settings = get_user_settings(session['user_id']) or {}
     unread = get_linked_account_unread(session['user_id'])
+    try:
+        agreement_accepted = is_agreement_accepted(session['user_id'])
+    except Exception:
+        agreement_accepted = True
 
     return render_template(template,
                             user=dict(user),
@@ -782,6 +934,7 @@ def chat_page():
                            channels=[dict(channel) for channel in channels] if channels else [],
                            avatars=[dict(a) for a in avatars] if avatars else [],
                            body_class='mobile' if is_mobile() else 'desktop',
+                           agreement_accepted=agreement_accepted,
                            csrf_token=session.get('csrf_token'))
 
 
@@ -3685,6 +3838,52 @@ def api_delete_account():
     return jsonify({'success': False}), 400
 
 
+@app.route('/api/revoke_agreement', methods=['POST'])
+def api_revoke_agreement():
+    """Пользователь отзывает соглашение, но остаётся в аккаунте.
+
+    Сессия и Socket.IO-соединение сохраняются. Меняется только доступ к
+    общению: пользователь выходит из личного room (не получает новые
+    сообщения/звонки), а все изменяющие API и socket-события закрываются
+    замком с просьбой принять соглашение.
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    ok, err = set_agreement_accepted(user_id, False)
+    if ok is False:
+        return jsonify({'error': err or 'Не удалось отозвать соглашение'}), 403
+
+    apply_agreement_socket_state(user_id, False)
+    return jsonify({'success': True, 'accepted': False,
+                    'message': AGREEMENT_LOCK_MESSAGE})
+
+
+@app.route('/api/agreement/status')
+def api_agreement_status():
+    """Текущее состояние соглашения для UI-замка."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify({'accepted': is_agreement_accepted(session['user_id']),
+                    'message': AGREEMENT_LOCK_MESSAGE})
+
+
+@app.route('/api/agreement/accept', methods=['POST'])
+def api_agreement_accept():
+    """Повторное принятие соглашения прямо из замка в мессенджере."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    ok, err = set_agreement_accepted(user_id, True)
+    if ok is False:
+        return jsonify({'error': err or 'Не удалось принять соглашение'}), 403
+
+    apply_agreement_socket_state(user_id, True)
+    return jsonify({'success': True, 'accepted': True})
+
+
 @app.route('/api/upload_auth_photo', methods=['POST'])
 def api_upload_auth_photo():
     """Загрузка фото на странице входа (сохраняется в static/auth-logo.png)"""
@@ -5154,6 +5353,106 @@ def clear_active_call(call_id):
             del active_calls[uid]
 
 
+def apply_agreement_socket_state(user_id, accepted):
+    """Включить/снять замок общения без разрыва соединения.
+
+    При отзыве пользователь выходит из ВСЕх комнат (личной, чатов, звонков):
+    туда приходят новые сообщения и звонки. Socket.IO-соединение остаётся,
+    поэтому интерфейс и настройки продолжают работать. При повторном
+    принятии клиент перезагружается и заново вступает в нужные комнаты.
+    """
+    personal_room = f'user_{user_id}'
+    event = 'agreement_restored' if accepted else 'agreement_locked'
+    data = ({'accepted': True} if accepted
+            else {'accepted': False, 'message': AGREEMENT_LOCK_MESSAGE})
+
+    if not accepted:
+        # Завершаем уже идущие звонки, иначе WebRTC-медиа может идти дальше,
+        # даже если новые сигнал-события уже закрыты замком.
+        call_id = active_calls.get(user_id)
+        if call_id:
+            for other_uid, other_call in list(active_calls.items()):
+                if other_uid == user_id or other_call != call_id:
+                    continue
+                try:
+                    socketio.emit('call_ended_by_peer', {'call_id': other_call},
+                                  room=f'user_{other_uid}')
+                except Exception as e:
+                    print('[agreement] end call %s failed: %s' % (other_uid, e))
+            clear_active_call(call_id)
+        for room_id, room_data in list(video_rooms.items()):
+            participants = room_data.get('participants', {})
+            for sid, info in list(participants.items()):
+                if info.get('user_id') != user_id:
+                    continue
+                try:
+                    socketio.emit('participant_left', {
+                        'sid': sid, 'user_id': user_id
+                    }, room=f'video_{room_id}')
+                except Exception as e:
+                    print('[agreement] leave video %s failed: %s' % (room_id, e))
+                participants.pop(sid, None)
+                try:
+                    remove_video_call_participant(room_id, user_id)
+                except Exception:
+                    pass
+            if not participants and room_id in video_rooms:
+                try:
+                    end_video_call(room_id)
+                except Exception:
+                    pass
+                video_rooms.pop(room_id, None)
+
+    # Оповещаем все активные соединения пользователя и ставим/снимаем замок.
+    try:
+        participants = list(socketio.server.manager.get_participants('/', personal_room))
+    except KeyError:
+        participants = []  # пространство имён ещё не создано
+    except Exception as e:
+        print('[agreement] participants failed: %s' % e)
+        participants = []
+
+    # После отзыва пользователь уже не в личном room, поэтому одного
+    # get_participants() мало — берём ещё sids из онлайн-карты.
+    sids = set(online_user_sids.get(user_id, ()))
+    for item in participants:
+        # python-socketio возвращает пары (sid, eio_sid), а не просто sid.
+        sids.add(item[0] if isinstance(item, (tuple, list)) else item)
+
+    for sid in sids:
+        try:
+            socketio.emit(event, data, to=sid)
+        except Exception as e:
+            print('[agreement] emit %s failed: %s' % (sid, e))
+
+        if accepted:
+            # Возвращаем хотя бы личный room сразу; остальные комнаты
+            # восстановятся после перезагрузки страницы.
+            try:
+                socketio.server.enter_room(sid, personal_room, namespace='/')
+            except Exception as e:
+                print('[agreement] enter %s failed: %s' % (sid, e))
+            continue
+
+        # Отзыв: выходим из всех комнат, кроме служебной комнаты самого sid.
+        try:
+            rooms = list(socketio.server.manager.get_rooms(sid, '/'))
+        except Exception as e:
+            print('[agreement] rooms %s failed: %s' % (sid, e))
+            rooms = [personal_room]
+        for room in rooms:
+            if room == sid:
+                continue
+            try:
+                socketio.server.leave_room(sid, room, namespace='/')
+            except Exception as e:
+                print('[agreement] leave %s/%s failed: %s' % (sid, room, e))
+
+
+# Админка переключает тот же замок через callback.
+_svc.set_agreement_change_callback(apply_agreement_socket_state)
+
+
 @socketio.on('connect')
 def handle_connect():
     if 'user_id' in session:
@@ -5161,7 +5460,13 @@ def handle_connect():
             emit('banned', {'error': 'Аккаунт заблокирован администратором'})
             disconnect()
             return
-        join_room(f"user_{session['user_id']}")
+        if not is_agreement_accepted(session['user_id']):
+            # Соединение остаётся, но в личный room не пускаем — значит
+            # новые сообщения и звонки просто не придут.
+            emit('agreement_locked',
+                 {'accepted': False, 'message': AGREEMENT_LOCK_MESSAGE})
+        else:
+            join_room(f"user_{session['user_id']}")
         was_offline = not online_user_sids.get(session['user_id'])
         online_user_sids.setdefault(session['user_id'], set()).add(request.sid)
         update_last_seen(session['user_id'])
@@ -6310,6 +6615,7 @@ def api_2fa_verify():
     data = request.get_json(silent=True) or {}
     phone = '+' + re.sub(r'\D', '', str(data.get('phone') or '')).lstrip('+')
     pw = data.get('password') or ''
+    accept_agreement = str(data.get('agreement_accepted', '')).lower() in ('1', 'true', 'on', 'yes')
     if not phone or not pw:
         return jsonify({'success': False, 'error': 'Введите телефон и облачный пароль'}), 400
 
@@ -6335,7 +6641,7 @@ def api_2fa_verify():
 
     clear_auth_failures(lock_key)
     user = get_user_by_id(user['id'])
-    complete_login(user, True, method='code')
+    complete_login(user, True, method='code', accept_agreement=accept_agreement)
     # complete_login() возвращает Response с redirect — для JS отдаём сам URL
     return jsonify({'success': True, 'twofa_required': True,
                     'redirect': url_for('chat_page')})

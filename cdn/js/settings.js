@@ -108,6 +108,23 @@ function openPrivacy() {
                             <option value="contacts" ${settings.messages === 'contacts' ? 'selected' : ''}>Контакты</option>
                         </select>
 
+                        <div class="tg-section-title">Пользовательское соглашение</div>
+                        <div class="tg-setting-row" onclick="openRevokeAgreement()"
+                             style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;
+                                    border-bottom:1px solid rgba(128,128,128,.15);">
+                            <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,184,0,.18);
+                                        display:flex;align-items:center;justify-content:center;color:#ffb800;">
+                                <i class="fas fa-file-circle-xmark"></i>
+                            </div>
+                            <div style="flex:1;">
+                                <div style="font-size:15px;">Отозвать соглашение</div>
+                                <div style="font-size:12px;color:var(--modal-fg-muted);">
+                                    Общение будет заблокировано, аккаунт останется доступным
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right" style="color:var(--modal-fg-muted);font-size:12px;"></i>
+                        </div>
+
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
                             <button class="tg-action-btn" onclick="savePrivacySettings()" style="flex: 1; background: var(--modal-accent); color: var(--modal-fg);">
                                 <i class="fas fa-save"></i> Сохранить
@@ -1012,6 +1029,73 @@ function resetAllAppearance() {
         if (confirm('Завершить все сессии кроме текущей?')) {
             fetch('/api/terminate_all_sessions', { method: 'POST' }).then(() => { closeModal('tempModal'); alert('Все сессии завершены'); });
         }
+    }
+
+    // ===== ОТЗЫВ ПОЛЬЗОВАТЕЛЬСКОГО СОГЛАШЕНИЯ =====
+    function openRevokeAgreement() {
+        closeBurgerMenu();
+        const html = `
+            <div class="tg-modal-wrapper">
+                <div class="tg-modal-header">
+                    <button class="close-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
+                    <div class="title">Отзыв соглашения</div>
+                    <div style="width: 24px;"></div>
+                </div>
+                <div class="tg-modal-body">
+                    <div class="tg-section-title">ВНИМАНИЕ</div>
+                    <div style="background:rgba(255,184,0,0.12);border:1px solid rgba(255,184,0,0.35);border-radius:14px;padding:14px 16px;margin-bottom:18px;color:#ffd66b;font-size:13px;line-height:1.55;">
+                        Если отозвать пользовательское соглашение, <b>из аккаунта вас не выкинет</b>, но общение
+                        будет полностью закрыто: нельзя <b>писать и получать сообщения, звонить, отвечать на звонки</b>,
+                        отправлять файлы, стикеры и реакции. На всех действиях появится замок с напоминанием
+                        принять соглашение.
+                    </div>
+                    <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin-bottom:20px;">
+                        Вернуть доступ можно прямо из замка — кнопкой «Принять соглашение». Администратор также
+                        может восстановить его из панели управления. Продолжая, вы подтверждаете, что понимаете:
+                        мессенджером можно будет пользоваться только после повторного принятия.
+                    </p>
+                    <div style="display:flex;gap:10px;">
+                        <button id="revokeAgreementBtn" class="tg-action-btn danger" style="flex:1;" onclick="confirmRevokeAgreement()">
+                            <i class="fas fa-file-circle-xmark"></i> Отозвать соглашение
+                        </button>
+                        <button class="tg-action-btn" style="flex:1;background:var(--modal-btn-bg);color:var(--modal-fg-muted);" onclick="navBack()">
+                            <i class="fas fa-times"></i> Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('tempModalBody').innerHTML = html;
+        openModal('tempModal');
+    }
+
+    function confirmRevokeAgreement() {
+        const btn = document.getElementById('revokeAgreementBtn');
+        if (btn) btn.disabled = true;
+        fetch('/api/revoke_agreement', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                closeModal('tempModal');
+                if (typeof showAgreementLock === 'function') {
+                    showAgreementLock(d.message);
+                } else if (typeof setAgreementLocked === 'function') {
+                    setAgreementLocked(true, { showOverlay: true, message: d.message });
+                }
+                showToast('🔒 Соглашение отозвано — общение заблокировано');
+                return;
+            }
+            showToast(d.error || 'Не удалось отозвать соглашение');
+            if (btn) btn.disabled = false;
+        })
+        .catch(() => {
+            showToast('Ошибка соединения с сервером');
+            if (btn) btn.disabled = false;
+        });
     }
 
     function deleteAccount() {

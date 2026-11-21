@@ -1792,6 +1792,7 @@ function removeContactById(userId) {
                 <div class="burger-item" onclick="openSessions();closeModal('tempModal');"><i class="fas fa-shield-alt"></i><span>Активные сессии</span></div>
                 <div class="burger-item" onclick="openNotifications();closeModal('tempModal');"><i class="fas fa-bell"></i><span>Уведомления</span></div>
                 <div class="burger-divider"></div>
+                <div class="burger-item danger" onclick="openRevokeAgreement()"><i class="fas fa-file-circle-xmark"></i><span>Отозвать соглашение</span></div>
                 <div class="burger-item danger" onclick="deleteAccount();closeModal('tempModal');"><i class="fas fa-trash-alt"></i><span>Удалить аккаунт</span></div>
             </div>
         `;

@@ -359,7 +359,9 @@ def init_db():
                 email TEXT,
                 is_deleted BOOLEAN DEFAULT FALSE,
                 deleted_at TIMESTAMPTZ,
-                registration_complete BOOLEAN DEFAULT FALSE
+                registration_complete BOOLEAN DEFAULT FALSE,
+                agreement_accepted BOOLEAN DEFAULT TRUE,
+                agreement_revoked_at TIMESTAMPTZ
             )
         ''')
 
@@ -377,6 +379,23 @@ def init_db():
     )
     if not cur.fetchone():
         cur.execute('ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT NULL')
+        conn.commit()
+
+    # Миграция: отзыв пользовательского соглашения.
+    # По умолчанию TRUE — все существующие пользователи считают соглашение
+    # принятым, пока его явно не отзовут в настройках или в админке.
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'agreement_accepted'"
+    )
+    if not cur.fetchone():
+        cur.execute('ALTER TABLE users ADD COLUMN agreement_accepted BOOLEAN DEFAULT TRUE')
+        conn.commit()
+
+    cur.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'agreement_revoked_at'"
+    )
+    if not cur.fetchone():
+        cur.execute('ALTER TABLE users ADD COLUMN agreement_revoked_at TIMESTAMPTZ DEFAULT NULL')
         conn.commit()
 
     # Служебные журналы (переименованы, данные сохраняются)
@@ -1743,16 +1762,19 @@ def get_account_flags(user_id):
     чтобы не делать два обращения к БД на каждый запрос)."""
     conn = get_db()
     cur = dict_cursor(conn)
-    cur.execute('SELECT is_banned, ban_reason, is_deleted FROM users WHERE id = %s', (user_id,))
+    cur.execute('SELECT is_banned, ban_reason, is_deleted, agreement_accepted '
+                'FROM users WHERE id = %s', (user_id,))
     row = cur.fetchone()
     conn.close()
     if row is None:
-        return {'exists': False, 'is_banned': False, 'ban_reason': None, 'is_deleted': True}
+        return {'exists': False, 'is_banned': False, 'ban_reason': None,
+                'is_deleted': True, 'agreement_accepted': False}
     return {
         'exists': True,
         'is_banned': bool(row['is_banned']),
         'ban_reason': row['ban_reason'],
         'is_deleted': bool(row['is_deleted']),
+        'agreement_accepted': bool(row['agreement_accepted']),
     }
 
 
@@ -1769,6 +1791,38 @@ def get_ban_info(user_id):
     }
 
 
+def is_agreement_accepted(user_id):
+    """Принято ли пользовательское соглашение. Отсутствие записи считается
+    недоступным — при входе это означает отказ в доступе."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('SELECT agreement_accepted FROM users WHERE id = %s', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return bool(row and row['agreement_accepted'])
+
+
+def set_agreement_accepted(user_id, accepted):
+    """Отозвать/восстановить пользовательское соглашение.
+
+    Возвращает (True, None) при успехе или (False, ошибка) для защищённых
+    аккаунтов — их нельзя лишить доступа к мессенджеру.
+    """
+    if is_protected_user(user_id):
+        return False, 'У защищённого аккаунта нельзя отозвать соглашение'
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute(
+        'UPDATE users SET agreement_accepted = %s, agreement_revoked_at = '
+        "CASE WHEN %s THEN NULL ELSE NOW() AT TIME ZONE 'UTC' + INTERVAL '3 hours' END "
+        'WHERE id = %s',
+        (bool(accepted), bool(accepted), user_id)
+    )
+    conn.commit()
+    conn.close()
+    return True, None
+
+
 def svc_list_users():
     conn = get_db()
     cur = dict_cursor(conn)
@@ -1776,6 +1830,7 @@ def svc_list_users():
         SELECT u.id, u.unique_id, u.phone, u.username, u.display_name, u.avatar,
                u.email, u.bio, u.birthday, u.created_at, u.last_seen,
                u.is_banned, u.ban_reason, u.is_deleted, u.registration_complete,
+               u.agreement_accepted, u.agreement_revoked_at,
                (SELECT COUNT(*) FROM messages m WHERE m.sender_id = u.id AND m.is_deleted = FALSE) as messages_count,
                (SELECT COUNT(*) FROM chats c WHERE c.user1_id = u.id OR c.user2_id = u.id) as chats_count,
                (SELECT COUNT(*) FROM stories s WHERE s.user_id = u.id) as stories_count
@@ -1784,6 +1839,9 @@ def svc_list_users():
     ''')
     users = cur.fetchall()
     conn.close()
+    # SQLite хранит BOOLEAN как 0/1 — админка сравнивает с false строго.
+    for u in users:
+        u['agreement_accepted'] = bool(u['agreement_accepted'])
     return users
 
 
@@ -1795,6 +1853,7 @@ def svc_user_card(user_id):
     if not user:
         conn.close()
         return None
+    user['agreement_accepted'] = bool(user['agreement_accepted'])
     cur.execute('SELECT COUNT(*) as total FROM messages WHERE sender_id = %s AND is_deleted = FALSE', (user_id,))
     user['messages_count'] = cur.fetchone()['total']
     cur.execute('SELECT COUNT(*) as total FROM stories WHERE user_id = %s', (user_id,))
@@ -2198,6 +2257,9 @@ def svc_counters():
         'users': one('SELECT COUNT(*) as total FROM users'),
         'deleted_users': one('SELECT COUNT(*) as total FROM users WHERE is_deleted = TRUE'),
         'banned_users': one('SELECT COUNT(*) as total FROM users WHERE is_banned = TRUE'),
+        'revoked_agreement_users': one(
+            'SELECT COUNT(*) as total FROM users WHERE agreement_accepted = FALSE'
+        ),
         'messages': one('SELECT COUNT(*) as total FROM messages WHERE is_deleted = FALSE'),
         'groups': one('SELECT COUNT(*) as total FROM groups'),
         'channels': one('SELECT COUNT(*) as total FROM channels'),
@@ -2415,6 +2477,7 @@ def get_undelivered_message_ids(chat_id, reader_id, limit=200):
 USER_SETTINGS_FORBIDDEN = (
     'id', 'unique_id', 'is_system', 'is_deleted', 'deleted_at', 'is_banned',
     'ban_reason', 'phone', 'password', 'registration_complete',
+    'agreement_accepted', 'agreement_revoked_at',
     'premium_until', 'premium_emoji', 'cloud_password_hash',
     'app_passcode_hash', 'recovery_email',
 )
@@ -5507,6 +5570,15 @@ def delete_all_sessions_except(user_id, current_token):
     conn = get_db()
     cur = dict_cursor(conn)
     cur.execute('DELETE FROM user_sessions WHERE user_id = %s AND session_token != %s', (user_id, current_token))
+    conn.commit()
+    conn.close()
+
+
+def delete_all_user_sessions(user_id):
+    """Удалить все серверные сессии пользователя (отзыв JWT-токенов)."""
+    conn = get_db()
+    cur = dict_cursor(conn)
+    cur.execute('DELETE FROM user_sessions WHERE user_id = %s', (user_id,))
     conn.commit()
     conn.close()
 

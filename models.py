@@ -56,6 +56,8 @@ class User(Base):
     # Колонки, добавленные миграциями
     is_banned = Column(Boolean, default=False)
     ban_reason = Column(Text)
+    agreement_accepted = Column(Boolean, default=True)
+    agreement_revoked_at = Column(Text)
     banner_color = Column(Text, default='#2b8d8d')
     banner_image = Column(Text)
     is_system = Column(Boolean, default=False)

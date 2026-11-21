@@ -19,6 +19,24 @@
     const socket = io();
     const currentUser = window.CURRENT_USER;
 
+    // Отзыв соглашения — аккаунт остаётся открытым, но общение закрывается
+    // замком с кнопкой повторного принятия. Бан по-прежнему уводит на вход.
+    socket.on('agreement_locked', (data) => {
+        if (typeof showAgreementLock === 'function') {
+            showAgreementLock(data && data.message);
+        } else {
+            window.location.reload();
+        }
+    });
+    socket.on('agreement_restored', () => {
+        if (typeof setAgreementLocked === 'function') setAgreementLocked(false);
+        // Перезагрузка заново вступит в комнаты чатов/звонков.
+        window.location.reload();
+    });
+    socket.on('banned', () => {
+        window.location.href = '/auth?reason=banned';
+    });
+
     let currentChat = null;
     let currentChatType = null;
     let currentReplyMessage = null;

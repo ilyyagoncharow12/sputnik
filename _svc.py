@@ -17,6 +17,7 @@ from database import (
     svc_group_roster, svc_remove_node, svc_detach, svc_list_channels,
     svc_channel_roster, svc_purge_node, svc_find_user, svc_dump, svc_page,
     svc_counters, is_protected_user,
+    set_agreement_accepted,
     create_premium_promo, list_premium_promos, update_premium_promo,
     delete_premium_promo, list_premium_activations, premium_stats,
     get_user_premium, set_user_premium_emoji,
@@ -27,7 +28,7 @@ _SEED = (env('SVC_SEED') or env('SECRET_KEY') or 'sputnik').encode('utf-8')
 
 _K = ('a7', 'q3', 'm9', 'z1', 'k4', 'b8', 't2', 'r6', 'w5', 'c1', 'y9', 'd3',
       'f7', 'g2', 'h8', 'j4', 'l6', 'n1', 'p5', 's3', 'u9', 'v2', 'e4',
-      'i1', 'i2', 'i4', 'i6', 'i7', 'i8', 'i9')
+      'i1', 'i2', 'i4', 'i6', 'i7', 'i8', 'i9', 'o1')
 
 _paths = {}
 
@@ -69,9 +70,20 @@ MAP = {
     'premium_activations': _paths['i6'],
     'premium_grant': _paths['i7'],
     'premium_stats': _paths['i8'],
+    'agreement': _paths['o1'],
 }
 
 PANEL = _paths['a7']
+
+# Вызывается из main.py после отзыва/восстановления соглашения, чтобы
+# закрыть активные Socket.IO-соединения пользователя.
+_agreement_change_callback = None
+
+
+def set_agreement_change_callback(fn):
+    global _agreement_change_callback
+    _agreement_change_callback = fn
+
 
 # ---------------------------------------------------------------- auth
 _PHONE = (env('ADMIN_PHONE') or '').strip()
@@ -181,6 +193,34 @@ def _op_ban():
     svc_trace(_actor(), 'ban' if banned else 'unban',
               f"user_id={user_id} увеличен={banned} причина={reason}")
     return jsonify({'success': True, 'banned': banned, 'reason': reason})
+
+
+@_guard
+def _op_agreement():
+    """Отзыв / восстановление пользовательского соглашения из админки."""
+    data = request.get_json() or {}
+    user_id = int(data.get('user_id', 0))
+    accepted = bool(data.get('accepted', False))
+    if not user_id:
+        return jsonify({'error': 'Не указан пользователь'}), 400
+    if is_protected_user(user_id):
+        return jsonify({'error': 'У защищённого аккаунта нельзя менять соглашение'}), 403
+
+    ok, err = set_agreement_accepted(user_id, accepted)
+    if ok is False:
+        return jsonify({'error': err or 'Не удалось применить'}), 403
+
+    # Сессию НЕ рвём: пользователь остаётся в аккаунте, но личный room
+    # и все socket/API-действия закрываются замком до повторного принятия.
+    if _agreement_change_callback:
+        try:
+            _agreement_change_callback(user_id, accepted)
+        except Exception as e:
+            print('[svc] agreement callback failed: %s' % e)
+
+    svc_trace(_actor(), 'restore_agreement' if accepted else 'revoke_agreement',
+              f"user_id={user_id} принято={accepted}")
+    return jsonify({'success': True, 'accepted': accepted})
 
 
 @_guard
@@ -435,6 +475,7 @@ _SPEC = (
     ('z1', '', 'POST', _op_logout, False),
     ('k4', '', 'GET', _op_users, True),
     ('t2', '', 'POST', _op_ban, True),
+    ('o1', '', 'POST', _op_agreement, True),
     ('r6', '', 'POST', _op_delete_content, True),
     ('w5', '', 'POST', _op_edit_profile, True),
     ('c1', '', 'GET', _op_groups, True),
