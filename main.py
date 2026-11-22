@@ -74,7 +74,7 @@ from database import (
     create_video_call, add_video_call_participant, remove_video_call_participant,
     end_video_call, get_active_video_call, get_video_call_participants,
     get_preloaded_avatars, get_deleted_avatar,
-    block_user, unblock_user, is_user_blocked, get_blocked_users, get_user_profile, clear_chat, reply_to_story,
+    block_user, unblock_user, is_user_blocked, get_blocked_users, get_user_profile, clear_chat, clear_chat_for_me, reply_to_story,
     get_story_stats, get_story_by_id, search_messages_in_chat,create_call_room, update_call,create_folder,
     get_user_folders,
     update_folder_name,
@@ -1215,6 +1215,40 @@ def api_clear_chat():
     clear_chat(chat_id, group_id, channel_id)
 
     return jsonify({'success': True})
+
+
+@app.route('/api/clear_personal_chat', methods=['POST'])
+def api_clear_personal_chat():
+    """Очистка личного чата из меню профиля собеседника.
+
+    mode='me'  — только у пользователя (через message_hides);
+    mode='all' — у обоих собеседников (сообщения уходят в корзину).
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.get_json(silent=True) or {}
+    mode = (data.get('mode') or 'me').strip()
+    try:
+        other_id = int(data.get('user_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Не указан собеседник'}), 400
+
+    me = session['user_id']
+    chat_id = get_personal_chat_id(me, other_id)
+    if not chat_id:
+        return jsonify({'error': 'Чат не найден'}), 404
+
+    if mode == 'all':
+        clear_chat(chat_id=chat_id, deleted_by=me)
+        # Оба собеседника входят в room chat_<id> через событие join_chat.
+        socketio.emit('chat_cleared', {'chat_id': chat_id}, room='chat_%s' % chat_id)
+    else:
+        clear_chat_for_me(chat_id, me)
+        # Очистивший видит пустой чат сразу, у собеседника история остаётся.
+        socketio.emit('chat_cleared', {'chat_id': chat_id}, room='user_%s' % me)
+
+    return jsonify({'success': True, 'chat_id': chat_id})
 
 
 @app.route('/api/block_user', methods=['POST'])
@@ -3422,14 +3456,15 @@ def api_search_in_chat():
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     chat_id = data.get('chat_id')
-    query = data.get('query', '').strip()
+    chat_type = (data.get('chat_type') or 'personal').strip()
+    query = (data.get('query') or '').strip()
 
     if not chat_id or len(query) < 2:
         return jsonify({'messages': []})
 
-    messages = search_messages_in_chat(chat_id, session['user_id'], query)
+    messages = search_messages_in_chat(chat_id, session['user_id'], query, chat_type)
     return jsonify({'messages': [dict(m) for m in messages]})
 
 
@@ -4639,7 +4674,11 @@ def api_download_file(filepath):
     full_path = _resolve_media_path(filepath)
 
     if full_path:
-        return send_file(full_path, as_attachment=True)
+        # Имя файла с диска хешированное — отдаём пользователю его оригинальное
+        # имя, если оно передано. basename защищает от попытки подсунуть путь.
+        download_name = os.path.basename(request.args.get('name', '') or '')
+        return send_file(full_path, as_attachment=True,
+                         download_name=download_name or None)
 
     return jsonify({'error': 'File not found'}), 404
 

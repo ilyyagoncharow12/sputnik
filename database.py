@@ -1510,30 +1510,62 @@ def get_user_profile(user_id, current_user_id):
     return user_dict
 
 
-def clear_chat(chat_id=None, group_id=None, channel_id=None):
+def clear_chat(chat_id=None, group_id=None, channel_id=None, deleted_by=None):
     """Очищает историю сообщений в чате (мягко — сообщения уходят в корзину)"""
     conn = get_db()
     cur = dict_cursor(conn)
     now = get_moscow_time()
+    # Кто очистил — нужно для корректного восстановления из корзины.
+    by_sql = ', deleted_by = %s' if deleted_by else ''
+    by_args = (deleted_by,) if deleted_by else ()
     if chat_id:
         cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
-                       deleted_at = %s WHERE chat_id = %s AND is_deleted = FALSE''', (now, chat_id))
+                       deleted_at = %s''' + by_sql + '''
+                       WHERE chat_id = %s AND is_deleted = FALSE''',
+                    (now,) + by_args + (chat_id,))
         cur.execute('''DELETE FROM message_hides WHERE message_id IN
                        (SELECT id FROM messages WHERE chat_id = %s)''', (chat_id,))
     elif group_id:
         cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
-                       deleted_at = %s WHERE group_id = %s AND is_deleted = FALSE''', (now, group_id))
+                       deleted_at = %s''' + by_sql + '''
+                       WHERE group_id = %s AND is_deleted = FALSE''',
+                    (now,) + by_args + (group_id,))
         cur.execute('''DELETE FROM message_hides WHERE message_id IN
                        (SELECT id FROM messages WHERE group_id = %s)''', (group_id,))
     elif channel_id:
         cur.execute('''UPDATE messages SET is_deleted = TRUE, deleted_for_all = TRUE,
-                       deleted_at = %s WHERE channel_id = %s AND is_deleted = FALSE''', (now, channel_id))
+                       deleted_at = %s''' + by_sql + '''
+                       WHERE channel_id = %s AND is_deleted = FALSE''',
+                    (now,) + by_args + (channel_id,))
         cur.execute('''DELETE FROM message_hides WHERE message_id IN
                        (SELECT id FROM messages WHERE channel_id = %s)''', (channel_id,))
 
     conn.commit()
     conn.close()
     return True
+
+
+def clear_chat_for_me(chat_id, user_id):
+    """Очистить личный чат только у одного участника.
+
+    Сообщения остаются у собеседника: как «удалить у меня» для каждого
+    сообщения, они скрываются через message_hides и попадают в корзину.
+    """
+    if not chat_id or not user_id:
+        return False
+    conn = get_db()
+    cur = dict_cursor(conn)
+    try:
+        cur.execute('''
+            INSERT INTO message_hides (message_id, user_id)
+            SELECT id, %s FROM messages
+             WHERE chat_id = %s AND is_deleted = FALSE
+            ON CONFLICT (message_id, user_id) DO NOTHING
+        ''', (user_id, chat_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
 
 
 def reply_to_story(story_id, user_id, reply_text):
@@ -5746,24 +5778,57 @@ def get_story_by_id(story_id):
     return story
 
 
-def search_messages_in_chat(chat_id, user_id, query):
-    """Поиск сообщений в чате по ключевому слову"""
+def search_messages_in_chat(chat_id, user_id, query, chat_type='personal'):
+    """Поиск сообщений в чате по ключевому слову.
+
+    Поддерживает личные чаты, группы и каналы. Проверяет, что пользователь
+    действительно есть в этом чате, и не показывает сообщения, скрытые
+    через «удалить у меня». Результаты идут в хронологическом порядке —
+    так стрелки вверх/вниз совпадают с порядком сообщений в ленте.
+    """
+    if not chat_id or not user_id or not query:
+        return []
+
     conn = get_db()
     cur = dict_cursor(conn)
-    cur.execute('''
-        SELECT m.*, u.username, u.display_name, u.avatar,
-               CASE WHEN m.sender_id = %s THEN 1 ELSE 0 END as is_mine
-        FROM messages m
-        LEFT JOIN users u ON m.sender_id = u.id
-        WHERE m.chat_id = %s 
-          AND m.is_deleted = FALSE
-          AND (m.content LIKE %s OR m.file_name LIKE %s)
-        ORDER BY m.created_at DESC
-        LIMIT 100
-    ''', (user_id, chat_id, f'%{query}%', f'%{query}%'))
-    messages = cur.fetchall()
-    conn.close()
-    return  messages
+    try:
+        # Проверка доступа: нельзя искать в чужом чате.
+        if chat_type == 'group':
+            if not is_group_member(chat_id, user_id):
+                return []
+            scope_sql = 'm.group_id = %s'
+        elif chat_type == 'channel':
+            if not is_channel_subscriber(chat_id, user_id):
+                return []
+            scope_sql = 'm.channel_id = %s'
+        else:
+            cur.execute(
+                'SELECT 1 FROM chats WHERE id = %s AND (user1_id = %s OR user2_id = %s)',
+                (chat_id, user_id, user_id)
+            )
+            if not cur.fetchone():
+                return []
+            scope_sql = 'm.chat_id = %s'
+
+        like = '%' + query + '%'
+        cur.execute('''
+            SELECT m.*, u.username, u.display_name, u.avatar,
+                   CASE WHEN m.sender_id = %s THEN 1 ELSE 0 END as is_mine
+            FROM messages m
+            LEFT JOIN users u ON m.sender_id = u.id
+            WHERE ''' + scope_sql + '''
+              AND m.is_deleted = FALSE
+              AND (m.content LIKE %s OR m.file_name LIKE %s)
+              AND NOT EXISTS (
+                  SELECT 1 FROM message_hides h
+                  WHERE h.message_id = m.id AND h.user_id = %s
+              )
+            ORDER BY m.created_at ASC, m.id ASC
+            LIMIT 500
+        ''', (user_id, chat_id, like, like, user_id))
+        return cur.fetchall()
+    finally:
+        conn.close()
 
 #----CALL----
 

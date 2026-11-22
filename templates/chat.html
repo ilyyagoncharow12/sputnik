@@ -247,10 +247,18 @@
     <button onclick="startGroupVideoCall()" id="groupVideoCallBtn" style="display:none;">
         <i class="fas fa-users-video"></i>
     </button>
-    <button onclick="showChatMenu()">
-        <i class="fas fa-ellipsis-v"></i>
+    <button onclick="openChatSearch()" id="chatSearchBtn" title="Поиск сообщений" style="display:none;">
+        <i class="fas fa-search"></i>
     </button>
 </div>
+        </div>
+
+        <!-- Строка заголовка поиска сообщений (появляется при нажатии на лупу) -->
+        <div class="chat-search-header" id="chatSearchHeader" style="display:none;">
+            <button class="chat-search-close" onclick="closeChatSearch({restore:true})" title="Закрыть поиск">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <span class="chat-search-title">Поиск сообщений</span>
         </div>
 
         <div class="messages-area" id="messagesArea">
@@ -262,6 +270,23 @@
         </div>
 
         <div class="pinned-banner" id="pinnedBanner" style="display:none;"></div>
+
+        <!-- Нижняя строка поиска: поле ввода, счётчик 0/0 и стрелки навигации -->
+        <div class="chat-search-bar" id="chatSearchBar" style="display:none;">
+            <i class="fas fa-search chat-search-icon"></i>
+            <input type="text" id="chatSearchInput" class="chat-search-input" placeholder="Поиск сообщений..." autocomplete="off"
+                   oninput="onChatSearchInput()" onkeydown="onChatSearchKey(event)">
+            <button class="chat-search-clear" id="chatSearchClear" style="display:none;" onclick="clearChatSearchInput()" title="Очистить">
+                <i class="fas fa-times"></i>
+            </button>
+            <span class="chat-search-counter" id="chatSearchCounter">0/0</span>
+            <button class="chat-search-nav" onclick="navigateChatSearch(-1)" title="Предыдущее совпадение">
+                <i class="fas fa-chevron-up"></i>
+            </button>
+            <button class="chat-search-nav" onclick="navigateChatSearch(1)" title="Следующее совпадение">
+                <i class="fas fa-chevron-down"></i>
+            </button>
+        </div>
 
         <div class="message-input-area" id="messageInputArea" style="display:none;">
             <div class="reply-preview" id="replyPreview" style="display:none;">
@@ -675,6 +700,7 @@
 <script src="/cdn/js/messages.js"></script>
 <script src="/cdn/js/chats.js"></script>
 <script src="/cdn/js/context-menu.js"></script>
+<script src="/cdn/js/chat-search.js"></script>
 <script src="/cdn/js/gestures.js"></script>
 <script src="/cdn/js/message-features.js"></script>
 <script src="/cdn/js/trash.js"></script>

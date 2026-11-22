@@ -875,6 +875,34 @@
             outline: none;
         }
 
+        /* РђСѓРґРёРѕ: РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ СЃР»РµРІР°, РѕС‚РґРµР»СЊРЅР°СЏ РєРЅРѕРїРєР° СЃРєР°С‡РёРІР°РЅРёСЏ СЃРїСЂР°РІР° */
+        .message-audio {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0,0,0,0.05);
+            padding: 6px 8px;
+        }
+
+        .message-audio-download {
+            flex: 0 0 auto;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.08);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .message-audio-download:hover {
+            background: rgba(0,0,0,0.16);
+        }
+
         .message-file {
             display: flex;
             align-items: center;
@@ -1268,3 +1296,131 @@
             margin: 6px 0;
         }
 
+
+        /* ===== ПОИСК СООБЩЕНИЙ В ЧАТЕ (как в Telegram) ===== */
+        .chat-search-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .chat-search-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .chat-search-close:hover {
+            background: var(--bg-hover);
+            color: var(--primary-color);
+        }
+
+        .chat-search-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .chat-search-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .chat-search-icon {
+            color: var(--text-muted);
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .chat-search-input {
+            flex: 1;
+            min-width: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 8px 14px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .chat-search-input:focus {
+            border-color: var(--primary-color);
+        }
+
+        .chat-search-counter {
+            font-size: 13px;
+            color: var(--text-muted);
+            min-width: 46px;
+            text-align: center;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .chat-search-nav,
+        .chat-search-clear {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 13px;
+        }
+
+        .chat-search-nav:hover:not(:disabled),
+        .chat-search-clear:hover {
+            background: var(--primary-color);
+            color: #fff;
+        }
+
+        .chat-search-nav:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        /* Активное совпадение в списке результатов */
+        .messages-area .message.chat-search-active {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+            border-radius: 14px;
+        }
+
+        /* Подсветка найденных слов внутри текста сообщения */
+        mark.search-highlight {
+            background: rgba(245, 158, 11, 0.38);
+            color: inherit;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
+        .chat-search-empty {
+            margin: auto;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+            padding: 32px 16px;
+        }

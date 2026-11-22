@@ -25,18 +25,18 @@ function showContextMenu(e, id, content, el) {
     const isOutgoing = el.classList.contains('outgoing');
 
     // Получаем данные о файле из элемента сообщения
-    const filePath = el.querySelector('.message-media img, .message-media video, .message-file') ?
-                     (el.querySelector('.message-media img')?.src?.replace(window.location.origin + '/', '') ||
-                      el.querySelector('.message-media video')?.src?.replace(window.location.origin + '/', '') ||
-                      el.querySelector('.message-file')?.getAttribute('onclick')?.match(/downloadFile\('([^']+)'/)?.[1]?.replace('/', '') ||
-                      '') : '';
+    const dlEl = el.querySelector('[data-download-path]');
+    const filePath = dlEl
+        ? (dlEl.getAttribute('data-download-path') || '').replace(/^\//, '')
+        : (el.querySelector('.message-media img, .message-media video')?.src?.replace(window.location.origin + '/', '') || '');
+    const dlName = (dlEl?.getAttribute('data-download-name') || '').toLowerCase();
+    const audioExt = /\.(mp3|wav|ogg|opus|m4a|flac|aac|weba)$/;
 
-    const isAudio = el.querySelector('.message-file i.fa-file-audio') ||
-                    el.querySelector('.message-file')?.textContent?.includes('.mp3') ||
-                    el.querySelector('.message-file')?.textContent?.includes('.wav') ||
-                    el.querySelector('.message-file')?.textContent?.includes('.ogg');
+    const isAudio = !!el.querySelector('.message-media audio, .message-audio, .message-file i.fa-file-audio') ||
+                    audioExt.test(dlName) || audioExt.test(filePath.toLowerCase());
 
-    const hasFile = el.querySelector('.message-media img, .message-media video, .message-file') !== null;
+    const hasFile = !!dlEl ||
+                    el.querySelector('.message-media img, .message-media video, .message-media audio, .message-file') !== null;
     const isImage = el.querySelector('.message-media img') !== null;
     const isTextOnly = !hasFile && content && content.length > 0;
 
@@ -450,81 +450,59 @@ function showContextMenu(e, id, content, el) {
 // ===== СКАЧИВАНИЕ ФАЙЛА =====
 function downloadCurrentFile() {
     const msgElement = currentContextMessage.element;
+    if (!msgElement) return;
 
-    // Ищем путь к файлу
-    let filePath = '';
-    let fileName = 'file';
-
-    // Проверяем изображение
-    const img = msgElement.querySelector('.message-media img');
-    if (img) {
-        filePath = img.src.replace(window.location.origin + '/', '');
-        fileName = filePath.split('/').pop() || 'image.jpg';
-    }
-
-    // Проверяем видео
-    const video = msgElement.querySelector('.message-media video');
-    if (video) {
-        filePath = video.src.replace(window.location.origin + '/', '');
-        fileName = filePath.split('/').pop() || 'video.mp4';
-    }
-
-    // Проверяем файл
-    const fileDiv = msgElement.querySelector('.message-file');
-    if (fileDiv) {
-        const onclickAttr = fileDiv.getAttribute('onclick');
-        if (onclickAttr) {
-            const match = onclickAttr.match(/downloadFile\('([^']+)',\s*'([^']*)'\)/);
-            if (match) {
-                filePath = match[1].replace(/^\//, '');
-                fileName = match[2] || filePath.split('/').pop() || 'file';
-            }
-        }
-    }
-
-    if (!filePath) {
-        showToast('Не удалось найти файл для скачивания');
+    // Вложения размечаются data-атрибутами (см. formatMessage), они же
+    // используются и основным обработчиком клика в messages.js.
+    const dl = msgElement.querySelector('[data-download-path]');
+    if (dl) {
+        downloadFile(dl.getAttribute('data-download-path'),
+                     dl.getAttribute('data-download-name'));
         return;
     }
 
-    // Создаем ссылку для скачивания
-    const downloadUrl = '/api/download_file/' + filePath.replace(/\//g, '--');
+    // Fallback для старых сообщений, отрисованных без data-атрибутов.
+    const media = msgElement.querySelector('.message-media img, .message-media video');
+    if (media) {
+        const filePath = media.src.replace(window.location.origin + '/', '');
+        const fileName = filePath.split('/').pop() || 'file';
+        downloadFile(filePath, fileName);
+        return;
+    }
 
-    // Создаем временную ссылку и кликаем по ней
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = fileName;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    showToast('📥 Скачивание началось!');
+    showToast('Не удалось найти файл для скачивания');
 }
 
 // ===== ДОБАВЛЕНИЕ АУДИО В ПРОФИЛЬ =====
 function addAudioToProfile() {
     const msgElement = currentContextMessage.element;
 
-    // Ищем информацию об аудиофайле
+    // Ищем информацию об аудиофайле (data-атрибуты выставляются и для
+    // аудио, и для старых вложений-документов).
     let filePath = '';
     let fileName = '';
 
-    const fileDiv = msgElement.querySelector('.message-file');
-    if (fileDiv) {
-        const onclickAttr = fileDiv.getAttribute('onclick');
-        if (onclickAttr) {
-            const match = onclickAttr.match(/downloadFile\('([^']+)',\s*'([^']*)'\)/);
-            if (match) {
-                filePath = match[1].replace(/^\//, '');
-                fileName = match[2] || filePath.split('/').pop() || 'audio.mp3';
-            }
+    const dl = msgElement.querySelector('[data-download-path]');
+    if (dl) {
+        filePath = (dl.getAttribute('data-download-path') || '').replace(/^\//, '');
+        fileName = dl.getAttribute('data-download-name') || '';
+    }
+
+    // Fallback: старые сообщения без data-атрибутов.
+    if (!filePath) {
+        const audio = msgElement.querySelector('.message-media audio');
+        if (audio && audio.src) {
+            filePath = audio.src.replace(window.location.origin + '/', '');
         }
     }
 
     if (!filePath) {
         showToast('Не удалось найти аудиофайл');
         return;
+    }
+
+    if (!fileName) {
+        fileName = filePath.split('/').pop() || 'audio.mp3';
     }
 
     // Извлекаем название и исполнителя из имени файла
@@ -713,12 +691,21 @@ function addAudioViaFormData(filePath, title, artist, fileName) {
             else if (audioFormats.includes(ext)) actualFileType = 'audio';
         }
 
+        // Клик по любому вложению сразу скачивает файл. data-атрибуты
+        // используются вместо inline onclick, чтобы кавычки в имени файла
+        // не ломали разметку.
+        const rawPath = String(m.file_path).replace(/^\/+/, '');
+        const displayName = m.file_name || rawPath.split('/').pop() || 'Файл';
+        const dlAttrs = `data-download-path="/${escapeAttrValue(rawPath)}" data-download-name="${escapeAttrValue(displayName)}"`;
+
         if (actualFileType === 'photo' || imageFormats.includes(ext)) {
-            content += `<div class="message-media" onclick="openImageViewer('/${m.file_path}', '${escapeHtml(m.file_name || '')}', ${m.id || 'null'})"><img src="/${m.file_path}" alt="photo" loading="lazy"></div>`;
+            content += `<div class="message-media" ${dlAttrs} title="Скачать"><img src="/${rawPath}" alt="${escapeAttrValue(displayName)}" loading="lazy"></div>`;
         } else if (actualFileType === 'video' || videoFormats.includes(ext)) {
-            content += `<div class="message-media" onclick="openImageViewer('/${m.file_path}', '${escapeHtml(m.file_name || '')}', ${m.id || 'null'})"><video src="/${m.file_path}" controls preload="metadata"></video></div>`;
+            content += `<div class="message-media" ${dlAttrs} title="Скачать"><video src="/${rawPath}" controls preload="metadata"></video></div>`;
         } else if (actualFileType === 'audio' || audioFormats.includes(ext)) {
-            content += `<div class="message-media"><audio src="/${m.file_path}" controls preload="metadata"></audio></div>`;
+            // У аудио сохраняем управление воспроизведением, скачивание —
+            // отдельной кнопкой рядом.
+            content += `<div class="message-media message-audio"><audio src="/${rawPath}" controls preload="metadata"></audio><button type="button" class="message-audio-download" ${dlAttrs} title="Скачать"><i class="fas fa-download"></i></button></div>`;
         } else {
             let icon = 'fa-file';
             if (ext === 'pdf') icon = 'fa-file-pdf';
@@ -727,7 +714,7 @@ function addAudioViaFormData(filePath, title, artist, fileName) {
             else if (ext === 'zip' || ext === 'rar') icon = 'fa-file-archive';
             else if (ext === 'txt') icon = 'fa-file-alt';
 
-            content += `<div class="message-file" onclick="downloadFile('/${m.file_path}', '${escapeHtml(m.file_name || 'Файл')}')"><i class="fas ${icon}"></i><div class="message-file-info"><div class="message-file-name">${escapeHtml(m.file_name || 'Файл')}</div>${m.file_size ? `<div class="message-file-size">${formatFileSize(m.file_size)}</div>` : ''}</div><i class="fas fa-download"></i></div>`;
+            content += `<div class="message-file" ${dlAttrs} title="Скачать"><i class="fas ${icon}"></i><div class="message-file-info"><div class="message-file-name">${escapeHtml(displayName)}</div>${m.file_size ? `<div class="message-file-size">${formatFileSize(m.file_size)}</div>` : ''}</div><i class="fas fa-download"></i></div>`;
         }
     }
 

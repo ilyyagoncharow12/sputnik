@@ -96,7 +96,7 @@ function openUserProfileModal(userId) {
                                                 <button class="action-btn" onclick="startVideoCallToUser(${user.id}); closeModal('tempModal');">
                                                     <i class="fas fa-video"></i><span>Видео</span>
                                                 </button>
-                                                <button class="action-btn" onclick="showChatSearchModal(${currentChat ? currentChat.chat_id : ''}); closeModal('tempModal');">
+                                                <button class="action-btn" onclick="closeModal('tempModal'); openChatSearch();">
                                                     <i class="fas fa-search"></i><span>Поиск</span>
                                                 </button>
                                                 <button class="more-btn" onclick="showUserMenu(${user.id})">
@@ -184,7 +184,7 @@ function openUserProfileModal(userId) {
                                                 <button class="action-btn" onclick="startVideoCallToUser(${user.id}); closeModal('tempModal');">
                                                     <i class="fas fa-video"></i><span>Видео</span>
                                                 </button>
-                                                <button class="action-btn" onclick="showChatSearchModal(${currentChat ? currentChat.chat_id : ''}); closeModal('tempModal');">
+                                                <button class="action-btn" onclick="closeModal('tempModal'); openChatSearch();">
                                                     <i class="fas fa-search"></i><span>Поиск</span>
                                                 </button>
                                                 <button class="more-btn" onclick="showUserMenu(${user.id})">
@@ -307,7 +307,7 @@ function openUserProfileModalFallback(user) {
                         <button class="action-btn" onclick="startVideoCallToUser(${user.id}); closeModal('tempModal');">
                             <i class="fas fa-video"></i><span>Видео</span>
                         </button>
-                        <button class="action-btn" onclick="showChatSearchModal(${currentChat ? currentChat.chat_id : ''}); closeModal('tempModal');">
+                        <button class="action-btn" onclick="closeModal('tempModal'); openChatSearch();">
                             <i class="fas fa-search"></i><span>Поиск</span>
                         </button>
                         <button class="more-btn" onclick="showUserMenu(${user.id})">
@@ -346,35 +346,113 @@ function openUserProfileModalFallback(user) {
 
 
 function showUserMenu(userId) {
-    fetch('/api/check_contact/' + userId)
-        .then(r => r.json())
-        .then(data => {
-            let items = '';
+    Promise.all([
+        fetch('/api/check_contact/' + userId).then(r => r.json()).catch(() => ({})),
+        fetch('/api/is_user_blocked/' + userId).then(r => r.json()).catch(() => ({}))
+    ]).then(([data, blocked]) => {
+        let items = '';
 
-            if (data.is_contact) {
-                items += `
-                    <button class="tg-action-item" onclick="renameContactDialog(${userId});">
-                        <i class="fas fa-edit"></i>
-                        <span>Переименовать контакт</span>
+        if (data.is_contact) {
+            items += `
+                <button class="tg-action-item" onclick="renameContactDialog(${userId});">
+                    <i class="fas fa-edit"></i>
+                    <span>Переименовать контакт</span>
+                </button>
+                <div class="tg-action-divider"></div>
+                <button class="tg-action-item danger" onclick="removeContactById(${userId}); closeModal('tempModal');">
+                    <i class="fas fa-user-minus"></i>
+                    <span>Удалить из контактов</span>
+                </button>
+            `;
+        } else {
+            items += `
+                <button class="tg-action-item" onclick="addContactDialog(${userId});">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Добавить в контакты</span>
+                </button>
+            `;
+        }
+
+        // Меню «ЕЩЁ» в профиле: очистка чата и блокировка.
+        items += `
+            <div class="tg-action-divider"></div>
+            <button class="tg-action-item danger" onclick="openClearChatDialog(${userId});">
+                <i class="fas fa-eraser"></i>
+                <span>Очистить чат</span>
+            </button>
+            ${blocked.is_blocked
+                ? `<button class="tg-action-item" onclick="unblockUserAction(${userId});">
+                       <i class="fas fa-unlock"></i>
+                       <span>Разблокировать пользователя</span>
+                   </button>`
+                : `<button class="tg-action-item danger" onclick="blockUserAction(${userId});">
+                       <i class="fas fa-ban"></i>
+                       <span>Заблокировать пользователя</span>
+                   </button>`}
+        `;
+
+        showModal('Действия', `<div class="tg-action-menu">${items}</div>`);
+    }).catch(err => console.error('Error loading user menu:', err));
+}
+
+// Очистка личного чата из профиля: два варианта — только у меня и у обоих.
+function openClearChatDialog(userId) {
+    const html = `
+        <div class="tg-modal-wrapper">
+            <div class="tg-modal-header">
+                <button class="close-btn" onclick="navBack()"><i class="fas fa-arrow-left"></i></button>
+                <div class="title">Очистить чат</div>
+                <div style="width: 24px;"></div>
+            </div>
+            <div class="tg-modal-body">
+                <div class="tg-section-title">ВНИМАНИЕ</div>
+                <p style="color:#ff6b61;font-size:13px;line-height:1.55;margin:12px 0 20px;">
+                    История переписки будет очищена. Отменить это действие нельзя.
+                </p>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <button class="tg-action-btn danger" onclick="confirmClearChat(${userId}, 'me', this)">
+                        <i class="fas fa-eraser"></i> У меня
                     </button>
-                    <div class="tg-action-divider"></div>
-                    <button class="tg-action-item danger" onclick="removeContactById(${userId}); closeModal('tempModal');">
-                        <i class="fas fa-user-minus"></i>
-                        <span>Удалить из контактов</span>
+                    <button class="tg-action-btn danger" onclick="confirmClearChat(${userId}, 'all', this)">
+                        <i class="fas fa-users"></i> У меня и у собеседника (у обоих)
                     </button>
-                `;
-            } else {
-                items += `
-                    <button class="tg-action-item" onclick="addContactDialog(${userId});">
-                        <i class="fas fa-user-plus"></i>
-                        <span>Добавить в контакты</span>
+                    <button class="tg-action-btn" style="background:var(--modal-btn-bg);color:var(--modal-fg-muted);" onclick="navBack()">
+                        <i class="fas fa-times"></i> Отмена
                     </button>
-                `;
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('tempModalBody').innerHTML = html;
+    openModal('tempModal');
+}
+
+function confirmClearChat(userId, mode, btn) {
+    if (btn) btn.disabled = true;
+    fetch('/api/clear_personal_chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, mode: mode })
+    })
+        .then(r => r.json().then(d => ({ ok: r.ok, d: d })))
+        .then(({ ok, d }) => {
+            if (btn) btn.disabled = false;
+            if (!ok || !d.success) {
+                showToast(d.error || 'Не удалось очистить чат');
+                return;
             }
-
-            showModal('Действия', `<div class="tg-action-menu">${items}</div>`);
+            closeModal('tempModal');
+            showToast(mode === 'me' ? 'Чат очищен у вас' : 'Чат очищен у обоих');
+            if (currentChatType === 'personal' && currentChat &&
+                (currentChat.other_user_id == userId || currentChat.id == userId)) {
+                if (typeof continueOpenChat === 'function') continueOpenChat(userId, 'personal');
+            }
+            if (typeof loadChatsList === 'function') loadChatsList();
         })
-        .catch(err => console.error('Error loading user menu:', err));
+        .catch(() => {
+            if (btn) btn.disabled = false;
+            showToast('Ошибка сети');
+        });
 }
 
 function addContactDialog(userId) {

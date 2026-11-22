@@ -348,6 +348,11 @@
 }
 
 function continueOpenChat(id, type) {
+    // При переключении чата закрываем поиск (без восстановления старой ленты —
+    // она всё равно будет перерисована этим же вызовом).
+    if (typeof closeChatSearch === 'function') closeChatSearch();
+    const searchBtn = document.getElementById('chatSearchBtn');
+    if (searchBtn) searchBtn.style.display = 'flex';
     currentChat = { id: parseInt(id), type: type };
     currentChatType = type;
     // подсветка активного чата в списке (класс ставился только при рендере)

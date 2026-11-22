@@ -142,10 +142,14 @@ function collectMediaItems() {
     document.querySelectorAll('#messagesArea .message').forEach(msg => {
         const img = msg.querySelector('.message-media img');
         const video = msg.querySelector('.message-media video');
+        const nameEl = msg.querySelector('[data-download-name]');
+        const name = nameEl ? nameEl.getAttribute('data-download-name') : '';
         if (img) {
-            items.push({ src: img.getAttribute('src'), type: 'image', messageId: msg.dataset.messageId });
+            items.push({ src: img.getAttribute('src'), type: 'image',
+                         messageId: msg.dataset.messageId, name: name });
         } else if (video) {
-            items.push({ src: video.getAttribute('src'), type: 'video', messageId: msg.dataset.messageId });
+            items.push({ src: video.getAttribute('src'), type: 'video',
+                         messageId: msg.dataset.messageId, name: name });
         }
     });
     return items;
@@ -202,13 +206,51 @@ function mediaViewerForward() {
 function mediaViewerDownload() {
     const item = mediaItems[mediaIndex];
     if (!item) return;
+    downloadFile(item.src, item.name || '');
+}
+
+// ===== ПРЯМОЕ СКАЧИВАНИЕ ВЛОЖЕНИЙ =====
+// Раньше downloadFile() вызывался из разметки сообщений, но нигде не был
+// определён — по клику на документ ничего не происходило. Фото и видео
+// вообще открывали просмотрщик. Теперь любое вложение скачивается сразу.
+function downloadFile(filePath, fileName) {
+    if (!filePath) return false;
+    let rel = String(filePath).replace(/\\/g, '/').replace(/^\/+/, '');
+    // Ручка /api/download_file/<path> кодирует '/', как '--', а сервер
+    // разворачивает это обратно строго внутри static/ (защита от ../).
+    const encoded = rel.split('/').map(encodeURIComponent).join('--');
+    const safeName = fileName ? String(fileName).split(/[\\/]/).pop() : '';
+    let href = '/api/download_file/' + encoded;
+    if (safeName) href += '?name=' + encodeURIComponent(safeName);
     const a = document.createElement('a');
-    a.href = item.src;
-    a.download = '';
+    a.href = href;
+    if (safeName) a.download = safeName;
+    a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    a.remove();
+    if (typeof showToast === 'function') showToast('📥 Скачивание началось!');
+    return false;
 }
+window.downloadFile = downloadFile;
+
+function escapeAttrValue(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+window.escapeAttrValue = escapeAttrValue;
+
+// Обрабатываем клик по вложению через data-атрибуты: так имена с кавычками
+// и апострофами не ломают HTML-атрибут onclick.
+document.addEventListener('click', function (e) {
+    const el = e.target && e.target.closest ? e.target.closest('[data-download-path]') : null;
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation();
+    downloadFile(el.getAttribute('data-download-path'),
+                 el.getAttribute('data-download-name'));
+}, true);
 
 function closeMediaViewer() {
     const viewer = document.getElementById('mediaViewer');
@@ -364,6 +406,17 @@ document.addEventListener('keydown', (e) => {
             if (msgDiv) msgDiv.remove();
             if (currentPinnedMessage && String(currentPinnedMessage.id) === String(data.message_id)) {
                 showPinnedForCurrentChat();
+            }
+        });
+
+        // Очистка личного чата (у меня / у обоих) — переоткрываем активный чат.
+        socket.on('chat_cleared', (data) => {
+            if (typeof loadChatsList === 'function') loadChatsList();
+            if (currentChatType !== 'personal' || !currentChat) return;
+            if (currentChat.chat_id && currentChat.chat_id == data.chat_id) {
+                // continueOpenChat ждёт id собеседника, а не id чата
+                const otherId = currentChat.other_user_id || currentChat.id;
+                if (otherId) continueOpenChat(otherId, 'personal');
             }
         });
 
